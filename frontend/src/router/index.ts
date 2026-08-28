@@ -39,6 +39,48 @@ const router = createRouter({
       component: () => import('../views/admin/DashboardView.vue'),
       meta: { requiresAdminAuth: true },
     },
+    {
+      path: '/admin/tenants',
+      name: 'admin-tenants-lista',
+      component: () => import('../views/admin/tenants/ListaTenantsView.vue'),
+      meta: { requiresAdminAuth: true },
+    },
+    {
+      path: '/admin/tenants/crear',
+      name: 'admin-tenants-crear',
+      component: () => import('../views/admin/tenants/CrearTenantView.vue'),
+      meta: { requiresAdminAuth: true },
+    },
+    {
+      path: '/admin/tenants/:id',
+      name: 'admin-tenants-detalle',
+      component: () => import('../views/admin/tenants/DetalleTenantView.vue'),
+      meta: { requiresAdminAuth: true },
+    },
+    {
+      path: '/admin/tenants/:id/editar',
+      name: 'admin-tenants-editar',
+      component: () => import('../views/admin/tenants/EditarTenantView.vue'),
+      meta: { requiresAdminAuth: true },
+    },
+    {
+      path: '/admin/paquetes',
+      name: 'admin-paquetes-lista',
+      component: () => import('../views/admin/paquetes/ListaPaquetesView.vue'),
+      meta: { requiresAdminAuth: true },
+    },
+    {
+      path: '/admin/paquetes/crear',
+      name: 'admin-paquetes-crear',
+      component: () => import('../views/admin/paquetes/CrearPaqueteView.vue'),
+      meta: { requiresAdminAuth: true },
+    },
+    {
+      path: '/admin/paquetes/:id/editar',
+      name: 'admin-paquetes-editar',
+      component: () => import('../views/admin/paquetes/EditarPaqueteView.vue'),
+      meta: { requiresAdminAuth: true },
+    },
     ...(import.meta.env.DEV
       ? [
           {

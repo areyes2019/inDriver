@@ -81,7 +81,10 @@ async function onSubmit() {
               />
               Recordarme
             </label>
-            <RouterLink :to="{ name: 'admin-forgot-password' }" class="text-brand-blue hover:underline">
+            <RouterLink
+              :to="{ name: 'admin-forgot-password' }"
+              class="text-brand-blue hover:underline"
+            >
               ¿Olvidaste tu contraseña?
             </RouterLink>
           </div>

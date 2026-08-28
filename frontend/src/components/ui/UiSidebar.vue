@@ -31,7 +31,7 @@ const mobileOpen = ref(false)
   />
 
   <aside
-    class="fixed inset-y-0 left-0 z-50 flex h-full flex-col gap-6 bg-brand-dark py-6 text-white transition-all duration-200 md:sticky md:top-0 md:translate-x-0"
+    class="fixed inset-y-0 left-0 z-50 flex h-full flex-col gap-6 bg-brand-dark py-6 text-white transition-all duration-200 md:static md:translate-x-0"
     :class="[
       collapsed ? 'md:w-20' : 'md:w-64',
       mobileOpen ? 'w-64 translate-x-0 px-4' : '-translate-x-full px-4 md:translate-x-0',

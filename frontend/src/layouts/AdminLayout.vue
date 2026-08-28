@@ -15,9 +15,9 @@ const items = computed(() => {
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-black/[0.03]">
+  <div class="flex h-screen overflow-hidden bg-black/[0.03]">
     <UiSidebar logo-text="inDriver" :items="items" />
-    <main class="min-w-0 flex-1 p-4 pt-20 md:p-8">
+    <main class="min-w-0 flex-1 overflow-y-auto p-4 pt-20 md:p-8">
       <slot />
     </main>
   </div>

@@ -32,6 +32,15 @@ tipografía), no funcionalidades a implementar.
   proporcional al valor), sin instalar ninguna librería de charting.
 - Los componentes de UI reutilizables viven en `frontend/src/components/ui/`, separados de
   cualquier vista concreta, para que specs futuras los reutilicen en vez de repetir el diseño.
+- El layout del panel (sidebar + contenido) mide exactamente el alto de la pantalla (viewport) y
+  nunca genera scroll en la página completa: el sidebar queda siempre fijo e inmóvil, y solo el
+  área de contenido (a la derecha) tiene scroll interno propio cuando su contenido no cabe en la
+  pantalla. Mismo patrón ya usado en las vistas de auth (spec 006).
+- En cualquier bloque de contenido (formulario de campos apilados, o lista de datos en solo
+  lectura) seguido de un botón o enlace de acción, ese botón lleva más espacio por encima del que
+  ya separa a los elementos internos del bloque entre sí, y se distingue del contenido con una
+  línea divisoria sutil (borde superior), para que se perciba como la acción final y no como un
+  campo o dato más.
 
 ## Frontend (Vue 3)
 
@@ -85,16 +94,20 @@ tipografía), no funcionalidades a implementar.
    `frontend/src/components/ui/`, cada uno usable de forma independiente con props tipadas.
 5. `UiSidebar` se ve completo en desktop (expandido) y colapsa/oculta en pantallas angostas
    (mobile), sin generar scroll horizontal.
-6. En `StyleGuideView`, las cards se reacomodan en una sola columna en mobile y en grid en
+6. El sidebar ocupa siempre el 100% del alto de la pantalla y permanece inmóvil (no se desplaza,
+   no muestra su propia barra de scroll) al hacer scroll en el contenido; solo el área de
+   contenido a la derecha del sidebar tiene scroll interno propio cuando su contenido excede el
+   alto de la pantalla. Aplica tanto en desktop como en mobile (drawer/overlay).
+7. En `StyleGuideView`, las cards se reacomodan en una sola columna en mobile y en grid en
    desktop, sin overflow horizontal en ningún ancho de pantalla.
-7. `/admin/style-guide` solo existe cuando `import.meta.env.DEV` es verdadero — no aparece en el
+8. `/admin/style-guide` solo existe cuando `import.meta.env.DEV` es verdadero — no aparece en el
    build de producción (`npm run build` y revisar `dist`, o revisar el guard de la ruta).
-8. `AdminLayout.vue` envuelve el `DashboardView.vue` existente con el sidebar nuevo, sin romper el
+9. `AdminLayout.vue` envuelve el `DashboardView.vue` existente con el sidebar nuevo, sin romper el
    guard de sesión que ya existe (sigue redirigiendo a `/admin/login` sin sesión activa).
-9. `lucide-vue-next` está instalado; los íconos usados en el sidebar y en `StyleGuideView` se
-   renderizan correctamente.
-10. `UiBarChart` no depende de ninguna librería de charting — solo Vue y Tailwind.
-11. ESLint/Prettier corren sin errores sobre el código nuevo.
+10. `lucide-vue-next` está instalado; los íconos usados en el sidebar y en `StyleGuideView` se
+    renderizan correctamente.
+11. `UiBarChart` no depende de ninguna librería de charting — solo Vue y Tailwind.
+12. ESLint/Prettier corren sin errores sobre el código nuevo.
 
 ## Supuestos asumidos (registro completo)
 
@@ -127,3 +140,13 @@ tipografía), no funcionalidades a implementar.
 15. Se agrega una pantalla `/admin/style-guide` que junta todas las piezas (colores, tipografía,
     componentes) en una sola página, registrada solo cuando `import.meta.env.DEV` es verdadero
     (no existe en producción), sin requerir sesión iniciada.
+16. (Corrección) El layout de `AdminLayout.vue` mide exactamente el alto de la pantalla y nunca
+    genera scroll en la página completa. El sidebar (`UiSidebar`) queda siempre fijo e inmóvil, sin
+    scroll propio; solo el área de contenido a la derecha tiene scroll interno cuando su contenido
+    no cabe en la pantalla. Mismo patrón de layout ya usado en las vistas de auth (spec 006:
+    `h-screen` + `overflow-y-auto` en el contenido).
+17. En cualquier bloque de contenido (formulario de campos apilados, o lista de datos en solo
+    lectura) seguido de un botón o enlace de acción, ese botón lleva más espacio por encima que el
+    que ya separa a los elementos internos del bloque, y se distingue del contenido con una línea
+    divisoria sutil (borde superior), para que se perciba como la acción final y no como un campo o
+    dato más.

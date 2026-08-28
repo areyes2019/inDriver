@@ -28,8 +28,7 @@ ADMIN CENTRAL (Dueño del sistema)
                         │                  │
                         │ tenants          │
                         │ admins           │
-                        │ planes            │
-                        │ suscripciones    │
+                        │ paquetes_viajes  │
                         └────────┬─────────┘
                                  │
                                  ▼
@@ -104,7 +103,7 @@ updated_at
 - AUTOMATICO
 - MANUAL
 
-El `estado` del tenant normalmente lo decide el sistema solo, revisando si su suscripción está vigente o vencida (`modo_estado` = AUTOMATICO). Cuando un ADMIN_CENTRAL cambia el `estado` a mano, `modo_estado` pasa a MANUAL: desde ese momento el sistema deja de tocar el `estado` de ese tenant, aunque su suscripción cambie, hasta que un ADMIN_CENTRAL regrese `modo_estado` a AUTOMATICO explícitamente.
+**Derogado** (spec `009-paquetes-viajes.md`): ya no existe el modelo de planes/suscripciones, así que el `estado` del tenant ya no se sincroniza con ninguna vigencia automática. Por ahora `modo_estado` sigue existiendo pero solo se mueve a MANUAL cuando un ADMIN_CENTRAL cambia el `estado` a mano (ver `008-listado-tenants.md`); qué otra cosa (si acaso) pondría el `estado` en AUTOMATICO, o cómo se refleja quedarse sin viajes disponibles en los paquetes comprados, queda pendiente para una historia futura.
 
 ## TABLA ADMIN_CENTRALES - Usuarios que administran todo el sistema
 
@@ -119,35 +118,32 @@ ultimo_acceso
 created_at
 updated_at
 
-## TABLA PLANES - Permite definir planes comerciales
+## Tabla paquetes_viajes - Catálogo de paquetes de viajes que un tenant puede comprar
 
-id_plan
+id_paquete
+codigo_paquete
 nombre
 descripcion
+cantidad_viajes
 precio
-limite_despachadores
-limite_conductores
-limite_pedidos
 estado
 created_at
 updated_at
-
-## Tabla suscripciones - Relaciona un Tenant con su plan.
-
-id_suscripcion
-id_tenant
-id_plan
-fecha_inicio
-fecha_vencimiento
-estado
-created_at
-updated_at
+deleted_at
 
 * Estados
-- ACTIVA
-- VENCIDA
-- SUSPENDIDA
-- CANCELADA
+- Activo
+- Inactivo
+
+`codigo_paquete` es un identificador libre y único (no es llave foránea real): la tabla
+`compras_paquetes`, que vive en la base de cada tenant, lo referencia por texto para registrar qué
+paquete compró, ya que no es posible una llave foránea entre bases de datos distintas.
+
+"Eliminar" un paquete es un borrado lógico (`deleted_at`), no físico: como no hay forma de
+verificar desde `delivery_central` si algún tenant ya lo compró (esa información vive en la base
+de cada tenant), se prefiere ocultarlo de los listados y de futuras compras en vez de borrar la
+fila, para no dejar compras históricas apuntando a un `codigo_paquete` sin ningún registro que lo
+explique.
 
 ## Tabla configuraciones_globales - Configuraciones generales del sistema.
 id_configuracion
@@ -176,12 +172,9 @@ created_at
 # Reglas de negocio — Base Central
 
 - Cada tenant activo tiene su propia base de datos física separada (DB_T01, DB_T02...), aprovisionada al darse de alta el tenant — no es un esquema compartido con columna `tenant_id`.
-- El `estado` de TENANTS es AUTOMATICO por defecto y se sincroniza con el estado de la suscripción; puede pasar a MANUAL cuando un ADMIN_CENTRAL lo fija a mano (ver `modo_estado` arriba).
-- Mientras la suscripción de un tenant está VENCIDA o SUSPENDIDA (y `modo_estado` = AUTOMATICO), el sistema bloquea el acceso al tenant (admin_cliente, despachadores, conductores) — no hay periodo de gracia.
-- Los límites del plan (`limite_despachadores`, `limite_conductores`, `limite_pedidos`) son topes duros: el sistema impide crear un nuevo registro si el tenant ya alcanzó su límite.
-- `limite_pedidos` se cuenta por mes (ciclo de facturación de la suscripción), no como total histórico acumulado ni como pedidos concurrentes abiertos.
-- Un tenant solo puede tener una suscripción con estado ACTIVA a la vez; cambiar de plan implica cancelar/reemplazar la suscripción vigente, no coexistir varias activas.
-- `logs_centrales` registra solo acciones administrativas de alto nivel hechas por ADMIN_CENTRAL (altas/bajas de tenants, cambios de plan, suspensiones, cambios de `modo_estado`) — no la actividad operativa de despachadores/conductores dentro de cada tenant, que queda fuera del alcance de esta parte 1.
+- El `estado` de TENANTS pasa a MANUAL cuando un ADMIN_CENTRAL lo fija a mano (ver `modo_estado` arriba); no hay ningún proceso automático que lo mueva por ahora (ver nota "Derogado" arriba).
+- `paquetes_viajes` es el catálogo (definido por ADMIN_CENTRAL) de paquetes que un tenant puede comprar; no reemplaza ningún límite ni vigencia — cómo un tenant consume esos viajes, o qué pasa cuando se le acaban, queda pendiente para una historia futura.
+- `logs_centrales` registra solo acciones administrativas de alto nivel hechas por ADMIN_CENTRAL (altas/bajas de tenants, altas/ediciones de paquetes de viajes, suspensiones, cambios de `modo_estado`) — no la actividad operativa de despachadores/conductores dentro de cada tenant, que queda fuera del alcance de esta parte 1.
 - Todos los ADMIN_CENTRAL tienen el mismo nivel de acceso a todos los tenants; no hay cartera asignada por admin ni niveles de permiso entre ellos.
 - `configuraciones_globales` aplica igual para todos los tenants; un tenant no puede sobreescribir un valor global con uno propio.
 - ADMIN_CLIENTE (dueño del negocio/tenant) se define y almacena dentro de la base de datos propia del tenant (DB_T0X), no en `delivery_central` — por eso no aparece como tabla en este documento de la Base Central.
@@ -191,13 +184,9 @@ admins_centrales
         │
         └── administra → tenants
 
-tenants
+admins_centrales
         │
-        └── tiene → suscripciones
-
-planes
-        │
-        └── tiene → suscripciones
+        └── administra → paquetes_viajes
 
 tenants
         │

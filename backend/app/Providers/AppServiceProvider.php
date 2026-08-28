@@ -28,6 +28,10 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($request->string('email').'|'.$request->ip());
         });
 
+        RateLimiter::for('admin-tenants', function (Request $request) {
+            return Limit::perMinute(20)->by($request->user('admin')?->id_admin ?? $request->ip());
+        });
+
         ResetPassword::createUrlUsing(function (CanResetPassword $notifiable, string $token) {
             $email = urlencode($notifiable->getEmailForPasswordReset());
 
