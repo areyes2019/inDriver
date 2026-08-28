@@ -3,9 +3,13 @@
 use App\Models\AdminCentral;
 use App\Models\LogCentral;
 use App\Models\Tenant;
+use App\Models\Tenant\Usuario;
+use App\Notifications\CredencialesAdminCliente;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Notification;
 
 uses(RefreshDatabase::class);
 
@@ -50,6 +54,18 @@ it('rejects tenant creation when nombre_comercial or razon_social is missing', f
         ->assertJsonValidationErrors(['nombre_comercial', 'razon_social']);
 });
 
+it('rejects tenant creation when email, nombre or apellido_paterno is missing', function () {
+    $admin = makeTenantAdmin();
+
+    $this->actingAs($admin, 'admin')
+        ->postJson('/api/v1/admin/tenants', [
+            'nombre_comercial' => 'Café Luna',
+            'razon_social' => 'Café Luna SA de CV',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['email', 'nombre', 'apellido_paterno']);
+});
+
 it('rejects a duplicate rfc or email without creating the tenant', function () {
     $admin = makeTenantAdmin();
     Tenant::create([
@@ -65,6 +81,8 @@ it('rejects a duplicate rfc or email without creating the tenant', function () {
             'razon_social' => 'Otro negocio SA de CV',
             'rfc' => 'CLU010101AAA',
             'email' => 'otro@example.com',
+            'nombre' => 'Luis',
+            'apellido_paterno' => 'Gómez',
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['rfc']);
@@ -72,7 +90,9 @@ it('rejects a duplicate rfc or email without creating the tenant', function () {
     expect(Tenant::count())->toBe(1);
 });
 
-it('creates a tenant, provisions its database, and logs the action', function () {
+it('creates a tenant, provisions its database, logs the action, and creates the AdminCliente inicial', function () {
+    Notification::fake();
+
     $admin = makeTenantAdmin();
 
     $response = $this->actingAs($admin, 'admin')
@@ -82,6 +102,9 @@ it('creates a tenant, provisions its database, and logs the action', function ()
             'rfc' => 'CLU010101AAA',
             'telefono' => '5555555555',
             'email' => 'contacto@cafeluna.com',
+            'nombre' => 'Laura',
+            'apellido_paterno' => 'Torres',
+            'apellido_materno' => 'Díaz',
         ])
         ->assertCreated()
         ->assertJsonMissingPath('database_password');
@@ -92,11 +115,33 @@ it('creates a tenant, provisions its database, and logs the action', function ()
     expect($tenant->estado)->toBe('Activo');
     expect($tenant->modo_estado)->toBe('AUTOMATICO');
 
+    // nombre/apellido del AdminCliente no se persisten en el tenant (base central).
+    $rawData = DB::table('tenants')
+        ->where('id_tenant', $tenant->id_tenant)
+        ->value('data');
+    expect(json_decode($rawData ?? '[]', true) ?? [])->not->toHaveKey('nombre');
+
     expect(LogCentral::where('id_tenant', $tenant->id_tenant)
         ->where('id_admin', $admin->id_admin)
         ->where('tipo', 'TENANT')
         ->where('accion', 'ALTA')
         ->exists())->toBeTrue();
+
+    tenancy()->initialize($tenant);
+    $usuario = Usuario::where('email', 'contacto@cafeluna.com')->first();
+    tenancy()->end();
+
+    expect($usuario)->not->toBeNull();
+    expect($usuario->rol)->toBe('AdminCliente');
+    expect($usuario->estado)->toBe('Activo');
+    expect($usuario->nombre)->toBe('Laura');
+    expect($usuario->apellido_paterno)->toBe('Torres');
+    expect($usuario->password)->toStartWith('$2y$');
+
+    Notification::assertSentOnDemand(
+        CredencialesAdminCliente::class,
+        fn ($notification, $channels, $notifiable) => $notifiable->routes['mail'] === 'contacto@cafeluna.com',
+    );
 });
 
 it('throttles tenant creation after 20 attempts per minute', function () {
@@ -225,4 +270,59 @@ it('rejects toggling estado for an Inactivo tenant', function () {
     $this->actingAs($admin, 'admin')
         ->patchJson("/api/v1/admin/tenants/{$tenant->id_tenant}/estado")
         ->assertUnprocessable();
+});
+
+it('rejects tenant deletion without an admin session', function () {
+    $tenant = Tenant::create(['nombre_comercial' => 'Café Luna', 'razon_social' => 'Café Luna SA de CV']);
+
+    $this->deleteJson("/api/v1/admin/tenants/{$tenant->id_tenant}", ['password' => 'Password123!'])
+        ->assertUnauthorized();
+});
+
+it('rejects tenant deletion with a missing or incorrect password, without deleting the tenant', function () {
+    $admin = makeTenantAdmin();
+    $tenant = Tenant::create(['nombre_comercial' => 'Café Luna', 'razon_social' => 'Café Luna SA de CV']);
+
+    $this->actingAs($admin, 'admin')
+        ->deleteJson("/api/v1/admin/tenants/{$tenant->id_tenant}", [])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['password']);
+
+    $this->actingAs($admin, 'admin')
+        ->deleteJson("/api/v1/admin/tenants/{$tenant->id_tenant}", ['password' => 'wrong-password'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['password']);
+
+    expect(Tenant::find($tenant->id_tenant))->not->toBeNull();
+});
+
+it('deletes a tenant, its database, and logs the action when the password is correct', function () {
+    $admin = makeTenantAdmin();
+    $tenant = Tenant::create(['nombre_comercial' => 'Café Luna', 'razon_social' => 'Café Luna SA de CV']);
+    $tenantId = $tenant->id_tenant;
+
+    $this->actingAs($admin, 'admin')
+        ->deleteJson("/api/v1/admin/tenants/{$tenantId}", ['password' => 'Password123!'])
+        ->assertOk();
+
+    expect(Tenant::find($tenantId))->toBeNull();
+    expect(LogCentral::where('id_admin', $admin->id_admin)
+        ->where('tipo', 'TENANT')
+        ->where('accion', 'BAJA')
+        ->exists())->toBeTrue();
+});
+
+it('throttles tenant deletion after 20 attempts per minute', function () {
+    $admin = makeTenantAdmin();
+    $tenant = Tenant::create(['nombre_comercial' => 'Café Luna', 'razon_social' => 'Café Luna SA de CV']);
+
+    for ($i = 0; $i < 20; $i++) {
+        $this->actingAs($admin, 'admin')
+            ->deleteJson("/api/v1/admin/tenants/{$tenant->id_tenant}", [])
+            ->assertUnprocessable();
+    }
+
+    $this->actingAs($admin, 'admin')
+        ->deleteJson("/api/v1/admin/tenants/{$tenant->id_tenant}", [])
+        ->assertStatus(429);
 });

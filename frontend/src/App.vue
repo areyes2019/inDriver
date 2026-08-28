@@ -4,15 +4,17 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import HelloWorld from './components/HelloWorld.vue'
 
 const route = useRoute()
-const isAdminRoute = computed(() => route.path.startsWith('/admin'))
+// El scaffold inicial de Vite/Vue (logo + "You did it!" + nav Home/About) solo debe verse en la
+// ruta raíz de demo ("/", "/about"); cualquier panel real de la app (admin o tenant) lo omite.
+const isAppRoute = computed(() => route.path.startsWith('/admin') || route.path.startsWith('/t/'))
 
 watchEffect(() => {
-  document.body.classList.toggle('is-admin', isAdminRoute.value)
+  document.body.classList.toggle('is-admin', isAppRoute.value)
 })
 </script>
 
 <template>
-  <RouterView v-if="isAdminRoute" />
+  <RouterView v-if="isAppRoute" />
   <div v-else class="app-shell">
     <header>
       <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\AdminCentral;
+use App\Models\Tenant\Usuario;
 use App\Models\User;
 
 return [
@@ -48,6 +49,11 @@ return [
             'driver' => 'session',
             'provider' => 'admins_centrales',
         ],
+
+        'usuario' => [
+            'driver' => 'session',
+            'provider' => 'usuarios',
+        ],
     ],
 
     /*
@@ -82,6 +88,11 @@ return [
             'driver' => 'eloquent',
             'model' => AdminCentral::class,
         ],
+
+        'usuarios' => [
+            'driver' => 'eloquent',
+            'model' => Usuario::class,
+        ],
     ],
 
     /*
@@ -113,6 +124,13 @@ return [
 
         'admins_centrales' => [
             'provider' => 'admins_centrales',
+            'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
+            'expire' => 60,
+            'throttle' => 60,
+        ],
+
+        'usuarios' => [
+            'provider' => 'usuarios',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
             'expire' => 60,
             'throttle' => 60,

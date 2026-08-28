@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import { useAdminAuthStore } from '@/stores/adminAuth'
+import { useTenantAuthStore } from '@/stores/tenantAuth'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -90,19 +91,82 @@ const router = createRouter({
           },
         ]
       : []),
+    {
+      path: '/t/:slug/login',
+      name: 'tenant-login',
+      component: () => import('../views/tenant/LoginView.vue'),
+    },
+    {
+      path: '/t/:slug/forgot-password',
+      name: 'tenant-forgot-password',
+      component: () => import('../views/tenant/ForgotPasswordView.vue'),
+    },
+    {
+      path: '/t/:slug/reset-password/:token',
+      name: 'tenant-reset-password',
+      component: () => import('../views/tenant/ResetPasswordView.vue'),
+    },
+    {
+      path: '/t/:slug/panel/usuarios',
+      name: 'tenant-usuarios-lista',
+      component: () => import('../views/tenant/usuarios/ListaUsuariosView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
+      path: '/t/:slug/panel/usuarios/crear',
+      name: 'tenant-usuarios-crear',
+      component: () => import('../views/tenant/usuarios/CrearUsuarioView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
+      path: '/t/:slug/panel/usuarios/:id/editar',
+      name: 'tenant-usuarios-editar',
+      component: () => import('../views/tenant/usuarios/EditarUsuarioView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
+      path: '/t/:slug/panel/clientes',
+      name: 'tenant-clientes-lista',
+      component: () => import('../views/tenant/clientes/ListaClientesView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
+      path: '/t/:slug/panel/clientes/crear',
+      name: 'tenant-clientes-crear',
+      component: () => import('../views/tenant/clientes/CrearClienteView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
+      path: '/t/:slug/panel/clientes/:id/editar',
+      name: 'tenant-clientes-editar',
+      component: () => import('../views/tenant/clientes/EditarClienteView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
   ],
 })
 
 router.beforeEach(async (to) => {
-  if (!to.meta.requiresAdminAuth) return true
+  if (to.meta.requiresAdminAuth) {
+    const auth = useAdminAuthStore()
+    if (!auth.checked) {
+      await auth.fetchMe()
+    }
 
-  const auth = useAdminAuthStore()
-  if (!auth.checked) {
-    await auth.fetchMe()
+    if (!auth.isAuthenticated) {
+      return { name: 'admin-login' }
+    }
   }
 
-  if (!auth.isAuthenticated) {
-    return { name: 'admin-login' }
+  if (to.meta.requiresTenantAuth) {
+    const slug = to.params.slug as string
+    const auth = useTenantAuthStore()
+    if (!auth.checked || auth.slug !== slug) {
+      await auth.fetchMe(slug)
+    }
+
+    if (!auth.isAuthenticated) {
+      return { name: 'tenant-login', params: { slug } }
+    }
   }
 
   return true

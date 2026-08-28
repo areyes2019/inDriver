@@ -14,6 +14,9 @@ const form = reactive({
   rfc: '',
   telefono: '',
   email: '',
+  nombre: '',
+  apellido_paterno: '',
+  apellido_materno: '',
 })
 
 const fieldErrors = reactive<Record<string, string>>({})
@@ -29,7 +32,8 @@ async function onSubmit() {
 
   try {
     await http.post('/admin/tenants', form)
-    success.value = 'Tenant creado correctamente.'
+    success.value =
+      'Tenant creado correctamente. Se enviaron las credenciales de acceso al correo proporcionado.'
     setTimeout(() => router.push({ name: 'admin-dashboard' }), 1200)
   } catch (err) {
     if (axios.isAxiosError(err) && err.response?.status === 422) {
@@ -105,12 +109,59 @@ async function onSubmit() {
           <input
             v-model="form.email"
             type="email"
+            required
             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
           />
           <span v-if="fieldErrors.email" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.email }}
           </span>
         </label>
+
+        <div class="border-t border-gray-100 pt-5">
+          <p class="mb-4 text-sm font-semibold text-brand-dark">
+            Datos del administrador del negocio
+          </p>
+
+          <div class="space-y-5">
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-brand-dark">Nombre</span>
+              <input
+                v-model="form.nombre"
+                type="text"
+                required
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+              />
+              <span v-if="fieldErrors.nombre" class="mt-1 block text-sm text-red-600">
+                {{ fieldErrors.nombre }}
+              </span>
+            </label>
+
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-brand-dark">Apellido paterno</span>
+              <input
+                v-model="form.apellido_paterno"
+                type="text"
+                required
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+              />
+              <span v-if="fieldErrors.apellido_paterno" class="mt-1 block text-sm text-red-600">
+                {{ fieldErrors.apellido_paterno }}
+              </span>
+            </label>
+
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-brand-dark">Apellido materno</span>
+              <input
+                v-model="form.apellido_materno"
+                type="text"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+              />
+              <span v-if="fieldErrors.apellido_materno" class="mt-1 block text-sm text-red-600">
+                {{ fieldErrors.apellido_materno }}
+              </span>
+            </label>
+          </div>
+        </div>
 
         <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
         <p v-if="success" class="text-sm text-green-600">{{ success }}</p>

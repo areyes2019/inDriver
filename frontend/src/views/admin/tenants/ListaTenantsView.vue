@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
+import axios from 'axios'
 import http from '@/lib/http'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import UiCard from '@/components/ui/UiCard.vue'
@@ -26,6 +27,9 @@ const loading = ref(false)
 const error = ref('')
 const togglingId = ref<number | null>(null)
 const tenantToToggle = ref<Tenant | null>(null)
+const tenantToDelete = ref<Tenant | null>(null)
+const deleting = ref(false)
+const deleteError = ref('')
 
 const estadoColor: Record<string, 'green' | 'yellow' | 'blue'> = {
   Activo: 'green',
@@ -77,6 +81,35 @@ async function confirmToggleEstado() {
     error.value = 'No se pudo cambiar el estado del tenant.'
   } finally {
     togglingId.value = null
+  }
+}
+
+function requestDelete(tenant: Tenant) {
+  deleteError.value = ''
+  tenantToDelete.value = tenant
+}
+
+function cancelDelete() {
+  tenantToDelete.value = null
+  deleteError.value = ''
+}
+
+async function confirmDelete(password?: string) {
+  const tenant = tenantToDelete.value
+  if (!tenant) return
+
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await http.delete(`/admin/tenants/${tenant.id_tenant}`, { data: { password } })
+    tenants.value = tenants.value.filter((t) => t.id_tenant !== tenant.id_tenant)
+    tenantToDelete.value = null
+  } catch (err) {
+    deleteError.value =
+      (axios.isAxiosError(err) && err.response?.data?.errors?.password?.[0]) ??
+      'No se pudo eliminar el tenant.'
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -161,6 +194,13 @@ onMounted(fetchTenants)
                   >
                     {{ tenant.estado === 'Activo' ? 'Suspender' : 'Activar' }}
                   </button>
+                  <button
+                    type="button"
+                    class="rounded-lg border border-red-600 px-3 py-1.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-600 hover:text-white"
+                    @click="requestDelete(tenant)"
+                  >
+                    Eliminar
+                  </button>
                 </div>
               </td>
             </tr>
@@ -202,6 +242,21 @@ onMounted(fetchTenants)
       "
       @confirm="confirmToggleEstado"
       @cancel="cancelToggleEstado"
+    />
+
+    <UiConfirmDialog
+      :open="tenantToDelete !== null"
+      title="Eliminar tenant"
+      :message="
+        tenantToDelete
+          ? `Esta acción es irreversible: se borrará ${tenantToDelete.nombre_comercial} y toda su base de datos. Ingresa tu contraseña para confirmar.`
+          : ''
+      "
+      confirm-label="Eliminar"
+      require-password
+      :password-error="deleteError"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
     />
   </AdminLayout>
 </template>

@@ -8,7 +8,7 @@ Esta es la base que vamos a utilizar inicialmente.
 
 Todo lo que ocurre dentro de la empresa estará aquí.
 
-## Tabla usuarios - Todos los usuarios que trabajan dentro del Tenant.
+## 01 Tabla usuarios - Todos los usuarios que trabajan dentro del Tenant.
 
 id_usuario
 nombre
@@ -28,7 +28,7 @@ updated_at
 - Despachador
 - Conductor
 
-# Tabla despachadores - Perfil operativo del despachador.
+# 02 Tabla despachadores - Perfil operativo del despachador.
 
 id_despachador
 id_usuario
@@ -41,7 +41,7 @@ usuarios
    │
    └── despachador
 
-## Tabla conductores - Perfil operativo del conductor.
+## 03 Tabla conductores - Perfil operativo del conductor.
 
 id_conductor
 id_usuario
@@ -65,7 +65,7 @@ updated_at
 - DESCANSO
 - FUERA_DE_SERVICIO
 
-## Tabla vehiculos - Vehículos pertenecientes a la flotilla.
+## 04 Tabla vehiculos - Vehículos pertenecientes a la flotilla.
 
 id_vehiculo
 placa
@@ -84,7 +84,7 @@ updated_at
 - INACTIVO
 - MANTENIMIENTO
 
-## Tabla conductor_vehiculo - Relaciona conductores y vehículos.
+## 05 Tabla conductor_vehiculo - Relaciona conductores y vehículos.
 
 id
 id_conductor
@@ -104,7 +104,7 @@ Conductor 01
    └── Moto 03 → julio-actual
 
 
-## Tabla clientes - Clientes finales que solicitan servicios.
+## 06 Tabla clientes - Clientes finales que solicitan servicios.
 
 id_cliente
 nombre
@@ -115,7 +115,7 @@ estado
 created_at
 updated_at
 
-## Tabla direcciones_clientes - Un cliente puede tener múltiples direcciones.
+## 07 Tabla direcciones_clientes - Un cliente puede tener múltiples direcciones.
 
 id_direccion
 id_cliente
@@ -141,7 +141,7 @@ Casa
 Trabajo
 Negocio
 
-# Tabla pedidos - Tabla central del sistema operativo.
+# 08 Tabla pedidos - Tabla central del sistema operativo.
 
 ├── id_pedido
 ├── numero_pedido
@@ -215,7 +215,7 @@ Si no es cliente frecuente, id_cliente = null
         importe_envio = $80
         importe_cobro = $450 
 
-# Tabla pedido_asignaciones - Registra cada intento de asignación.
+# 09 Tabla pedido_asignaciones - Registra cada intento de asignación.
 
 id_pedido
 id_despachador
@@ -254,7 +254,7 @@ o
 estado = RECHAZADA
 motivo = "Lejos del punto de recogida"
 
-## Tabla pedido_estados - Historial completo del pedido.
+## 10 Tabla pedido_estados - Historial completo del pedido.
 
 id_estado
 id_pedido
@@ -291,7 +291,7 @@ CLIENTE
 SISTEMA
 ADMIN_CLIENTE 
 
-## Tabla pedido_cambios - Modificaciones relavantes al pedido
+## 11 Tabla pedido_cambios - Modificaciones relavantes al pedido
 
 pedido_cambios
 id_cambio
@@ -413,7 +413,7 @@ ENTREGADO
                   EN_CAMINO
                   ARRIBADO_A_ENTREGA
                   ENTREGADO
-## Tabla pagos - Registra el cobro real de cada pedido.
+## 12 Tabla pagos - Registra el cobro real de cada pedido.
 
 id_pago
 id_pedido
@@ -429,7 +429,7 @@ updated_at
 - TARJETA
 - TRANSFERENCIA
 
-## Tabla conductor_posiciones - Histórico de posiciones GPS.
+## 13 Tabla conductor_posiciones - Histórico de posiciones GPS.
 
 id_posicion
 id_conductor
@@ -446,7 +446,7 @@ created_at
 Esta tabla será probablemente la que más crecerá.
 No conviene consultar todo el histórico cada vez que el mapa necesite mostrar conductores.
 
-## Tabla conductor_estado - Estado actual del conductor.
+## 14 Tabla conductor_estado - Estado actual del conductor.
 id
 id_conductor
 estado
@@ -474,7 +474,7 @@ Esta tabla permite obtener rápidamente:
 ¿Cuándo se actualizó?
 
 
-## Tabla compras_paquetes - facturacion comercial del sistema
+## 15 Tabla compras_paquetes - facturacion comercial del sistema
 
 id_compra
 codigo_paquete
@@ -488,7 +488,20 @@ fecha_compra
 created_at
 updated_at
 
-## Tabla notificaciones - Notificaciones internas de la aplicación.
+## 16 Tabla configuraciones_tenant - Configuraciones particulares de cada empresa.
+
+id_configuracion
+clave
+valor
+created_at
+updated_at
+Ejemplo:
+radio_asignacion = 5
+tiempo_expiracion_pedido = 60
+permite_efectivo = true
+permite_tarjeta = true
+
+## 17 Tabla notificaciones - Notificaciones internas de la aplicación.
 id_notificacion
 id_usuario
 id_pedido
@@ -507,19 +520,7 @@ PEDIDO_CANCELADO
 PEDIDO_ENTREGADO
 NUEVA_ASIGNACION
 
-## Tabla configuraciones_tenant - Configuraciones particulares de cada empresa.
-
-id_configuracion
-clave
-valor
-created_at
-updated_at
-Ejemplo:
-radio_asignacion = 5
-tiempo_expiracion_pedido = 60
-permite_efectivo = true
-permite_tarjeta = true
-Tabla zonas_servicio
+## 18 Tabla zonas_servicio
 Zonas donde opera la flotilla.
 id_zona
 nombre
@@ -528,7 +529,7 @@ estado
 created_at
 updated_at
 
-## Tabla auditoria - Registro general de cambios sensibles dentro del tenant.
+## 19 Tabla auditoria - Registro general de cambios sensibles dentro del tenant.
 
 id_auditoria
 id_usuario

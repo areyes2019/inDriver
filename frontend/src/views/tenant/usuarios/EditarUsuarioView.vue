@@ -3,40 +3,45 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import http from '@/lib/http'
-import AdminLayout from '@/layouts/AdminLayout.vue'
+import TenantLayout from '@/layouts/TenantLayout.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 
 const route = useRoute()
 const router = useRouter()
-const tenantId = route.params.id
+const slug = route.params.slug as string
+const usuarioId = route.params.id
 
 const form = reactive({
-  nombre_comercial: '',
-  razon_social: '',
-  rfc: '',
+  nombre: '',
+  apellido_paterno: '',
+  apellido_materno: '',
   telefono: '',
   email: '',
+  rol: '',
+  estado: '',
 })
 
 const fieldErrors = reactive<Record<string, string>>({})
 const error = ref('')
 const success = ref('')
 const loading = ref(false)
-const loadingTenant = ref(true)
+const loadingUsuario = ref(true)
 
 onMounted(async () => {
   try {
-    const { data } = await http.get(`/admin/tenants/${tenantId}`)
-    const tenant = data.data ?? data
-    form.nombre_comercial = tenant.nombre_comercial ?? ''
-    form.razon_social = tenant.razon_social ?? ''
-    form.rfc = tenant.rfc ?? ''
-    form.telefono = tenant.telefono ?? ''
-    form.email = tenant.email ?? ''
+    const { data } = await http.get(`/t/${slug}/usuarios/${usuarioId}`)
+    const usuario = data.data ?? data
+    form.nombre = usuario.nombre ?? ''
+    form.apellido_paterno = usuario.apellido_paterno ?? ''
+    form.apellido_materno = usuario.apellido_materno ?? ''
+    form.telefono = usuario.telefono ?? ''
+    form.email = usuario.email ?? ''
+    form.rol = usuario.rol ?? ''
+    form.estado = usuario.estado ?? ''
   } catch {
-    error.value = 'No se pudo cargar el tenant.'
+    error.value = 'No se pudo cargar el usuario.'
   } finally {
-    loadingTenant.value = false
+    loadingUsuario.value = false
   }
 })
 
@@ -47,9 +52,9 @@ async function onSubmit() {
   loading.value = true
 
   try {
-    await http.put(`/admin/tenants/${tenantId}`, form)
-    success.value = 'Tenant actualizado correctamente.'
-    setTimeout(() => router.push({ name: 'admin-tenants-detalle', params: { id: tenantId } }), 1200)
+    await http.put(`/t/${slug}/usuarios/${usuarioId}`, form)
+    success.value = 'Usuario actualizado correctamente.'
+    setTimeout(() => router.push({ name: 'tenant-usuarios-lista', params: { slug } }), 1200)
   } catch (err) {
     if (axios.isAxiosError(err) && err.response?.status === 422) {
       const errors = err.response.data?.errors ?? {}
@@ -57,7 +62,7 @@ async function onSubmit() {
         fieldErrors[field] = (messages as string[])[0] ?? ''
       }
     } else {
-      error.value = 'No se pudo actualizar el tenant, intenta de nuevo.'
+      error.value = 'No se pudo actualizar el usuario, intenta de nuevo.'
     }
   } finally {
     loading.value = false
@@ -66,46 +71,46 @@ async function onSubmit() {
 </script>
 
 <template>
-  <AdminLayout>
-    <UiCard title="Editar tenant">
-      <p v-if="loadingTenant" class="text-sm text-black/50">Cargando...</p>
+  <TenantLayout>
+    <UiCard title="Editar usuario">
+      <p v-if="loadingUsuario" class="text-sm text-black/50">Cargando...</p>
 
       <form v-else class="max-w-lg space-y-5" @submit.prevent="onSubmit">
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Nombre comercial</span>
+          <span class="mb-1 block text-sm font-medium text-brand-dark">Nombre</span>
           <input
-            v-model="form.nombre_comercial"
+            v-model="form.nombre"
             type="text"
             required
             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
           />
-          <span v-if="fieldErrors.nombre_comercial" class="mt-1 block text-sm text-red-600">
-            {{ fieldErrors.nombre_comercial }}
+          <span v-if="fieldErrors.nombre" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.nombre }}
           </span>
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Razón social</span>
+          <span class="mb-1 block text-sm font-medium text-brand-dark">Apellido paterno</span>
           <input
-            v-model="form.razon_social"
+            v-model="form.apellido_paterno"
             type="text"
             required
             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
           />
-          <span v-if="fieldErrors.razon_social" class="mt-1 block text-sm text-red-600">
-            {{ fieldErrors.razon_social }}
+          <span v-if="fieldErrors.apellido_paterno" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.apellido_paterno }}
           </span>
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">RFC</span>
+          <span class="mb-1 block text-sm font-medium text-brand-dark">Apellido materno</span>
           <input
-            v-model="form.rfc"
+            v-model="form.apellido_materno"
             type="text"
             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
           />
-          <span v-if="fieldErrors.rfc" class="mt-1 block text-sm text-red-600">
-            {{ fieldErrors.rfc }}
+          <span v-if="fieldErrors.apellido_materno" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.apellido_materno }}
           </span>
         </label>
 
@@ -134,6 +139,36 @@ async function onSubmit() {
           </span>
         </label>
 
+        <label class="block">
+          <span class="mb-1 block text-sm font-medium text-brand-dark">Rol</span>
+          <select
+            v-model="form.rol"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+          >
+            <option value="AdminCliente">AdminCliente</option>
+            <option value="Despachador">Despachador</option>
+            <option value="Conductor">Conductor</option>
+          </select>
+          <span v-if="fieldErrors.rol" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.rol }}
+          </span>
+        </label>
+
+        <label class="block">
+          <span class="mb-1 block text-sm font-medium text-brand-dark">Estado</span>
+          <select
+            v-model="form.estado"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+          >
+            <option value="Activo">Activo</option>
+            <option value="Suspendido">Suspendido</option>
+            <option value="Inactivo">Inactivo</option>
+          </select>
+          <span v-if="fieldErrors.estado" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.estado }}
+          </span>
+        </label>
+
         <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
         <p v-if="success" class="text-sm text-green-600">{{ success }}</p>
 
@@ -148,5 +183,5 @@ async function onSubmit() {
         </div>
       </form>
     </UiCard>
-  </AdminLayout>
+  </TenantLayout>
 </template>

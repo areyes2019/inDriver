@@ -28,6 +28,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         return [
             'id_tenant',
             'nombre_comercial',
+            'slug',
             'razon_social',
             'rfc',
             'telefono',

@@ -1,23 +1,42 @@
 <script setup lang="ts">
-withDefaults(
+import { ref, watch } from 'vue'
+
+const props = withDefaults(
   defineProps<{
     open: boolean
     message: string
     title?: string
     confirmLabel?: string
     cancelLabel?: string
+    requirePassword?: boolean
+    passwordError?: string
   }>(),
   {
     title: 'Confirmar acción',
     confirmLabel: 'Confirmar',
     cancelLabel: 'Cancelar',
+    requirePassword: false,
+    passwordError: '',
   },
 )
 
 const emit = defineEmits<{
-  confirm: []
+  confirm: [password?: string]
   cancel: []
 }>()
+
+const password = ref('')
+
+watch(
+  () => props.open,
+  (open) => {
+    if (!open) password.value = ''
+  },
+)
+
+function handleConfirm() {
+  emit('confirm', props.requirePassword ? password.value : undefined)
+}
 </script>
 
 <template>
@@ -32,6 +51,24 @@ const emit = defineEmits<{
       <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg shadow-black/10">
         <h2 class="text-base font-semibold text-brand-dark">{{ title }}</h2>
         <p class="mt-2 text-sm text-black/70">{{ message }}</p>
+
+        <div v-if="requirePassword" class="mt-4">
+          <label class="text-sm font-medium text-brand-dark" for="ui-confirm-dialog-password">
+            Contraseña
+          </label>
+          <input
+            id="ui-confirm-dialog-password"
+            v-model="password"
+            type="password"
+            autocomplete="current-password"
+            class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            @keyup.enter="handleConfirm"
+          />
+          <p v-if="passwordError" role="alert" class="mt-1 text-sm text-red-600">
+            {{ passwordError }}
+          </p>
+        </div>
+
         <div class="mt-5 flex justify-end gap-3">
           <button
             type="button"
@@ -43,7 +80,7 @@ const emit = defineEmits<{
           <button
             type="button"
             class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
-            @click="emit('confirm')"
+            @click="handleConfirm"
           >
             {{ confirmLabel }}
           </button>

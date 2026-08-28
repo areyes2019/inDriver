@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Resources\Admin;
+namespace App\Http\Resources\Tenant;
 
-use App\Models\Tenant;
+use App\Models\Tenant\Usuario;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin Tenant
+ * @mixin Usuario
  */
-class TenantResource extends JsonResource
+class UsuarioResource extends JsonResource
 {
     /**
      * @return array<string, mixed>
@@ -19,15 +19,15 @@ class TenantResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id_tenant' => $this->id_tenant,
-            'nombre_comercial' => $this->nombre_comercial,
-            'slug' => $this->slug,
-            'razon_social' => $this->razon_social,
-            'rfc' => $this->rfc,
+            'id_usuario' => $this->id_usuario,
+            'nombre' => $this->nombre,
+            'apellido_paterno' => $this->apellido_paterno,
+            'apellido_materno' => $this->apellido_materno,
             'telefono' => $this->telefono,
             'email' => $this->email,
+            'rol' => $this->rol,
             'estado' => $this->estado,
-            'modo_estado' => $this->modo_estado,
+            'ultimo_acceso' => $this->ultimo_acceso,
             'created_at' => $this->created_at,
         ];
     }
