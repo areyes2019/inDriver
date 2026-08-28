@@ -25,12 +25,14 @@ async function onSubmit() {
 </script>
 
 <template>
-  <main class="flex min-h-screen bg-white font-sans">
-    <div class="hidden w-1/2 lg:block">
+  <main class="flex h-screen bg-white font-sans">
+    <div class="hidden h-full w-1/2 lg:block">
       <img :src="banner" alt="" class="h-full w-full object-cover" />
     </div>
 
-    <div class="flex w-full flex-col items-center justify-center px-6 py-12 lg:w-1/2">
+    <div
+      class="flex h-full w-full flex-col items-center justify-center overflow-y-auto px-6 py-12 lg:w-1/2"
+    >
       <div class="w-full max-w-sm">
         <div class="mb-8 flex items-center gap-2">
           <img :src="logo" alt="" class="h-8 w-8" />

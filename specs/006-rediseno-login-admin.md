@@ -23,6 +23,11 @@ sobre pantallas que ya funcionan.
   explícita para mantener cada vista independiente.
 - La columna izquierda (imagen) se oculta en pantallas angostas (mobile); en ese caso el
   formulario ocupa el ancho completo, sin apilar la imagen arriba.
+- El layout ocupa exactamente el alto de la pantalla (`h-screen`, no `min-h-screen`) y ambas
+  columnas se estiran a ese mismo alto — la imagen (`object-cover`) se recorta a la altura de
+  pantalla en vez de imponer su propia relación de aspecto. La página nunca hace scroll vertical
+  completo; si el contenido del formulario no cabe en pantallas muy bajas, hace scroll interno
+  solo dentro de la columna del formulario (`overflow-y-auto`), sin mover la columna de la imagen.
 - La imagen `banner.png` (`delivery/public/banner.png`, ~1.8 MB) se comprime y convierte a
   `banner.webp`, y se copia a `inDriver/frontend/src/assets/banner.webp` — proyecto independiente
   de `delivery`, sin referencias cruzadas de ruta entre repos.
@@ -56,6 +61,9 @@ sobre pantallas que ya funcionan.
 - En las 3 vistas, la columna de imagen usa una clase responsiva de Tailwind (oculta por defecto,
   visible desde el breakpoint de desktop) para que en mobile solo se vea el formulario, sin scroll
   horizontal.
+- `<main>` usa `h-screen` (no `min-h-screen`) y ambas columnas `h-full`, para que la página nunca
+  exceda el alto de pantalla; la columna del formulario usa `overflow-y-auto` como resguardo si su
+  contenido no cabe en pantallas bajas.
 - Se reutilizan tokens/clases de la spec 005 (`brand.dark/yellow/blue`, Montserrat) y componentes
   de `components/ui/` donde aplique (p. ej. `UiCard` para el panel del formulario), sin duplicar
   estilos sueltos.
@@ -77,23 +85,27 @@ sobre pantallas que ya funcionan.
    columnas en desktop: imagen a la izquierda, formulario a la derecha.
 2. En pantallas angostas (mobile), la columna de imagen no se muestra en ninguna de las 3 vistas;
    el formulario ocupa el ancho completo sin generar scroll horizontal.
-3. La imagen usada es `frontend/src/assets/banner.webp` (versión comprimida/WebP de
+3. Ninguna de las 3 vistas genera scroll vertical de página completa: el layout ocupa
+   exactamente el alto de pantalla y la imagen se recorta a ese alto (no impone su propia relación
+   de aspecto). Si el contenido del formulario no cabe en una pantalla muy baja, el scroll ocurre
+   solo dentro de la columna del formulario.
+4. La imagen usada es `frontend/src/assets/banner.webp` (versión comprimida/WebP de
    `banner.png`), importada como asset de Vite — no existe una copia sin comprimir servida desde
    una carpeta pública.
-4. La imagen tiene `alt=""` en las 3 vistas.
-5. Los colores y la tipografía de las 3 vistas usan los tokens `brand.dark/yellow/blue` y
+5. La imagen tiene `alt=""` en las 3 vistas.
+6. Los colores y la tipografía de las 3 vistas usan los tokens `brand.dark/yellow/blue` y
    `fontFamily.sans` (Montserrat) definidos en `005-guia-diseno-base.md` — no hay hex ni fuentes
    sueltas nuevas.
-6. Los textos visibles de las 3 vistas están en español.
-7. El checkbox "Recordarme" existe visualmente en `LoginView` pero no cambia el comportamiento del
+7. Los textos visibles de las 3 vistas están en español.
+8. El checkbox "Recordarme" existe visualmente en `LoginView` pero no cambia el comportamiento del
    login: la petición a `/api/v1/admin/login` es idéntica a la de hoy con o sin el checkbox
    marcado.
-8. El link "¿Olvidaste tu contraseña?" sigue apuntando a `/admin/forgot-password` sin cambios de
+9. El link "¿Olvidaste tu contraseña?" sigue apuntando a `/admin/forgot-password` sin cambios de
    comportamiento respecto a la spec 004.
-9. Ningún endpoint de `/api/v1/admin/*`, el store `useAdminAuthStore`, ni las rutas del router
-   (`router/index.ts`) cambian de comportamiento respecto a la spec 004.
-10. `npm run build` compila sin errores; ESLint/Prettier corren sin errores sobre el código nuevo.
-11. No existe ningún componente de layout compartido nuevo entre las 3 vistas — cada una contiene
+10. Ningún endpoint de `/api/v1/admin/*`, el store `useAdminAuthStore`, ni las rutas del router
+    (`router/index.ts`) cambian de comportamiento respecto a la spec 004.
+11. `npm run build` compila sin errores; ESLint/Prettier corren sin errores sobre el código nuevo.
+12. No existe ningún componente de layout compartido nuevo entre las 3 vistas — cada una contiene
     su propio markup del layout de dos columnas.
 
 ## Supuestos asumidos (registro completo)
