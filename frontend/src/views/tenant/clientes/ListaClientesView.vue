@@ -151,10 +151,22 @@ onMounted(fetchClientes)
               <td class="py-2 pr-4">
                 <div class="flex flex-wrap gap-2">
                   <RouterLink
-                    :to="{ name: 'tenant-clientes-editar', params: { slug, id: cliente.id_cliente } }"
+                    :to="{
+                      name: 'tenant-clientes-editar',
+                      params: { slug, id: cliente.id_cliente },
+                    }"
                     class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
                   >
                     Editar
+                  </RouterLink>
+                  <RouterLink
+                    :to="{
+                      name: 'tenant-direcciones-lista',
+                      params: { slug, id: cliente.id_cliente },
+                    }"
+                    class="rounded-lg border border-brand-blue px-3 py-1.5 text-sm font-semibold text-brand-blue transition-colors hover:bg-brand-blue hover:text-white"
+                  >
+                    Direcciones
                   </RouterLink>
                   <button
                     type="button"
@@ -200,7 +212,9 @@ onMounted(fetchClientes)
           ? `¿Seguro que quieres ${accionPara(clienteToToggle)} a ${clienteToToggle.nombre}?`
           : ''
       "
-      :confirm-label="clienteToToggle && clienteToToggle.estado === 'Activo' ? 'Desactivar' : 'Activar'"
+      :confirm-label="
+        clienteToToggle && clienteToToggle.estado === 'Activo' ? 'Desactivar' : 'Activar'
+      "
       @confirm="confirmToggleEstado"
       @cancel="cancelToggleEstado"
     />

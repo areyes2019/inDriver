@@ -8,6 +8,7 @@ use App\Http\Controllers\Tenant\ClienteController;
 use App\Http\Controllers\Tenant\ConductorController;
 use App\Http\Controllers\Tenant\ConductorVehiculoController;
 use App\Http\Controllers\Tenant\DespachadorController;
+use App\Http\Controllers\Tenant\DireccionClienteController;
 use App\Http\Controllers\Tenant\UsuarioController;
 use App\Http\Controllers\Tenant\VehiculoController;
 use Illuminate\Support\Facades\Route;
@@ -79,6 +80,12 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::get('/clientes/{cliente}', [ClienteController::class, 'show']);
             Route::put('/clientes/{cliente}', [ClienteController::class, 'update']);
             Route::patch('/clientes/{cliente}/estado', [ClienteController::class, 'cambiarEstado']);
+
+            Route::get('/clientes/{cliente}/direcciones', [DireccionClienteController::class, 'index']);
+            Route::post('/clientes/{cliente}/direcciones', [DireccionClienteController::class, 'store']);
+            Route::get('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'show']);
+            Route::put('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'update']);
+            Route::delete('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'destroy']);
         });
     });
 });

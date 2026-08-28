@@ -196,6 +196,26 @@ const router = createRouter({
       component: () => import('../views/tenant/clientes/EditarClienteView.vue'),
       meta: { requiresTenantAuth: true },
     },
+    {
+      path: '/t/:slug/panel/clientes/:id/direcciones',
+      name: 'tenant-direcciones-lista',
+      component: () =>
+        import('../views/tenant/clientes/direcciones/ListaDireccionesClienteView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
+      path: '/t/:slug/panel/clientes/:id/direcciones/crear',
+      name: 'tenant-direcciones-crear',
+      component: () => import('../views/tenant/clientes/direcciones/CrearDireccionClienteView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
+      path: '/t/:slug/panel/clientes/:id/direcciones/:direccionId/editar',
+      name: 'tenant-direcciones-editar',
+      component: () =>
+        import('../views/tenant/clientes/direcciones/EditarDireccionClienteView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
   ],
 })
 
