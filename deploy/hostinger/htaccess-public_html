@@ -1,0 +1,91 @@
+# =============================================================================
+# .htaccess del docroot de producción
+#
+# Se copia a public_html/.htaccess (SIN el prefijo "htaccess-").
+#
+# En este archivo conviven dos aplicaciones: el SPA compilado y el front
+# controller de Laravel. El orden de los bloques importa y no se debe alterar.
+#
+# Versión reducida frente a la de facturación: sin las reglas de PWA (manifest,
+# .mjs, cachés de service worker), porque inDriver no tiene PWA todavía (fuera
+# de alcance de specs/001-inicio-proyecto.md). El día que se agregue, este
+# archivo gana esas reglas — no antes.
+# =============================================================================
+
+DirectoryIndex index.html
+
+<IfModule mod_negotiation.c>
+    Options -MultiViews -Indexes
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # -------------------------------------------------------------------------
+    # 1. Host canónico y HTTPS
+    #
+    # No es cosmético. La cookie de sesión es host-only, así que para el
+    # navegador www.delivery.ejemplo.com y delivery.ejemplo.com son dos sitios
+    # distintos: un usuario que entra por uno después de haberse logueado en el
+    # otro aparece como no autenticado, sin ninguna explicación visible. HTTPS
+    # además es requisito de cualquier futura PWA.
+    #
+    # El dominio NO se escribe aquí: las dos reglas lo derivan de la petición
+    # (%{HTTP_HOST} en la primera, el grupo capturado %1 en la segunda), para
+    # que una futura mudanza de dominio no obligue a editar este archivo.
+    # -------------------------------------------------------------------------
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+    RewriteRule ^ https://%1%{REQUEST_URI} [L,R=301]
+
+    # -------------------------------------------------------------------------
+    # 2. Cabeceras que Apache no reexpone por su cuenta
+    #    (idénticas a las de backend/public/.htaccess)
+    # -------------------------------------------------------------------------
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    RewriteCond %{HTTP:x-xsrf-token} .
+    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
+
+    # -------------------------------------------------------------------------
+    # 3. Lo que le toca a Laravel
+    #
+    #    /api/v1/*          el API             (apiPrefix en bootstrap/app.php)
+    #    /sanctum/*         la cookie CSRF
+    #    /up                el healthcheck
+    #
+    # Van al front controller SIEMPRE, existan o no como archivo en disco.
+    # -------------------------------------------------------------------------
+    RewriteRule ^(api|sanctum)(/.*)?$ index.php [L]
+    RewriteRule ^up$ index.php [L]
+
+    # -------------------------------------------------------------------------
+    # 4. Todo lo demás es del SPA
+    #
+    # Si el archivo existe en disco se sirve tal cual (assets, favicon). Si no,
+    # responde index.html y el router de Vue resuelve la ruta en el cliente.
+    # -------------------------------------------------------------------------
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.html [L]
+</IfModule>
+
+# =============================================================================
+# 5. Cabeceras de caché del SPA
+# =============================================================================
+
+<IfModule mod_headers.c>
+    # Solo los archivos con hash de contenido en el nombre son inmutables.
+    <FilesMatch "-[A-Za-z0-9_-]{8,}\.(js|css)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+
+    # El índice siempre se revalida contra el servidor.
+    <Files "index.html">
+        Header set Cache-Control "no-cache, must-revalidate"
+    </Files>
+</IfModule>

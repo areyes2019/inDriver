@@ -1,0 +1,3 @@
+# Configuración real del despliegue: tiene la ruta de la cuenta de Hostinger.
+# La plantilla pública equivalente es deploy/config.example.sh.
+/deploy/config.sh

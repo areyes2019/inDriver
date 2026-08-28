@@ -1,0 +1,25 @@
+# =============================================================================
+# Normalizacion de fin de linea
+#
+# Windows termina cada renglon con CRLF; Linux con LF. Un script .sh guardado
+# desde Windows y ejecutado en Hostinger falla con "bad interpreter: /bin/bash^M".
+# Con text=auto Git normaliza a LF al guardar en el repositorio.
+# =============================================================================
+
+* text=auto eol=lf
+
+# Archivos que SIEMPRE deben llegar al servidor con LF, sin excepcion
+*.sh        text eol=lf
+.htaccess   text eol=lf
+*.env       text eol=lf
+
+# Binarios: nunca normalizar
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.ttf  binary
+*.woff binary
+*.woff2 binary

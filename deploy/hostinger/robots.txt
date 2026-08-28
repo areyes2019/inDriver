@@ -1,0 +1,6 @@
+# Todavía no hay ninguna pantalla pública en inDriver: no hay nada que un
+# buscador deba indexar, y las URL del SPA filtrarían la estructura interna
+# sin ningún beneficio. Reemplaza al robots.txt por defecto de Laravel, que
+# permite el rastreo completo.
+User-agent: *
+Disallow: /
