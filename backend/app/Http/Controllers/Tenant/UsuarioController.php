@@ -7,11 +7,13 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Tenant\UsuarioResource;
 use App\Models\Tenant\Auditoria;
+use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Usuario;
 use App\Notifications\CredencialesUsuarioTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
@@ -53,7 +55,15 @@ class UsuarioController extends Controller
 
         $password = Str::password(16);
 
-        $usuario = Usuario::create([...$data, 'password' => $password, 'estado' => 'Activo']);
+        $usuario = DB::transaction(function () use ($data, $password) {
+            $usuario = Usuario::create([...$data, 'password' => $password, 'estado' => 'Activo']);
+
+            if ($usuario->rol === 'Despachador') {
+                Despachador::create(['id_usuario' => $usuario->id_usuario, 'estado' => 'Activo']);
+            }
+
+            return $usuario;
+        });
 
         Notification::route('mail', $usuario->email)->notify(new CredencialesUsuarioTenant(
             tenant('nombre_comercial'),
@@ -92,7 +102,17 @@ class UsuarioController extends Controller
             ]);
         }
 
-        $usuario->update($data);
+        $rolAnterior = $usuario->rol;
+
+        DB::transaction(function () use ($usuario, $data, $rolAnterior) {
+            $usuario->update($data);
+
+            if ($rolAnterior !== 'Despachador' && $usuario->rol === 'Despachador') {
+                Despachador::firstOrCreate(['id_usuario' => $usuario->id_usuario], ['estado' => 'Activo']);
+            } elseif ($rolAnterior === 'Despachador' && $usuario->rol !== 'Despachador') {
+                Despachador::where('id_usuario', $usuario->id_usuario)->delete();
+            }
+        });
 
         Auditoria::create([
             'id_usuario' => $request->user('usuario')->id_usuario,

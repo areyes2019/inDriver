@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Tenant;
+use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Usuario;
 use App\Notifications\CredencialesUsuarioTenant;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -200,5 +201,89 @@ it('deletes a usuario when the password is correct', function () {
 
     tenancy()->initialize($tenant);
     expect(Usuario::find($otro->id_usuario))->toBeNull();
+    tenancy()->end();
+});
+
+it('creates a despachador profile when a usuario is created with rol Despachador', function () {
+    Notification::fake();
+    $tenant = usuarioTenant();
+    $admin = usuarioEnTenant($tenant);
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/usuarios', [
+            'nombre' => 'Pedro',
+            'apellido_paterno' => 'Ruiz',
+            'email' => 'pedro@cafeluna.com',
+            'rol' => 'Despachador',
+        ])
+        ->assertCreated();
+
+    tenancy()->initialize($tenant);
+    $despachador = Despachador::where('id_usuario', $response->json('id_usuario'))->first();
+    expect($despachador)->not->toBeNull();
+    expect($despachador->estado)->toBe('Activo');
+    tenancy()->end();
+});
+
+it('does not create a despachador profile for other roles', function () {
+    Notification::fake();
+    $tenant = usuarioTenant();
+    $admin = usuarioEnTenant($tenant);
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/usuarios', [
+            'nombre' => 'Pedro',
+            'apellido_paterno' => 'Ruiz',
+            'email' => 'pedro@cafeluna.com',
+            'rol' => 'Conductor',
+        ])
+        ->assertCreated();
+
+    tenancy()->initialize($tenant);
+    expect(Despachador::where('id_usuario', $response->json('id_usuario'))->exists())->toBeFalse();
+    tenancy()->end();
+});
+
+it('creates a despachador profile when a usuario rol changes to Despachador', function () {
+    $tenant = usuarioTenant();
+    $admin = usuarioEnTenant($tenant);
+    $otro = usuarioEnTenant($tenant, ['nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com', 'rol' => 'Conductor']);
+
+    $this->actingAs($admin, 'usuario')
+        ->putJson("/api/v1/t/cafe-luna/usuarios/{$otro->id_usuario}", [
+            'nombre' => 'Pedro',
+            'apellido_paterno' => 'Ruiz',
+            'email' => 'pedro@cafeluna.com',
+            'rol' => 'Despachador',
+            'estado' => 'Activo',
+        ])
+        ->assertOk();
+
+    tenancy()->initialize($tenant);
+    expect(Despachador::where('id_usuario', $otro->id_usuario)->exists())->toBeTrue();
+    tenancy()->end();
+});
+
+it('removes the despachador profile when a usuario rol changes away from Despachador', function () {
+    $tenant = usuarioTenant();
+    $admin = usuarioEnTenant($tenant);
+    $otro = usuarioEnTenant($tenant, ['nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com', 'rol' => 'Despachador']);
+
+    tenancy()->initialize($tenant);
+    Despachador::create(['id_usuario' => $otro->id_usuario, 'estado' => 'Activo']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->putJson("/api/v1/t/cafe-luna/usuarios/{$otro->id_usuario}", [
+            'nombre' => 'Pedro',
+            'apellido_paterno' => 'Ruiz',
+            'email' => 'pedro@cafeluna.com',
+            'rol' => 'Conductor',
+            'estado' => 'Activo',
+        ])
+        ->assertOk();
+
+    tenancy()->initialize($tenant);
+    expect(Despachador::where('id_usuario', $otro->id_usuario)->exists())->toBeFalse();
     tenancy()->end();
 });

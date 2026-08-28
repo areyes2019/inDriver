@@ -125,6 +125,12 @@ const router = createRouter({
       meta: { requiresTenantAuth: true },
     },
     {
+      path: '/t/:slug/panel/despachadores',
+      name: 'tenant-despachadores-lista',
+      component: () => import('../views/tenant/despachadores/ListaDespachadoresView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
       path: '/t/:slug/panel/clientes',
       name: 'tenant-clientes-lista',
       component: () => import('../views/tenant/clientes/ListaClientesView.vue'),

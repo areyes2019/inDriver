@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\PaqueteViajeController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Tenant\AuthController as TenantAuthController;
 use App\Http\Controllers\Tenant\ClienteController;
+use App\Http\Controllers\Tenant\DespachadorController;
 use App\Http\Controllers\Tenant\UsuarioController;
 use Illuminate\Support\Facades\Route;
 
@@ -50,6 +51,9 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::get('/usuarios/{id}', [UsuarioController::class, 'show']);
             Route::put('/usuarios/{id}', [UsuarioController::class, 'update']);
             Route::delete('/usuarios/{id}', [UsuarioController::class, 'destroy']);
+
+            Route::get('/despachadores', [DespachadorController::class, 'index']);
+            Route::patch('/despachadores/{despachador}/estado', [DespachadorController::class, 'cambiarEstado']);
 
             Route::get('/clientes', [ClienteController::class, 'index']);
             Route::post('/clientes', [ClienteController::class, 'store']);

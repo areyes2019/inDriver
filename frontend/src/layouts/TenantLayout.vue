@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { UserCog, Users } from '@lucide/vue'
+import { Radio, UserCog, Users } from '@lucide/vue'
 import UiSidebar from '@/components/ui/UiSidebar.vue'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
 
@@ -14,6 +14,7 @@ const slug = computed(() => route.params.slug as string)
 const items = computed(() => [
   { label: 'Clientes', to: `/t/${slug.value}/panel/clientes`, icon: Users },
   { label: 'Usuarios', to: `/t/${slug.value}/panel/usuarios`, icon: UserCog },
+  { label: 'Despachadores', to: `/t/${slug.value}/panel/despachadores`, icon: Radio },
 ])
 
 async function onLogout() {
