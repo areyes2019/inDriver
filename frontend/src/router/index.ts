@@ -131,6 +131,24 @@ const router = createRouter({
       meta: { requiresTenantAuth: true },
     },
     {
+      path: '/t/:slug/panel/conductores',
+      name: 'tenant-conductores-lista',
+      component: () => import('../views/tenant/conductores/ListaConductoresView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
+      path: '/t/:slug/panel/conductores/crear',
+      name: 'tenant-conductores-crear',
+      component: () => import('../views/tenant/conductores/CrearConductorView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
+      path: '/t/:slug/panel/conductores/:id/editar',
+      name: 'tenant-conductores-editar',
+      component: () => import('../views/tenant/conductores/EditarConductorView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
       path: '/t/:slug/panel/clientes',
       name: 'tenant-clientes-lista',
       component: () => import('../views/tenant/clientes/ListaClientesView.vue'),

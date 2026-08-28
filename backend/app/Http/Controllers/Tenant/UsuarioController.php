@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Tenant\UsuarioResource;
 use App\Models\Tenant\Auditoria;
+use App\Models\Tenant\Conductor;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Usuario;
 use App\Notifications\CredencialesUsuarioTenant;
@@ -111,6 +112,10 @@ class UsuarioController extends Controller
                 Despachador::firstOrCreate(['id_usuario' => $usuario->id_usuario], ['estado' => 'Activo']);
             } elseif ($rolAnterior === 'Despachador' && $usuario->rol !== 'Despachador') {
                 Despachador::where('id_usuario', $usuario->id_usuario)->delete();
+            }
+
+            if ($rolAnterior === 'Conductor' && $usuario->rol !== 'Conductor') {
+                Conductor::where('id_usuario', $usuario->id_usuario)->delete();
             }
         });
 

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Tenant;
+use App\Models\Tenant\Conductor;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Usuario;
 use App\Notifications\CredencialesUsuarioTenant;
@@ -285,5 +286,49 @@ it('removes the despachador profile when a usuario rol changes away from Despach
 
     tenancy()->initialize($tenant);
     expect(Despachador::where('id_usuario', $otro->id_usuario)->exists())->toBeFalse();
+    tenancy()->end();
+});
+
+it('does not create a conductor profile when a usuario rol changes to Conductor', function () {
+    $tenant = usuarioTenant();
+    $admin = usuarioEnTenant($tenant);
+    $otro = usuarioEnTenant($tenant, ['nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com', 'rol' => 'Despachador']);
+
+    $this->actingAs($admin, 'usuario')
+        ->putJson("/api/v1/t/cafe-luna/usuarios/{$otro->id_usuario}", [
+            'nombre' => 'Pedro',
+            'apellido_paterno' => 'Ruiz',
+            'email' => 'pedro@cafeluna.com',
+            'rol' => 'Conductor',
+            'estado' => 'Activo',
+        ])
+        ->assertOk();
+
+    tenancy()->initialize($tenant);
+    expect(Conductor::where('id_usuario', $otro->id_usuario)->exists())->toBeFalse();
+    tenancy()->end();
+});
+
+it('removes the conductor profile when a usuario rol changes away from Conductor', function () {
+    $tenant = usuarioTenant();
+    $admin = usuarioEnTenant($tenant);
+    $otro = usuarioEnTenant($tenant, ['nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com', 'rol' => 'Conductor']);
+
+    tenancy()->initialize($tenant);
+    Conductor::create(['id_usuario' => $otro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->putJson("/api/v1/t/cafe-luna/usuarios/{$otro->id_usuario}", [
+            'nombre' => 'Pedro',
+            'apellido_paterno' => 'Ruiz',
+            'email' => 'pedro@cafeluna.com',
+            'rol' => 'Despachador',
+            'estado' => 'Activo',
+        ])
+        ->assertOk();
+
+    tenancy()->initialize($tenant);
+    expect(Conductor::where('id_usuario', $otro->id_usuario)->exists())->toBeFalse();
     tenancy()->end();
 });

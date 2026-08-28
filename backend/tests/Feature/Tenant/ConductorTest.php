@@ -1,0 +1,271 @@
+<?php
+
+use App\Models\Tenant;
+use App\Models\Tenant\Auditoria;
+use App\Models\Tenant\Conductor;
+use App\Models\Tenant\Usuario;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+
+uses(RefreshDatabase::class);
+
+beforeEach(function () {
+    $this->withHeader('Referer', 'http://localhost:5173')
+        ->withoutMiddleware(ValidateCsrfToken::class);
+
+    gc_collect_cycles();
+    foreach (glob(database_path('delivery_tenant_*')) as $file) {
+        if (! File::delete($file)) {
+            usleep(50000);
+            File::delete($file);
+        }
+    }
+});
+
+afterEach(function () {
+    tenancy()->end();
+    DB::purge('tenant');
+    gc_collect_cycles();
+
+    foreach (glob(database_path('delivery_tenant_*')) as $file) {
+        File::delete($file);
+    }
+});
+
+function conductorTenant(array $overrides = []): Tenant
+{
+    return Tenant::create(array_merge([
+        'nombre_comercial' => 'Café Luna',
+        'razon_social' => 'Café Luna SA de CV',
+        'slug' => 'cafe-luna',
+    ], $overrides));
+}
+
+function conductorAdminUsuario(Tenant $tenant, array $overrides = []): Usuario
+{
+    tenancy()->initialize($tenant);
+
+    $usuario = Usuario::create(array_merge([
+        'nombre' => 'Laura',
+        'apellido_paterno' => 'Torres',
+        'email' => 'laura@cafeluna.com',
+        'password' => bcrypt('Password123!'),
+        'rol' => 'AdminCliente',
+        'estado' => 'Activo',
+    ], $overrides));
+
+    tenancy()->end();
+
+    return $usuario;
+}
+
+it('rejects listing conductores without a session', function () {
+    conductorTenant();
+
+    $this->getJson('/api/v1/t/cafe-luna/conductores')->assertUnauthorized();
+});
+
+it('rejects conductores access for a non-AdminCliente role', function () {
+    $tenant = conductorTenant();
+    $despachador = conductorAdminUsuario($tenant, [
+        'email' => 'pedro@cafeluna.com',
+        'rol' => 'Despachador',
+    ]);
+
+    $this->actingAs($despachador, 'usuario')
+        ->getJson('/api/v1/t/cafe-luna/conductores')
+        ->assertForbidden();
+});
+
+it('only lists Conductor usuarios that are Activo and have no profile yet as available', function () {
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $conductorSinPerfil = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    $conductorConPerfil = Usuario::create([
+        'nombre' => 'Ana', 'apellido_paterno' => 'Gómez', 'email' => 'ana@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    Conductor::create(['id_usuario' => $conductorConPerfil->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    Usuario::create([
+        'nombre' => 'Suspendido', 'apellido_paterno' => 'Ruiz', 'email' => 'suspendido@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Suspendido',
+    ]);
+    tenancy()->end();
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->getJson('/api/v1/t/cafe-luna/conductores/usuarios-disponibles')
+        ->assertOk();
+
+    expect($response->json('data'))->toHaveCount(1);
+    expect($response->json('data.0.id_usuario'))->toBe($conductorSinPerfil->id_usuario);
+});
+
+it('creates a conductor profile for an eligible usuario', function () {
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    tenancy()->end();
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/conductores', [
+            'id_usuario' => $usuarioPedro->id_usuario,
+            'numero_licencia' => 'ABC123',
+            'tipo_licencia' => 'A',
+        ])
+        ->assertCreated()
+        ->assertJsonPath('estado', 'ACTIVO')
+        ->assertJsonPath('disponibilidad', 'FUERA_DE_SERVICIO')
+        ->assertJsonPath('numero_licencia', 'ABC123');
+
+    tenancy()->initialize($tenant);
+    expect(Auditoria::where('tabla_afectada', 'conductores')->where('accion', 'ALTA')->exists())->toBeTrue();
+    tenancy()->end();
+
+    expect($response->json('id_conductor'))->not->toBeNull();
+});
+
+it('rejects creating a conductor profile for a usuario without rol Conductor', function () {
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Despachador', 'estado' => 'Activo',
+    ]);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/conductores', [
+            'id_usuario' => $usuarioPedro->id_usuario,
+            'numero_licencia' => 'ABC123',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['id_usuario']);
+});
+
+it('rejects creating a conductor profile for a usuario that already has one', function () {
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/conductores', [
+            'id_usuario' => $usuarioPedro->id_usuario,
+            'numero_licencia' => 'XYZ789',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['id_usuario']);
+});
+
+it('lists conductores with their usuario data and filters by search', function () {
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+
+    $usuarioAna = Usuario::create([
+        'nombre' => 'Ana', 'apellido_paterno' => 'Gómez', 'email' => 'ana@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    Conductor::create(['id_usuario' => $usuarioAna->id_usuario, 'numero_licencia' => 'XYZ789', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->getJson('/api/v1/t/cafe-luna/conductores?search=ABC123')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.nombre', 'Pedro');
+});
+
+it('shows a single conductor with its usuario data', function () {
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    $conductor = Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->getJson("/api/v1/t/cafe-luna/conductores/{$conductor->id_conductor}")
+        ->assertOk()
+        ->assertJsonPath('numero_licencia', 'ABC123')
+        ->assertJsonPath('email', 'pedro@cafeluna.com');
+});
+
+it('updates a conductor profile including estado and disponibilidad, and logs it', function () {
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    $conductor = Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->putJson("/api/v1/t/cafe-luna/conductores/{$conductor->id_conductor}", [
+            'numero_licencia' => 'ABC123',
+            'estado' => 'BLOQUEADO',
+            'disponibilidad' => 'DISPONIBLE',
+        ])
+        ->assertOk()
+        ->assertJsonPath('estado', 'BLOQUEADO')
+        ->assertJsonPath('disponibilidad', 'DISPONIBLE');
+
+    tenancy()->initialize($tenant);
+    expect(Auditoria::where('tabla_afectada', 'conductores')->where('accion', 'EDICION')->exists())->toBeTrue();
+    tenancy()->end();
+});
+
+it('rejects updating a conductor with an estado outside the enum', function () {
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    $conductor = Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->putJson("/api/v1/t/cafe-luna/conductores/{$conductor->id_conductor}", [
+            'numero_licencia' => 'ABC123',
+            'estado' => 'NoExiste',
+            'disponibilidad' => 'DISPONIBLE',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['estado']);
+});
