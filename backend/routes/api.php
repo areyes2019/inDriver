@@ -6,8 +6,10 @@ use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Tenant\AuthController as TenantAuthController;
 use App\Http\Controllers\Tenant\ClienteController;
 use App\Http\Controllers\Tenant\ConductorController;
+use App\Http\Controllers\Tenant\ConductorVehiculoController;
 use App\Http\Controllers\Tenant\DespachadorController;
 use App\Http\Controllers\Tenant\UsuarioController;
+use App\Http\Controllers\Tenant\VehiculoController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')->group(function () {
@@ -61,6 +63,16 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::post('/conductores', [ConductorController::class, 'store']);
             Route::get('/conductores/{conductor}', [ConductorController::class, 'show']);
             Route::put('/conductores/{conductor}', [ConductorController::class, 'update']);
+
+            Route::get('/vehiculos', [VehiculoController::class, 'index']);
+            Route::post('/vehiculos', [VehiculoController::class, 'store']);
+            Route::get('/vehiculos/{vehiculo}', [VehiculoController::class, 'show']);
+            Route::put('/vehiculos/{vehiculo}', [VehiculoController::class, 'update']);
+
+            Route::get('/conductor-vehiculo/disponibles', [ConductorVehiculoController::class, 'disponibles']);
+            Route::get('/conductor-vehiculo', [ConductorVehiculoController::class, 'index']);
+            Route::post('/conductor-vehiculo', [ConductorVehiculoController::class, 'store']);
+            Route::patch('/conductor-vehiculo/{conductorVehiculo}/finalizar', [ConductorVehiculoController::class, 'finalizar']);
 
             Route::get('/clientes', [ClienteController::class, 'index']);
             Route::post('/clientes', [ClienteController::class, 'store']);
