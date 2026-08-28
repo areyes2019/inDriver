@@ -9,6 +9,7 @@ use App\Http\Controllers\Tenant\ConductorController;
 use App\Http\Controllers\Tenant\ConductorVehiculoController;
 use App\Http\Controllers\Tenant\DespachadorController;
 use App\Http\Controllers\Tenant\DireccionClienteController;
+use App\Http\Controllers\Tenant\PedidoController;
 use App\Http\Controllers\Tenant\UsuarioController;
 use App\Http\Controllers\Tenant\VehiculoController;
 use Illuminate\Support\Facades\Route;
@@ -86,6 +87,15 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::get('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'show']);
             Route::put('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'update']);
             Route::delete('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'destroy']);
+        });
+
+        Route::middleware(['throttle:tenant-usuarios', 'rol.tenant:AdminCliente,Despachador'])->group(function () {
+            Route::get('/pedidos/recursos', [PedidoController::class, 'recursos']);
+            Route::get('/pedidos', [PedidoController::class, 'index']);
+            Route::post('/pedidos', [PedidoController::class, 'store']);
+            Route::get('/pedidos/{pedido}', [PedidoController::class, 'show']);
+            Route::put('/pedidos/{pedido}', [PedidoController::class, 'update']);
+            Route::patch('/pedidos/{pedido}/estado', [PedidoController::class, 'cambiarEstado']);
         });
     });
 });
