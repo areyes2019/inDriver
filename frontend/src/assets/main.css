@@ -1,13 +1,21 @@
 @import './base.css';
+@import 'tailwindcss';
 
-#app {
+@theme {
+  --color-brand-dark: #000814;
+  --color-brand-yellow: #ffc300;
+  --color-brand-blue: #003566;
+  --font-sans: 'Montserrat', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+.app-shell {
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
   font-weight: normal;
 }
 
-a,
+.app-shell a,
 .green {
   text-decoration: none;
   color: hsla(160, 100%, 37%, 1);
@@ -16,18 +24,18 @@ a,
 }
 
 @media (hover: hover) {
-  a:hover {
+  .app-shell a:hover {
     background-color: hsla(160, 100%, 37%, 0.2);
   }
 }
 
 @media (min-width: 1024px) {
-  body {
+  body:not(.is-admin) {
     display: flex;
     place-items: center;
   }
 
-  #app {
+  .app-shell {
     display: grid;
     grid-template-columns: 1fr 1fr;
     padding: 0 2rem;
