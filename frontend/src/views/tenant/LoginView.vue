@@ -21,7 +21,8 @@ async function onSubmit() {
   loading.value = true
   try {
     await auth.login(slug, email.value, password.value)
-    router.push({ name: 'tenant-clientes-lista', params: { slug } })
+    const destino = auth.usuario?.rol === 'Despachador' ? 'tenant-panel' : 'tenant-clientes-lista'
+    router.push({ name: destino, params: { slug } })
   } catch {
     error.value = 'Correo o contraseña incorrectos.'
   } finally {

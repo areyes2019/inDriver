@@ -107,6 +107,12 @@ const router = createRouter({
       component: () => import('../views/tenant/ResetPasswordView.vue'),
     },
     {
+      path: '/t/:slug/panel',
+      name: 'tenant-panel',
+      component: () => import('../views/tenant/panel/PanelView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
       path: '/t/:slug/panel/usuarios',
       name: 'tenant-usuarios-lista',
       component: () => import('../views/tenant/usuarios/ListaUsuariosView.vue'),
@@ -258,6 +264,10 @@ router.beforeEach(async (to) => {
 
     if (!auth.isAuthenticated) {
       return { name: 'tenant-login', params: { slug } }
+    }
+
+    if (to.name === 'tenant-panel' && auth.usuario?.rol !== 'Despachador') {
+      return { name: 'tenant-clientes-lista', params: { slug } }
     }
   }
 
