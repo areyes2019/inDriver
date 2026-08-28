@@ -104,6 +104,9 @@ filtrar, a diferencia de los listados a nivel tenant (`usuarios`, `clientes`, et
   `EditarDireccionClienteView.vue`.
 - **`ListaClientesView.vue`**: cada fila gana un enlace "Direcciones" que lleva a la lista anidada de
   ese cliente.
+- Las tablas de `ListaClientesView.vue` y `ListaDireccionesClienteView.vue` ocupan el 100% del
+  ancho interior disponible del card, sin `max-width` ni centrado propio, igual que la corrección
+  ya aplicada en `ListaTenantsView.vue` (spec 008).
 - **Rutas** (`router/index.ts`): `/t/:slug/panel/clientes/:id/direcciones` (+`/crear`,
   `/:direccionId/editar`), con `meta: { requiresTenantAuth: true }`. Sin ítem nuevo en el menú lateral
   — se llega solo desde la ficha de un cliente.
@@ -131,7 +134,10 @@ filtrar, a diferencia de los listados a nivel tenant (`usuarios`, `clientes`, et
 7. El frontend expone `/t/:slug/panel/clientes/:id/direcciones` con la tabla, "Nueva dirección",
    "Editar" y "Eliminar" (con confirmación simple, sin contraseña); el listado de clientes tiene un
    enlace "Direcciones" por fila.
-8. Pint y ESLint/Prettier corren sin errores; `php artisan test` pasa.
+8. En `/t/:slug/panel/clientes` y `/t/:slug/panel/clientes/:id/direcciones`, cada tabla ocupa el
+   100% del ancho interior del card (sin franjas vacías a los lados) en pantallas anchas, y sigue
+   siendo legible con scroll horizontal propio en pantallas angostas.
+9. Pint y ESLint/Prettier corren sin errores; `php artisan test` pasa.
 
 ## Supuestos asumidos (registro completo)
 
@@ -149,3 +155,7 @@ filtrar, a diferencia de los listados a nivel tenant (`usuarios`, `clientes`, et
    directo desde el listado de clientes a la lista de direcciones de ese cliente.
 8. Eliminar una dirección pide confirmación simple, sin contraseña — no es una cuenta con acceso al
    sistema.
+9. Las tablas de `ListaClientesView.vue` y `ListaDireccionesClienteView.vue` ocupan el 100% del
+   ancho interior del card, sin `max-width` ni centrado propio; solo conservan un ancho mínimo para
+   pantallas angostas, resuelto con scroll horizontal en su propio contenedor — misma corrección
+   aplicada a `ListaTenantsView.vue` (spec 008).

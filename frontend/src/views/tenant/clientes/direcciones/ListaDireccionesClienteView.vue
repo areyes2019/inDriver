@@ -79,13 +79,13 @@ onMounted(fetchDatos)
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
         <RouterLink
           :to="{ name: 'tenant-clientes-lista', params: { slug } }"
-          class="text-sm font-medium text-brand-blue hover:underline"
+          class="text-sm font-medium text-accent hover:underline"
         >
           &larr; Volver a clientes
         </RouterLink>
         <RouterLink
           :to="{ name: 'tenant-direcciones-crear', params: { slug, id: clienteId } }"
-          class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+          class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
         >
           Nueva dirección
         </RouterLink>
@@ -116,7 +116,7 @@ onMounted(fetchDatos)
               v-for="direccion in direcciones"
               v-else
               :key="direccion.id_direccion"
-              class="border-b border-gray-100 text-brand-dark"
+              class="border-b border-gray-100 text-heading"
             >
               <td class="py-2 pr-4 font-medium">{{ direccion.alias ?? '—' }}</td>
               <td class="py-2 pr-4">
@@ -130,7 +130,7 @@ onMounted(fetchDatos)
                       name: 'tenant-direcciones-editar',
                       params: { slug, id: clienteId, direccionId: direccion.id_direccion },
                     }"
-                    class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+                    class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
                   >
                     Editar
                   </RouterLink>

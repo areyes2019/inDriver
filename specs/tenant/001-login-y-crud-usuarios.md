@@ -215,7 +215,9 @@ siempre arma `/admin/reset-password/{token}`. Se cambia para que distinga por ti
 - **Vistas nuevas** en `views/tenant/usuarios/`: `ListaUsuariosView.vue` (tabla con búsqueda,
   paginación, botones "Editar"/"Eliminar" por fila, botón "Nuevo usuario"), `CrearUsuarioView.vue`,
   `EditarUsuarioView.vue` — mismo patrón que `views/admin/tenants/*View.vue`. "Eliminar" reutiliza
-  `UiConfirmDialog.vue` con el campo de contraseña (ya extendido en spec 007).
+  `UiConfirmDialog.vue` con el campo de contraseña (ya extendido en spec 007). La tabla ocupa el
+  100% del ancho interior disponible del card, sin `max-width` ni centrado propio, igual que la
+  corrección ya aplicada en `ListaTenantsView.vue` (spec 008).
 - **Rutas** (`router/index.ts`): `/t/:slug/login`, `/t/:slug/forgot-password`,
   `/t/:slug/reset-password/:token`, `/t/:slug/panel/usuarios`,
   `/t/:slug/panel/usuarios/crear`, `/t/:slug/panel/usuarios/:id/editar`, protegidas con
@@ -264,7 +266,10 @@ siempre arma `/admin/reset-password/{token}`. Se cambia para que distinga por ti
 11. El frontend expone `/t/:slug/login` y, tras iniciar sesión, `/t/:slug/panel/usuarios` con la
     tabla, búsqueda y los tres botones (Nuevo usuario / Editar / Eliminar); "Eliminar" pide la
     contraseña en `UiConfirmDialog` antes de ejecutar.
-12. Pint y ESLint/Prettier corren sin errores sobre el código nuevo.
+12. En `/t/:slug/panel/usuarios`, la tabla ocupa el 100% del ancho interior del card (sin franjas
+    vacías a los lados) en pantallas anchas, y sigue siendo legible con scroll horizontal propio en
+    pantallas angostas.
+13. Pint y ESLint/Prettier corren sin errores sobre el código nuevo.
 
 ## Supuestos asumidos (registro completo)
 
@@ -320,3 +325,7 @@ siempre arma `/admin/reset-password/{token}`. Se cambia para que distinga por ti
     (`Usuario $usuario` en la firma del controlador) tampoco es seguro aquí — `SubstituteBindings`
     no tiene garantizado correr después de `tenant.slug` — así que `UsuarioController` resuelve el
     usuario a mano (`Usuario::findOrFail($id)`) en vez de depender del binding automático.
+19. La tabla de `ListaUsuariosView.vue` ocupa el 100% del ancho interior del card, sin `max-width`
+    ni centrado propio; solo conserva un ancho mínimo para pantallas angostas, resuelto con scroll
+    horizontal en su propio contenedor — misma corrección aplicada a `ListaTenantsView.vue` (spec
+    008).

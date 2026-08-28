@@ -18,7 +18,7 @@ withDefaults(
     :aria-checked="modelValue"
     :disabled="disabled"
     class="inline-flex h-7 w-12 shrink-0 items-center rounded-full p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-    :class="modelValue ? 'bg-brand-dark' : 'bg-black/15'"
+    :class="modelValue ? 'bg-heading' : 'bg-black/15'"
     @click="!disabled && (modelValue = !modelValue)"
   >
     <span

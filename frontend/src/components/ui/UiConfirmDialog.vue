@@ -49,11 +49,11 @@ function handleConfirm() {
       :aria-label="title"
     >
       <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg shadow-black/10">
-        <h2 class="text-base font-semibold text-brand-dark">{{ title }}</h2>
+        <h2 class="text-base font-semibold text-heading">{{ title }}</h2>
         <p class="mt-2 text-sm text-black/70">{{ message }}</p>
 
         <div v-if="requirePassword" class="mt-4">
-          <label class="text-sm font-medium text-brand-dark" for="ui-confirm-dialog-password">
+          <label class="text-sm font-medium text-heading" for="ui-confirm-dialog-password">
             Contraseña
           </label>
           <input
@@ -61,7 +61,7 @@ function handleConfirm() {
             v-model="password"
             type="password"
             autocomplete="current-password"
-            class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
             @keyup.enter="handleConfirm"
           />
           <p v-if="passwordError" role="alert" class="mt-1 text-sm text-red-600">
@@ -72,14 +72,14 @@ function handleConfirm() {
         <div class="mt-5 flex justify-end gap-3">
           <button
             type="button"
-            class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark hover:bg-black/5"
+            class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading hover:bg-black/5"
             @click="emit('cancel')"
           >
             {{ cancelLabel }}
           </button>
           <button
             type="button"
-            class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
+            class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
             @click="handleConfirm"
           >
             {{ confirmLabel }}

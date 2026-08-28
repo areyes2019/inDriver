@@ -28,9 +28,9 @@ const deletingId = ref<number | null>(null)
 const paqueteToToggle = ref<PaqueteViaje | null>(null)
 const paqueteToDelete = ref<PaqueteViaje | null>(null)
 
-const estadoColor: Record<string, 'green' | 'yellow' | 'blue'> = {
+const estadoColor: Record<string, 'green' | 'orange' | 'blue'> = {
   Activo: 'green',
-  Inactivo: 'yellow',
+  Inactivo: 'orange',
 }
 
 async function fetchPaquetes() {
@@ -123,11 +123,11 @@ onMounted(fetchPaquetes)
           v-model="search"
           type="search"
           placeholder="Buscar por nombre..."
-          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
         />
         <RouterLink
           :to="{ name: 'admin-paquetes-crear' }"
-          class="shrink-0 rounded-lg bg-brand-blue px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+          class="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-heading"
         >
           Crear paquete
         </RouterLink>
@@ -160,7 +160,7 @@ onMounted(fetchPaquetes)
               v-for="paquete in paquetes"
               v-else
               :key="paquete.id_paquete"
-              class="border-b border-gray-100 text-brand-dark"
+              class="border-b border-gray-100 text-heading"
             >
               <td class="py-2 pr-4 font-medium">{{ paquete.codigo_paquete }}</td>
               <td class="py-2 pr-4">{{ paquete.nombre }}</td>
@@ -173,14 +173,14 @@ onMounted(fetchPaquetes)
                 <div class="flex flex-wrap gap-2">
                   <RouterLink
                     :to="{ name: 'admin-paquetes-editar', params: { id: paquete.id_paquete } }"
-                    class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+                    class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
                   >
                     Editar
                   </RouterLink>
                   <button
                     type="button"
                     :disabled="togglingId === paquete.id_paquete"
-                    class="rounded-lg border border-brand-blue px-3 py-1.5 text-sm font-semibold text-brand-blue transition-colors hover:bg-brand-blue hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    class="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                     @click="requestToggleEstado(paquete)"
                   >
                     {{ paquete.estado === 'Activo' ? 'Desactivar' : 'Activar' }}
@@ -204,7 +204,7 @@ onMounted(fetchPaquetes)
         <button
           type="button"
           :disabled="page <= 1"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page -= 1"
         >
           Anterior
@@ -213,7 +213,7 @@ onMounted(fetchPaquetes)
         <button
           type="button"
           :disabled="page >= lastPage"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page += 1"
         >
           Siguiente

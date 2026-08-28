@@ -106,7 +106,9 @@ quede apuntando a un `codigo_paquete` sin ningún registro que la explique.
   `ListaTenantsView.vue` — buscador con debounce de 300ms (filtra por nombre), tabla con columnas
   (código, nombre, cantidad de viajes, precio, estado), paginación, y por fila: "Editar",
   "Activar"/"Desactivar" (con `UiConfirmDialog`, reutilizado tal cual de la spec 008) y "Eliminar"
-  (también con `UiConfirmDialog`).
+  (también con `UiConfirmDialog`). La tabla ocupa el 100% del ancho interior disponible del card,
+  sin `max-width` ni centrado propio, igual que la corrección ya aplicada en `ListaTenantsView.vue`
+  (spec 008).
 - **Vista nueva** `frontend/src/views/admin/paquetes/CrearPaqueteView.vue`: formulario con
   `codigo_paquete`, `nombre`, `descripcion`, `cantidad_viajes`, `precio`. Al enviar, llama al
   endpoint de creación; en éxito muestra confirmación y redirige a la lista; en error muestra los
@@ -167,7 +169,10 @@ quede apuntando a un `codigo_paquete` sin ningún registro que la explique.
 12. `DashboardView.vue` muestra un enlace hacia `/admin/paquetes`.
 13. En `/admin/paquetes`, "Activar"/"Desactivar" y "Eliminar" piden confirmación mediante
     `UiConfirmDialog` antes de ejecutarse; cancelar no llama al endpoint ni altera la fila.
-14. Pint y ESLint/Prettier corren sin errores sobre el código nuevo.
+14. En `/admin/paquetes`, la tabla ocupa el 100% del ancho interior del card (sin franjas vacías a
+    los lados) en pantallas anchas, y sigue siendo legible con scroll horizontal propio en
+    pantallas angostas.
+15. Pint y ESLint/Prettier corren sin errores sobre el código nuevo.
 
 ## Supuestos asumidos (registro completo)
 
@@ -199,3 +204,7 @@ quede apuntando a un `codigo_paquete` sin ningún registro que la explique.
     la spec 007 para tenants.
 12. No hay pantalla de detalle separada de la edición (a diferencia de tenants): "Editar" ya
     muestra y permite modificar todos los campos del paquete.
+13. La tabla de `ListaPaquetesView.vue` ocupa el 100% del ancho interior del card, sin `max-width`
+    ni centrado propio; solo conserva un ancho mínimo para pantallas angostas, resuelto con scroll
+    horizontal en su propio contenedor — misma corrección aplicada a `ListaTenantsView.vue` (spec
+    008).

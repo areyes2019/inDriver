@@ -55,12 +55,12 @@ async function onSubmit() {
     <UiCard title="Nuevo usuario">
       <form class="max-w-lg space-y-5" @submit.prevent="onSubmit">
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Nombre</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Nombre</span>
           <input
             v-model="form.nombre"
             type="text"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.nombre" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.nombre }}
@@ -68,12 +68,12 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Apellido paterno</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Apellido paterno</span>
           <input
             v-model="form.apellido_paterno"
             type="text"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.apellido_paterno" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.apellido_paterno }}
@@ -81,11 +81,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Apellido materno</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Apellido materno</span>
           <input
             v-model="form.apellido_materno"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.apellido_materno" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.apellido_materno }}
@@ -93,11 +93,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Teléfono</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Teléfono</span>
           <input
             v-model="form.telefono"
             type="tel"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.telefono" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.telefono }}
@@ -105,12 +105,12 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Correo electrónico</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Correo electrónico</span>
           <input
             v-model="form.email"
             type="email"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.email" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.email }}
@@ -118,10 +118,10 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Rol</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Rol</span>
           <select
             v-model="form.rol"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           >
             <option value="AdminCliente">AdminCliente</option>
             <option value="Despachador">Despachador</option>
@@ -139,7 +139,7 @@ async function onSubmit() {
           <button
             type="submit"
             :disabled="loading"
-            class="w-full rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            class="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             Crear usuario
           </button>

@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Radio, UserCog, Users } from '@lucide/vue'
-import UiSidebar from '@/components/ui/UiSidebar.vue'
+import UiNavbar from '@/components/ui/UiNavbar.vue'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
 
 const route = useRoute()
@@ -12,9 +11,13 @@ const auth = useTenantAuthStore()
 const slug = computed(() => route.params.slug as string)
 
 const items = computed(() => [
-  { label: 'Clientes', to: `/t/${slug.value}/panel/clientes`, icon: Users },
-  { label: 'Usuarios', to: `/t/${slug.value}/panel/usuarios`, icon: UserCog },
-  { label: 'Despachadores', to: `/t/${slug.value}/panel/despachadores`, icon: Radio },
+  { label: 'Pedidos', to: `/t/${slug.value}/panel/pedidos` },
+  { label: 'Clientes', to: `/t/${slug.value}/panel/clientes` },
+  { label: 'Usuarios', to: `/t/${slug.value}/panel/usuarios` },
+  { label: 'Despachadores', to: `/t/${slug.value}/panel/despachadores` },
+  { label: 'Conductores', to: `/t/${slug.value}/panel/conductores` },
+  { label: 'Vehículos', to: `/t/${slug.value}/panel/vehiculos` },
+  { label: 'Asignaciones', to: `/t/${slug.value}/panel/asignaciones` },
 ])
 
 async function onLogout() {
@@ -24,18 +27,22 @@ async function onLogout() {
 </script>
 
 <template>
-  <div class="flex h-screen overflow-hidden bg-black/[0.03]">
-    <UiSidebar logo-text="inDriver" :items="items" />
-    <main class="min-w-0 flex-1 overflow-y-auto p-4 pt-20 md:p-8">
-      <div class="mb-4 flex justify-end">
+  <div class="min-h-screen bg-black/[0.03]">
+    <UiNavbar logo-text="inDriver" :items="items">
+      <template #actions>
+        <span v-if="auth.usuario" class="text-sm text-body">
+          {{ auth.usuario.nombre }} {{ auth.usuario.apellido_paterno }}
+        </span>
         <button
           type="button"
-          class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-brand-dark hover:bg-black/5"
+          class="rounded-lg border border-default bg-neutral-primary px-3 py-1.5 text-sm font-medium text-heading hover:bg-black/5"
           @click="onLogout"
         >
           Cerrar sesión
         </button>
-      </div>
+      </template>
+    </UiNavbar>
+    <main class="mx-auto max-w-screen-xl px-4 pb-4 pt-[5.25rem] md:px-8 md:pb-8 md:pt-[6.25rem]">
       <slot />
     </main>
   </div>

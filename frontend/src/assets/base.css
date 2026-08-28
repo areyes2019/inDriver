@@ -30,7 +30,7 @@
   --color-border: var(--vt-c-divider-light-2);
   --color-border-hover: var(--vt-c-divider-light-1);
 
-  --color-heading: var(--vt-c-text-light-1);
+  --color-demo-heading: var(--vt-c-text-light-1);
   --color-text: var(--vt-c-text-light-1);
 
   --section-gap: 160px;
@@ -45,17 +45,19 @@
     --color-border: var(--vt-c-divider-dark-2);
     --color-border-hover: var(--vt-c-divider-dark-1);
 
-    --color-heading: var(--vt-c-text-dark-1);
+    --color-demo-heading: var(--vt-c-text-dark-1);
     --color-text: var(--vt-c-text-dark-2);
   }
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  font-weight: normal;
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    font-weight: normal;
+  }
 }
 
 body {

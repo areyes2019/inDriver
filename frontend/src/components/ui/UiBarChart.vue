@@ -22,14 +22,14 @@ const hovered = ref<number | null>(null)
     >
       <div
         v-if="hovered === index"
-        class="absolute -top-8 rounded-lg bg-brand-dark px-2 py-1 text-xs font-semibold whitespace-nowrap text-white"
+        class="absolute -top-8 rounded-lg bg-heading px-2 py-1 text-xs font-semibold whitespace-nowrap text-white"
       >
         {{ item.value }}{{ unit }}
       </div>
       <div class="flex h-36 w-full items-end">
         <div
           class="w-full rounded-t-md transition-colors"
-          :class="hovered === index ? 'bg-brand-blue' : 'bg-brand-blue/25'"
+          :class="hovered === index ? 'bg-accent' : 'bg-accent/25'"
           :style="{ height: `${(item.value / max) * 100}%` }"
         />
       </div>

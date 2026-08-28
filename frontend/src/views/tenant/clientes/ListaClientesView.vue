@@ -104,11 +104,11 @@ onMounted(fetchClientes)
           v-model="search"
           type="search"
           placeholder="Buscar por nombre, teléfono o email..."
-          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
         />
         <RouterLink
           :to="{ name: 'tenant-clientes-crear', params: { slug } }"
-          class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+          class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
         >
           Nuevo cliente
         </RouterLink>
@@ -140,7 +140,7 @@ onMounted(fetchClientes)
               v-for="cliente in clientes"
               v-else
               :key="cliente.id_cliente"
-              class="border-b border-gray-100 text-brand-dark"
+              class="border-b border-gray-100 text-heading"
             >
               <td class="py-2 pr-4 font-medium">{{ cliente.nombre }}</td>
               <td class="py-2 pr-4">{{ cliente.telefono ?? '—' }}</td>
@@ -155,7 +155,7 @@ onMounted(fetchClientes)
                       name: 'tenant-clientes-editar',
                       params: { slug, id: cliente.id_cliente },
                     }"
-                    class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+                    class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
                   >
                     Editar
                   </RouterLink>
@@ -164,14 +164,14 @@ onMounted(fetchClientes)
                       name: 'tenant-direcciones-lista',
                       params: { slug, id: cliente.id_cliente },
                     }"
-                    class="rounded-lg border border-brand-blue px-3 py-1.5 text-sm font-semibold text-brand-blue transition-colors hover:bg-brand-blue hover:text-white"
+                    class="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white"
                   >
                     Direcciones
                   </RouterLink>
                   <button
                     type="button"
                     :disabled="togglingId === cliente.id_cliente"
-                    class="rounded-lg border border-brand-blue px-3 py-1.5 text-sm font-semibold text-brand-blue transition-colors hover:bg-brand-blue hover:text-white disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:opacity-50"
+                    class="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:opacity-50"
                     @click="requestToggleEstado(cliente)"
                   >
                     {{ cliente.estado === 'Activo' ? 'Desactivar' : 'Activar' }}
@@ -187,7 +187,7 @@ onMounted(fetchClientes)
         <button
           type="button"
           :disabled="page <= 1"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page -= 1"
         >
           Anterior
@@ -196,7 +196,7 @@ onMounted(fetchClientes)
         <button
           type="button"
           :disabled="page >= lastPage"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page += 1"
         >
           Siguiente

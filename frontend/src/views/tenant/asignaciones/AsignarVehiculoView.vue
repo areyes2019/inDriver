@@ -92,11 +92,11 @@ async function onSubmit() {
 
       <form v-else class="max-w-lg space-y-5" @submit.prevent="onSubmit">
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Conductor</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Conductor</span>
           <select
             v-model="form.id_conductor"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           >
             <option value="" disabled>Selecciona un conductor</option>
             <option
@@ -113,11 +113,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Vehículo</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Vehículo</span>
           <select
             v-model="form.id_vehiculo"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           >
             <option value="" disabled>Selecciona un vehículo</option>
             <option
@@ -136,12 +136,12 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Fecha de inicio</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Fecha de inicio</span>
           <input
             v-model="form.fecha_inicio"
             type="date"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.fecha_inicio" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.fecha_inicio }}
@@ -155,7 +155,7 @@ async function onSubmit() {
           <button
             type="submit"
             :disabled="loading"
-            class="w-full rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            class="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             Asignar vehículo
           </button>

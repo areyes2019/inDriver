@@ -51,12 +51,12 @@ async function onSubmit() {
     <UiCard title="Crear paquete de viajes">
       <form class="max-w-lg space-y-5" @submit.prevent="onSubmit">
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Código de paquete</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Código de paquete</span>
           <input
             v-model="form.codigo_paquete"
             type="text"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.codigo_paquete" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.codigo_paquete }}
@@ -64,12 +64,12 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Nombre</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Nombre</span>
           <input
             v-model="form.nombre"
             type="text"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.nombre" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.nombre }}
@@ -77,11 +77,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Descripción</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Descripción</span>
           <textarea
             v-model="form.descripcion"
             rows="3"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.descripcion" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.descripcion }}
@@ -89,14 +89,14 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Cantidad de viajes</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Cantidad de viajes</span>
           <input
             v-model="form.cantidad_viajes"
             type="number"
             min="1"
             step="1"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.cantidad_viajes" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.cantidad_viajes }}
@@ -104,14 +104,14 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Precio</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Precio</span>
           <input
             v-model="form.precio"
             type="number"
             min="0"
             step="0.01"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.precio" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.precio }}
@@ -125,7 +125,7 @@ async function onSubmit() {
           <button
             type="submit"
             :disabled="loading"
-            class="w-full rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            class="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             Crear paquete
           </button>

@@ -29,10 +29,10 @@ const lastPage = ref(1)
 const loading = ref(false)
 const error = ref('')
 
-const estadoColor: Record<string, 'green' | 'yellow' | 'blue'> = {
+const estadoColor: Record<string, 'green' | 'orange' | 'blue'> = {
   ACTIVO: 'green',
   INACTIVO: 'blue',
-  MANTENIMIENTO: 'yellow',
+  MANTENIMIENTO: 'orange',
 }
 
 async function fetchVehiculos() {
@@ -75,11 +75,11 @@ onMounted(fetchVehiculos)
           v-model="search"
           type="search"
           placeholder="Buscar por placa, marca, modelo o número económico..."
-          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
         />
         <RouterLink
           :to="{ name: 'tenant-vehiculos-crear', params: { slug } }"
-          class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+          class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
         >
           Nuevo vehículo
         </RouterLink>
@@ -111,7 +111,7 @@ onMounted(fetchVehiculos)
               v-for="vehiculo in vehiculos"
               v-else
               :key="vehiculo.id_vehiculo"
-              class="border-b border-gray-100 text-brand-dark"
+              class="border-b border-gray-100 text-heading"
             >
               <td class="py-2 pr-4 font-medium">{{ vehiculo.placa }}</td>
               <td class="py-2 pr-4">
@@ -127,7 +127,7 @@ onMounted(fetchVehiculos)
                     name: 'tenant-vehiculos-editar',
                     params: { slug, id: vehiculo.id_vehiculo },
                   }"
-                  class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+                  class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
                 >
                   Editar
                 </RouterLink>
@@ -141,7 +141,7 @@ onMounted(fetchVehiculos)
         <button
           type="button"
           :disabled="page <= 1"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page -= 1"
         >
           Anterior
@@ -150,7 +150,7 @@ onMounted(fetchVehiculos)
         <button
           type="button"
           :disabled="page >= lastPage"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page += 1"
         >
           Siguiente

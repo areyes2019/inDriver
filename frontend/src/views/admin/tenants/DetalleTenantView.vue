@@ -23,9 +23,9 @@ const tenant = ref<Tenant | null>(null)
 const error = ref('')
 const loading = ref(true)
 
-const estadoColor: Record<string, 'green' | 'yellow' | 'blue'> = {
+const estadoColor: Record<string, 'green' | 'orange' | 'blue'> = {
   Activo: 'green',
-  Suspendido: 'yellow',
+  Suspendido: 'orange',
   Inactivo: 'blue',
 }
 
@@ -52,23 +52,23 @@ onMounted(async () => {
           <dt class="text-xs font-semibold tracking-wide text-black/50 uppercase">
             Nombre comercial
           </dt>
-          <dd class="text-sm text-brand-dark">{{ tenant.nombre_comercial }}</dd>
+          <dd class="text-sm text-heading">{{ tenant.nombre_comercial }}</dd>
         </div>
         <div>
           <dt class="text-xs font-semibold tracking-wide text-black/50 uppercase">Razón social</dt>
-          <dd class="text-sm text-brand-dark">{{ tenant.razon_social }}</dd>
+          <dd class="text-sm text-heading">{{ tenant.razon_social }}</dd>
         </div>
         <div>
           <dt class="text-xs font-semibold tracking-wide text-black/50 uppercase">RFC</dt>
-          <dd class="text-sm text-brand-dark">{{ tenant.rfc ?? '—' }}</dd>
+          <dd class="text-sm text-heading">{{ tenant.rfc ?? '—' }}</dd>
         </div>
         <div>
           <dt class="text-xs font-semibold tracking-wide text-black/50 uppercase">Teléfono</dt>
-          <dd class="text-sm text-brand-dark">{{ tenant.telefono ?? '—' }}</dd>
+          <dd class="text-sm text-heading">{{ tenant.telefono ?? '—' }}</dd>
         </div>
         <div>
           <dt class="text-xs font-semibold tracking-wide text-black/50 uppercase">Email</dt>
-          <dd class="text-sm text-brand-dark">{{ tenant.email ?? '—' }}</dd>
+          <dd class="text-sm text-heading">{{ tenant.email ?? '—' }}</dd>
         </div>
         <div>
           <dt class="text-xs font-semibold tracking-wide text-black/50 uppercase">Estado</dt>
@@ -80,11 +80,11 @@ onMounted(async () => {
           <dt class="text-xs font-semibold tracking-wide text-black/50 uppercase">
             Modo de estado
           </dt>
-          <dd class="text-sm text-brand-dark">{{ tenant.modo_estado }}</dd>
+          <dd class="text-sm text-heading">{{ tenant.modo_estado }}</dd>
         </div>
         <div>
           <dt class="text-xs font-semibold tracking-wide text-black/50 uppercase">Alta</dt>
-          <dd class="text-sm text-brand-dark">
+          <dd class="text-sm text-heading">
             {{ new Date(tenant.created_at).toLocaleDateString() }}
           </dd>
         </div>
@@ -93,7 +93,7 @@ onMounted(async () => {
       <div v-if="tenant" class="mt-8 border-t border-gray-100 pt-4">
         <RouterLink
           :to="{ name: 'admin-tenants-editar', params: { id: tenant.id_tenant } }"
-          class="rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark"
+          class="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-heading"
         >
           Editar
         </RouterLink>

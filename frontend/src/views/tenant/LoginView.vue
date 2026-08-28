@@ -42,32 +42,32 @@ async function onSubmit() {
       <div class="w-full max-w-sm">
         <div class="mb-8 flex items-center gap-2">
           <img :src="logo" alt="" class="h-8 w-8" />
-          <span class="text-lg font-bold text-brand-dark">inDriver</span>
+          <span class="text-lg font-bold text-heading">inDriver</span>
         </div>
 
-        <h1 class="text-2xl font-semibold text-brand-dark">Bienvenido de nuevo</h1>
+        <h1 class="text-2xl font-semibold text-heading">Bienvenido de nuevo</h1>
         <p class="mt-1 text-sm text-gray-500">Ingresa tus datos para continuar.</p>
 
         <form class="mt-8 space-y-5" @submit.prevent="onSubmit">
           <label class="block">
-            <span class="mb-1 block text-sm font-medium text-brand-dark">Correo electrónico</span>
+            <span class="mb-1 block text-sm font-medium text-heading">Correo electrónico</span>
             <input
               v-model="email"
               type="email"
               required
               autocomplete="email"
-              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
             />
           </label>
 
           <label class="block">
-            <span class="mb-1 block text-sm font-medium text-brand-dark">Contraseña</span>
+            <span class="mb-1 block text-sm font-medium text-heading">Contraseña</span>
             <input
               v-model="password"
               type="password"
               required
               autocomplete="current-password"
-              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
             />
           </label>
 
@@ -76,14 +76,14 @@ async function onSubmit() {
           <button
             type="submit"
             :disabled="loading"
-            class="w-full rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60"
+            class="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60"
           >
             Iniciar sesión
           </button>
 
           <RouterLink
             :to="{ name: 'tenant-forgot-password', params: { slug } }"
-            class="block text-center text-sm text-brand-blue hover:underline"
+            class="block text-center text-sm text-accent hover:underline"
           >
             ¿Olvidaste tu contraseña?
           </RouterLink>

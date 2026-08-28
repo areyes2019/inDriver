@@ -31,9 +31,9 @@ const tenantToDelete = ref<Tenant | null>(null)
 const deleting = ref(false)
 const deleteError = ref('')
 
-const estadoColor: Record<string, 'green' | 'yellow' | 'blue'> = {
+const estadoColor: Record<string, 'green' | 'orange' | 'blue'> = {
   Activo: 'green',
-  Suspendido: 'yellow',
+  Suspendido: 'orange',
   Inactivo: 'blue',
 }
 
@@ -136,7 +136,7 @@ onMounted(fetchTenants)
           v-model="search"
           type="search"
           placeholder="Buscar por nombre comercial..."
-          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
         />
       </div>
 
@@ -168,7 +168,7 @@ onMounted(fetchTenants)
               v-for="tenant in tenants"
               v-else
               :key="tenant.id_tenant"
-              class="border-b border-gray-100 text-brand-dark"
+              class="border-b border-gray-100 text-heading"
             >
               <td class="py-2 pr-4 font-medium">{{ tenant.nombre_comercial }}</td>
               <td class="py-2 pr-4">{{ tenant.rfc ?? '—' }}</td>
@@ -182,14 +182,14 @@ onMounted(fetchTenants)
                 <div class="flex flex-wrap gap-2">
                   <RouterLink
                     :to="{ name: 'admin-tenants-detalle', params: { id: tenant.id_tenant } }"
-                    class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+                    class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
                   >
                     Ver detalle
                   </RouterLink>
                   <button
                     type="button"
                     :disabled="togglingId === tenant.id_tenant || tenant.estado === 'Inactivo'"
-                    class="rounded-lg border border-brand-blue px-3 py-1.5 text-sm font-semibold text-brand-blue transition-colors hover:bg-brand-blue hover:text-white disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:opacity-50"
+                    class="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:opacity-50"
                     @click="requestToggleEstado(tenant)"
                   >
                     {{ tenant.estado === 'Activo' ? 'Suspender' : 'Activar' }}
@@ -212,7 +212,7 @@ onMounted(fetchTenants)
         <button
           type="button"
           :disabled="page <= 1"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page -= 1"
         >
           Anterior
@@ -221,7 +221,7 @@ onMounted(fetchTenants)
         <button
           type="button"
           :disabled="page >= lastPage"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page += 1"
         >
           Siguiente

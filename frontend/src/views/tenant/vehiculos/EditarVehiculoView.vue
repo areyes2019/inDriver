@@ -80,12 +80,12 @@ async function onSubmit() {
 
       <form v-else class="max-w-lg space-y-5" @submit.prevent="onSubmit">
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Placa</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Placa</span>
           <input
             v-model="form.placa"
             type="text"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.placa" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.placa }}
@@ -93,11 +93,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Marca</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Marca</span>
           <input
             v-model="form.marca"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.marca" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.marca }}
@@ -105,11 +105,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Modelo</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Modelo</span>
           <input
             v-model="form.modelo"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.modelo" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.modelo }}
@@ -117,13 +117,13 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Año</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Año</span>
           <input
             v-model="form.anio"
             type="number"
             min="1900"
             max="2100"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.anio" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.anio }}
@@ -131,11 +131,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Color</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Color</span>
           <input
             v-model="form.color"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.color" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.color }}
@@ -143,11 +143,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Tipo</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Tipo</span>
           <input
             v-model="form.tipo"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.tipo" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.tipo }}
@@ -155,11 +155,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Número económico</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Número económico</span>
           <input
             v-model="form.numero_economico"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.numero_economico" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.numero_economico }}
@@ -167,10 +167,10 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Estado</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Estado</span>
           <select
             v-model="form.estado"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           >
             <option value="ACTIVO">ACTIVO</option>
             <option value="INACTIVO">INACTIVO</option>
@@ -188,7 +188,7 @@ async function onSubmit() {
           <button
             type="submit"
             :disabled="loading"
-            class="w-full rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            class="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             Guardar cambios
           </button>

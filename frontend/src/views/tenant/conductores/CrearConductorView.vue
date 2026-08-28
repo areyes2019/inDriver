@@ -81,11 +81,11 @@ async function onSubmit() {
 
       <form v-else class="max-w-lg space-y-5" @submit.prevent="onSubmit">
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Usuario</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Usuario</span>
           <select
             v-model="form.id_usuario"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           >
             <option value="" disabled>Selecciona un usuario</option>
             <option
@@ -102,12 +102,12 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Número de licencia</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Número de licencia</span>
           <input
             v-model="form.numero_licencia"
             type="text"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.numero_licencia" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.numero_licencia }}
@@ -115,11 +115,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Tipo de licencia</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Tipo de licencia</span>
           <input
             v-model="form.tipo_licencia"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.tipo_licencia" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.tipo_licencia }}
@@ -127,13 +127,13 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">
+          <span class="mb-1 block text-sm font-medium text-heading">
             Fecha de vencimiento de licencia
           </span>
           <input
             v-model="form.fecha_vencimiento_licencia"
             type="date"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span
             v-if="fieldErrors.fecha_vencimiento_licencia"
@@ -144,13 +144,13 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">
+          <span class="mb-1 block text-sm font-medium text-heading">
             Teléfono de emergencia
           </span>
           <input
             v-model="form.telefono_emergencia"
             type="tel"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.telefono_emergencia" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.telefono_emergencia }}
@@ -164,7 +164,7 @@ async function onSubmit() {
           <button
             type="submit"
             :disabled="loading"
-            class="w-full rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            class="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             Crear conductor
           </button>

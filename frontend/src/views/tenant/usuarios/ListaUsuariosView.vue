@@ -33,9 +33,9 @@ const usuarioToDelete = ref<Usuario | null>(null)
 const deleting = ref(false)
 const deleteError = ref('')
 
-const estadoColor: Record<string, 'green' | 'yellow' | 'blue'> = {
+const estadoColor: Record<string, 'green' | 'orange' | 'blue'> = {
   Activo: 'green',
-  Suspendido: 'yellow',
+  Suspendido: 'orange',
   Inactivo: 'blue',
 }
 
@@ -108,11 +108,11 @@ onMounted(fetchUsuarios)
           v-model="search"
           type="search"
           placeholder="Buscar por nombre o email..."
-          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
         />
         <RouterLink
           :to="{ name: 'tenant-usuarios-crear', params: { slug } }"
-          class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+          class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
         >
           Nuevo usuario
         </RouterLink>
@@ -144,7 +144,7 @@ onMounted(fetchUsuarios)
               v-for="usuario in usuarios"
               v-else
               :key="usuario.id_usuario"
-              class="border-b border-gray-100 text-brand-dark"
+              class="border-b border-gray-100 text-heading"
             >
               <td class="py-2 pr-4 font-medium">
                 {{ usuario.nombre }} {{ usuario.apellido_paterno }}
@@ -158,7 +158,7 @@ onMounted(fetchUsuarios)
                 <div class="flex flex-wrap gap-2">
                   <RouterLink
                     :to="{ name: 'tenant-usuarios-editar', params: { slug, id: usuario.id_usuario } }"
-                    class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+                    class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
                   >
                     Editar
                   </RouterLink>
@@ -180,7 +180,7 @@ onMounted(fetchUsuarios)
         <button
           type="button"
           :disabled="page <= 1"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page -= 1"
         >
           Anterior
@@ -189,7 +189,7 @@ onMounted(fetchUsuarios)
         <button
           type="button"
           :disabled="page >= lastPage"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page += 1"
         >
           Siguiente

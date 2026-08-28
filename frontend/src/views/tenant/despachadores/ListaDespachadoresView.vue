@@ -29,9 +29,9 @@ const loading = ref(false)
 const error = ref('')
 const savingId = ref<number | null>(null)
 
-const estadoColor: Record<string, 'green' | 'yellow' | 'blue'> = {
+const estadoColor: Record<string, 'green' | 'orange' | 'blue'> = {
   Activo: 'green',
-  Suspendido: 'yellow',
+  Suspendido: 'orange',
   Inactivo: 'blue',
 }
 
@@ -96,7 +96,7 @@ onMounted(fetchDespachadores)
           v-model="search"
           type="search"
           placeholder="Buscar por nombre o email..."
-          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
         />
       </div>
 
@@ -125,7 +125,7 @@ onMounted(fetchDespachadores)
               v-for="despachador in despachadores"
               v-else
               :key="despachador.id_despachador"
-              class="border-b border-gray-100 text-brand-dark"
+              class="border-b border-gray-100 text-heading"
             >
               <td class="py-2 pr-4 font-medium">
                 {{ despachador.nombre }} {{ despachador.apellido_paterno }}
@@ -141,7 +141,7 @@ onMounted(fetchDespachadores)
                 <select
                   :value="despachador.estado"
                   :disabled="savingId === despachador.id_despachador"
-                  class="rounded-lg border border-gray-300 px-2 py-1.5 text-sm text-brand-dark focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  class="rounded-lg border border-gray-300 px-2 py-1.5 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                   @change="cambiarEstado(despachador, ($event.target as HTMLSelectElement).value)"
                 >
                   <option v-for="estado in ESTADOS" :key="estado" :value="estado">
@@ -158,7 +158,7 @@ onMounted(fetchDespachadores)
         <button
           type="button"
           :disabled="page <= 1"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page -= 1"
         >
           Anterior
@@ -167,7 +167,7 @@ onMounted(fetchDespachadores)
         <button
           type="button"
           :disabled="page >= lastPage"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page += 1"
         >
           Siguiente

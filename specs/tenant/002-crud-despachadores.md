@@ -113,7 +113,9 @@ usa binding implícito (`Despachador $despachador`), no resolución manual como 
 - **Vista nueva** `views/tenant/despachadores/ListaDespachadoresView.vue`: tabla con nombre, email,
   estado (`UiBadge`) y un `<select>` para cambiar el estado (no un botón de "toggle" binario, por la
   misma razón de tres valores explicada arriba); búsqueda y paginación, mismo patrón visual que
-  `ListaClientesView.vue`. Sin botones "Nuevo"/"Editar"/"Eliminar".
+  `ListaClientesView.vue`. Sin botones "Nuevo"/"Editar"/"Eliminar". La tabla ocupa el 100% del
+  ancho interior disponible del card, sin `max-width` ni centrado propio, igual que la corrección
+  ya aplicada en `ListaTenantsView.vue` (spec 008).
 - **Ruta nueva** (`router/index.ts`): `/t/:slug/panel/despachadores`, con
   `meta: { requiresTenantAuth: true }`.
 - **`layouts/TenantLayout.vue`**: agrega el ítem "Despachadores" al menú lateral.
@@ -142,7 +144,10 @@ usa binding implícito (`Despachador $despachador`), no resolución manual como 
    `Auditoria` (`CAMBIO_ESTADO`); con un valor fuera del enum responde `422`.
 8. El frontend expone `/t/:slug/panel/despachadores` con la tabla, búsqueda y el selector de estado
    por fila; el menú lateral del tenant incluye el enlace "Despachadores".
-9. Pint y ESLint/Prettier corren sin errores sobre el código nuevo; `php artisan test` pasa.
+9. En `/t/:slug/panel/despachadores`, la tabla ocupa el 100% del ancho interior del card (sin
+   franjas vacías a los lados) en pantallas anchas, y sigue siendo legible con scroll horizontal
+   propio en pantallas angostas.
+10. Pint y ESLint/Prettier corren sin errores sobre el código nuevo; `php artisan test` pasa.
 
 ## Supuestos asumidos (registro completo)
 
@@ -167,3 +172,7 @@ usa binding implícito (`Despachador $despachador`), no resolución manual como 
 7. La tabla `conductores` (inciso 03) queda fuera de esta historia — incluso siendo un patrón similar
    (perfil operativo 1 a 1 sobre `usuarios`), tiene columnas propias (licencia, disponibilidad) que
    ameritan su propia historia.
+8. La tabla de `ListaDespachadoresView.vue` ocupa el 100% del ancho interior del card, sin
+   `max-width` ni centrado propio; solo conserva un ancho mínimo para pantallas angostas, resuelto
+   con scroll horizontal en su propio contenedor — misma corrección aplicada a `ListaTenantsView.vue`
+   (spec 008).

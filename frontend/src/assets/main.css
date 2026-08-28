@@ -2,10 +2,11 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-brand-dark: #000814;
-  --color-brand-yellow: #ffc300;
-  --color-brand-blue: #003566;
-  --font-sans: 'Montserrat', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --color-neutral-primary: #ffffff;
+  --color-heading: #0f172a;
+  --color-body: #64748b;
+  --color-default: #e2e8f0;
+  --color-accent: #4f46e5;
 }
 
 .app-shell {

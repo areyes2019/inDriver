@@ -29,10 +29,10 @@ const lastPage = ref(1)
 const loading = ref(false)
 const error = ref('')
 
-const estadoColor: Record<string, 'green' | 'yellow' | 'blue'> = {
+const estadoColor: Record<string, 'green' | 'orange' | 'blue'> = {
   ACTIVO: 'green',
   INACTIVO: 'blue',
-  BLOQUEADO: 'yellow',
+  BLOQUEADO: 'orange',
 }
 
 async function fetchConductores() {
@@ -75,11 +75,11 @@ onMounted(fetchConductores)
           v-model="search"
           type="search"
           placeholder="Buscar por nombre, email o licencia..."
-          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
         />
         <RouterLink
           :to="{ name: 'tenant-conductores-crear', params: { slug } }"
-          class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+          class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
         >
           Nuevo conductor
         </RouterLink>
@@ -112,7 +112,7 @@ onMounted(fetchConductores)
               v-for="conductor in conductores"
               v-else
               :key="conductor.id_conductor"
-              class="border-b border-gray-100 text-brand-dark"
+              class="border-b border-gray-100 text-heading"
             >
               <td class="py-2 pr-4 font-medium">
                 {{ conductor.nombre }} {{ conductor.apellido_paterno }}
@@ -132,7 +132,7 @@ onMounted(fetchConductores)
                     name: 'tenant-conductores-editar',
                     params: { slug, id: conductor.id_conductor },
                   }"
-                  class="rounded-lg bg-brand-blue px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark"
+                  class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
                 >
                   Editar
                 </RouterLink>
@@ -146,7 +146,7 @@ onMounted(fetchConductores)
         <button
           type="button"
           :disabled="page <= 1"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page -= 1"
         >
           Anterior
@@ -155,7 +155,7 @@ onMounted(fetchConductores)
         <button
           type="button"
           :disabled="page >= lastPage"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
           @click="page += 1"
         >
           Siguiente

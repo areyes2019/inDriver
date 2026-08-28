@@ -128,7 +128,8 @@ sentido editar juntos en un solo formulario, incluyendo `estado` y `disponibilid
 - **Vista nueva** `views/tenant/conductores/ListaConductoresView.vue`: tabla con nombre, email,
   número de licencia, estado, disponibilidad, botón "Editar" por fila, botón "Nuevo conductor"
   arriba. Búsqueda y paginación, mismo patrón visual que `ListaClientesView.vue`. Sin botón
-  "Eliminar".
+  "Eliminar". La tabla ocupa el 100% del ancho interior disponible del card, sin `max-width` ni
+  centrado propio, igual que la corrección ya aplicada en `ListaTenantsView.vue` (spec 008).
 - **Vista nueva** `views/tenant/conductores/CrearConductorView.vue`: `<select>` con los usuarios de
   `usuariosDisponibles` (mensaje explicativo si viene vacío) + campos de licencia. Mismo patrón que
   `CrearClienteView.vue`/`CrearUsuarioView.vue`.
@@ -168,7 +169,10 @@ sentido editar juntos en un solo formulario, incluyendo `estado` y `disponibilid
 8. El frontend expone `/t/:slug/panel/conductores` con la tabla y el botón "Nuevo conductor"; ese
    formulario muestra un selector con los usuarios disponibles (o un mensaje si no hay ninguno); el
    menú del tenant incluye el enlace "Conductores".
-9. Pint y ESLint/Prettier corren sin errores sobre el código nuevo; `php artisan test` pasa.
+9. En `/t/:slug/panel/conductores`, la tabla ocupa el 100% del ancho interior del card (sin franjas
+   vacías a los lados) en pantallas anchas, y sigue siendo legible con scroll horizontal propio en
+   pantallas angostas.
+10. Pint y ESLint/Prettier corren sin errores sobre el código nuevo; `php artisan test` pasa.
 
 ## Supuestos asumidos (registro completo)
 
@@ -195,3 +199,7 @@ sentido editar juntos en un solo formulario, incluyendo `estado` y `disponibilid
    porque aquí sí hay varios campos que editar juntos.
 9. Sin "eliminar conductor" independiente — se maneja cambiando el rol o eliminando el usuario desde
    la pantalla de usuarios ya existente (punto 5 arriba).
+10. La tabla de `ListaConductoresView.vue` ocupa el 100% del ancho interior del card, sin
+    `max-width` ni centrado propio; solo conserva un ancho mínimo para pantallas angostas, resuelto
+    con scroll horizontal en su propio contenedor — misma corrección aplicada a
+    `ListaTenantsView.vue` (spec 008).

@@ -1,152 +1,128 @@
-# Spec: Guía de diseño base (design system) del panel de inDriver
+# Spec: Guía de diseño base
 
 ## Historia de usuario
 
-Como usuario del panel administrativo de inDriver, quiero que el panel de control tenga el estilo
-visual de una referencia dada, 100% responsivo y construido con Tailwind CSS, con una paleta de
-colores y tipografía definidas, para que todas las pantallas de frontend que se construyan en
-specs futuras compartan un mismo lenguaje visual en vez de inventar el estilo cada vez.
+Como desarrollador, quiero documentar y completar el sistema de diseño ya usado en el panel de
+inDriver (paleta, tipografía, componentes base en `components/ui/`), para que las pantallas nuevas
+y existentes se construyan de forma consistente sin inventar estilos sueltos en cada vista.
 
 ## Objetivo / Alcance
 
-Establecer el sistema de diseño base — paleta de colores, tipografía, layout de sidebar +
-contenido, y un set mínimo de componentes de UI reutilizables — que sirve de referencia obligatoria
-para toda spec de frontend futura de inDriver. Es la primera vez que se instala Tailwind CSS en
-`frontend`. **No** construye ninguna pantalla de negocio real: "Devices", "Schedule", "Split
-system" y "AI power analytics" de la referencia visual son solo ejemplos de estilo (card, spacing,
-tipografía), no funcionalidades a implementar.
-
-## Decisión técnica
-
-- Se instala y configura Tailwind CSS desde cero en `frontend` (Vue 3 + Vite), primera vez en el
-  proyecto.
-- Paleta y tipografía se definen como tokens con nombre en `tailwind.config`, nunca como hex
-  sueltos en los componentes:
-  - `brand.dark` → `#000814`
-  - `brand.yellow` → `#ffc300`
-  - `brand.blue` → `#003566`
-  - `fontFamily.sans` → `Montserrat` primero, con la pila por defecto de Tailwind como respaldo.
-- Montserrat se carga vía Google Fonts (pesos 400/500/600/700).
-- Íconos: `lucide-vue-next` (estilo de línea simple, igual al de la referencia).
-- La gráfica de barras del ejemplo se construye solo con HTML/Tailwind (`<div>`s con alto
-  proporcional al valor), sin instalar ninguna librería de charting.
-- Los componentes de UI reutilizables viven en `frontend/src/components/ui/`, separados de
-  cualquier vista concreta, para que specs futuras los reutilicen en vez de repetir el diseño.
-- El layout del panel (sidebar + contenido) mide exactamente el alto de la pantalla (viewport) y
-  nunca genera scroll en la página completa: el sidebar queda siempre fijo e inmóvil, y solo el
-  área de contenido (a la derecha) tiene scroll interno propio cuando su contenido no cabe en la
-  pantalla. Mismo patrón ya usado en las vistas de auth (spec 006).
-- En cualquier bloque de contenido (formulario de campos apilados, o lista de datos en solo
-  lectura) seguido de un botón o enlace de acción, ese botón lleva más espacio por encima del que
-  ya separa a los elementos internos del bloque entre sí, y se distingue del contenido con una
-  línea divisoria sutil (borde superior), para que se perciba como la acción final y no como un
-  campo o dato más.
+Documentar el sistema de diseño ya instalado (Tailwind CSS v4, tokens en `@theme`, iconos
+`lucide-vue`) y completar el inventario de componentes base con `UiButton`, `UiInput` y `UiAlert`
+— los que faltaban de la lista original (Button, Input, Card, Alert, Badge, Modal). Aplicar esos 3
+componentes nuevos a las pantallas de acceso (`/admin/login`, `/admin/forgot-password`,
+`/admin/reset-password`) reemplazando el markup repetido. No reinstala Tailwind (ya está), no
+cambia rutas, no toca `AdminLayout`/`TenantLayout`, ni el backend.
 
 ## Frontend (Vue 3)
 
-- **Dependencias nuevas**: `tailwindcss` y lo necesario para integrarlo con Vite, más
-  `lucide-vue-next`.
-- **`tailwind.config`**: tema extendido con `colors.brand.{dark,yellow,blue}` y
-  `fontFamily.sans = ['Montserrat', ...]`.
-- **Componentes nuevos en `frontend/src/components/ui/`**:
-  - `UiCard.vue` — tarjeta contenedora (fondo blanco, esquinas redondeadas, sombra suave), con
-    slots para encabezado y contenido.
-  - `UiToggle.vue` — interruptor on/off (`modelValue`, `disabled`), estilo del interruptor de la
-    referencia.
-  - `UiBadge.vue` — insignia pequeña (`text`, `color`), como el badge verde "2" del Schedule de la
-    referencia.
-  - `UiSidebar.vue` — menú lateral: logo, lista de ítems (ícono + texto + ruta), estado
-    expandido/colapsado; en mobile se oculta detrás de un botón/overlay en vez de mostrarse fijo.
-  - `UiBarChart.vue` — gráfica de barras simple (`data: {label, value}[]`), barras hechas con
-    `<div>`, con un tooltip simple al pasar el mouse/tocar una barra.
-- **`frontend/src/layouts/AdminLayout.vue`**: envuelve el contenido con `UiSidebar.vue` (ítems de
-  ejemplo: Dashboard, Style guide) + área de contenido responsiva. Se aplica al `DashboardView.vue`
-  placeholder ya existente (spec 004) para tener un lugar real donde verlo funcionando, sin agregar
-  lógica de negocio nueva ni tocar el guard de sesión existente.
-- **`frontend/src/views/admin/StyleGuideView.vue`**: muestra en una sola página la paleta de
-  colores, la tipografía en distintos tamaños/pesos, y cada componente de `ui/` con datos de
-  ejemplo (incluye `UiBarChart` con datos ficticios tipo la referencia).
-- **Ruta `/admin/style-guide`** (`router/index.ts`): se registra solo cuando
-  `import.meta.env.DEV` es verdadero — no existe en el build de producción. No requiere sesión
-  iniciada: es una herramienta interna de desarrollo, no una pantalla del producto.
+- **Tailwind CSS v4**, ya instalado vía el plugin oficial de Vite (`@tailwindcss/vite`).
+- **Sin librería de componentes externa**: no se usa shadcn-vue ni Reka UI. Todos los componentes
+  base son propios, en `components/ui/`, con `defineProps`/`withDefaults` tipados — el mismo patrón
+  que ya siguen `UiCard`/`UiBadge`.
+- **Paleta**: se usan los tokens ya definidos en `@theme` (`frontend/src/assets/main.css`):
+  `--color-heading` (#0f172a), `--color-body` (#64748b), `--color-default` (#e2e8f0),
+  `--color-accent` (#4f46e5), `--color-neutral-primary` (#ffffff). No se agregan tokens semánticos
+  de éxito/error/advertencia; los componentes que necesitan variantes de color (`UiBadge`,
+  `UiAlert`) usan clases nativas de Tailwind (red/green/orange/blue/gray) directamente, igual que ya
+  hace `UiBadge`.
+- **Tipografía**: pila sans-serif nativa del sistema operativo del usuario, sin fuente externa
+  (Google Fonts) cargada.
+- **Iconografía**: `@lucide/vue`.
+- **Componentes base en `components/ui/`**:
+  - Ya existentes: `UiCard`, `UiBadge`, `UiToggle`, `UiNavbar`, `UiConfirmDialog` (cumple el rol de
+    "Modal"), `UiBarChart`, `UiStatusBar`, `UiPersonListItem`.
+  - Nuevos en esta historia:
+    - `UiButton`: variantes `primary`/`secondary`, estado `disabled`, tamaño único.
+    - `UiInput`: junta etiqueta (label) + campo de texto + mensaje de error opcional.
+    - `UiAlert`: banner de aviso con variantes `success`/`error`/`warning`/`info`, con colores
+      nativos de Tailwind (sin tokens nuevos).
+- **Página de documentación viva**: `/admin/style-guide` (`StyleGuideView.vue`), ya existente,
+  gateada a `import.meta.env.DEV` — se le agrega una sección por cada componente nuevo con sus
+  variantes.
+- **Pantallas de acceso** (`LoginView.vue`, `ForgotPasswordView.vue`, `ResetPasswordView.vue`)
+  migran su `<input>`/`<button>`/mensaje de error sueltos a `UiInput`/`UiButton`/`UiAlert`. Sin
+  cambios de lógica (`onSubmit`, store, rutas) ni de layout visual — mismo alcance/decisiones que la
+  spec [006](006-rediseno-login-admin.md) (layout de dos columnas, sin `AuthLayout` compartido).
+- Responsive mobile-first con breakpoints default de Tailwind (ya así en las pantallas existentes).
+- Modo oscuro: fuera de alcance.
+
+## Reglas de arquitectura para componentes con `v-model`
+
+Un ref de `defineModel` no se puede leer de vuelta en el mismo tick en que se escribió si el
+componente padre lo usa con `v-model`: la lectura devuelve el valor anterior, porque `useModel` de
+Vue solo sincroniza el valor local cuando el padre devuelve la prop nueva en el siguiente ciclo de
+render. La regla: cualquier manejador que escriba el modelo y en la misma pasada necesite el valor
+nuevo (emitir otro evento, derivar un dato, decidir una navegación) debe usar el valor que ya tiene
+a mano (el argumento del evento o una variable local), no leer el ref recién escrito. Sin regla de
+ESLint posible (no se distingue estáticamente de un uso legítimo); queda como regla escrita para
+cualquier componente futuro de `components/ui/` que use `defineModel` (p. ej. `UiToggle`).
 
 ## Fuera de alcance
 
-- Pantallas de negocio reales inspiradas en la referencia (Devices, Schedule, Power analytics,
-  Split system, Notification, Documentation, Settings) — son ejemplos de estilo, no
-  funcionalidades a construir.
-- Modo oscuro/claro alternable — el estilo visual es fijo.
-- Cualquier gráfica conectada a datos reales o librería de charting de terceros.
-- Reorganización de las rutas o el guard de sesión de ADMIN_CENTRAL ya definidos en
-  `004-auth-admin-central.md`.
-- Diseño para el futuro panel de AdminCliente/Despachador/Conductor (usuarios de tenant) — esta
-  guía cubre el frontend de admin actual; si esos paneles terminan en otro proyecto, se evalúa
-  aparte.
+- shadcn-vue, Reka UI o cualquier kit de componentes externo.
+- Tokens de color semánticos nuevos (éxito/error/advertencia) en `@theme`.
+- Fuentes externas (Google Fonts).
+- Rediseño de `AdminLayout`, `TenantLayout`, `DashboardView` u otras pantallas fuera de las 3 de
+  acceso.
+- Sistema de Toast/notificaciones flotantes (solo `Alert` como banner estático).
+- Componente `Select` propio y su regla de valor centinela para "ninguno" (no existe ese primitivo
+  en inDriver todavía; se documentará cuando se necesite).
+- Auditoría formal de accesibilidad (solo se busca contraste razonable).
+- Cualquier cambio de backend.
 
 ## Criterios de aceptación
 
-1. Tailwind CSS está instalado y funcionando en `frontend`; `npm run build` compila sin errores
-   usando clases de Tailwind.
-2. `tailwind.config` define `brand.dark` (#000814), `brand.yellow` (#ffc300), `brand.blue`
-   (#003566) y `fontFamily.sans` con Montserrat como primera opción.
-3. Montserrat se aplica por defecto en todo el texto bajo `/admin/*`.
-4. Existen `UiCard`, `UiToggle`, `UiBadge`, `UiSidebar` y `UiBarChart` en
-   `frontend/src/components/ui/`, cada uno usable de forma independiente con props tipadas.
-5. `UiSidebar` se ve completo en desktop (expandido) y colapsa/oculta en pantallas angostas
-   (mobile), sin generar scroll horizontal.
-6. El sidebar ocupa siempre el 100% del alto de la pantalla y permanece inmóvil (no se desplaza,
-   no muestra su propia barra de scroll) al hacer scroll en el contenido; solo el área de
-   contenido a la derecha del sidebar tiene scroll interno propio cuando su contenido excede el
-   alto de la pantalla. Aplica tanto en desktop como en mobile (drawer/overlay).
-7. En `StyleGuideView`, las cards se reacomodan en una sola columna en mobile y en grid en
-   desktop, sin overflow horizontal en ningún ancho de pantalla.
-8. `/admin/style-guide` solo existe cuando `import.meta.env.DEV` es verdadero — no aparece en el
-   build de producción (`npm run build` y revisar `dist`, o revisar el guard de la ruta).
-9. `AdminLayout.vue` envuelve el `DashboardView.vue` existente con el sidebar nuevo, sin romper el
-   guard de sesión que ya existe (sigue redirigiendo a `/admin/login` sin sesión activa).
-10. `lucide-vue-next` está instalado; los íconos usados en el sidebar y en `StyleGuideView` se
-    renderizan correctamente.
-11. `UiBarChart` no depende de ninguna librería de charting — solo Vue y Tailwind.
-12. ESLint/Prettier corren sin errores sobre el código nuevo.
+1. Existen `UiButton.vue`, `UiInput.vue` y `UiAlert.vue` en `components/ui/`, tipados con
+   `defineProps`/`withDefaults`, estilizados con los tokens ya definidos en `@theme`.
+2. `LoginView.vue`, `ForgotPasswordView.vue` y `ResetPasswordView.vue` usan `UiInput`/`UiButton`/
+   `UiAlert` en vez de `<input>`/`<button>`/`<p>` sueltos, sin cambiar su lógica de envío ni las
+   rutas.
+3. `/admin/style-guide` documenta `UiButton`, `UiInput` y `UiAlert` con sus variantes, igual que ya
+   hace con los componentes existentes.
+4. Ningún componente nuevo agrega tokens de color a `@theme`; las variantes de `UiAlert` usan
+   clases nativas de Tailwind.
+5. No se instala shadcn-vue, Reka UI, ni ninguna fuente externa.
+6. `npm run build` compila sin errores; ESLint/Prettier corren sin errores sobre el código nuevo.
+7. Las 3 pantallas de acceso se ven visualmente igual que antes (mismo layout de dos columnas de la
+   spec 006); el cambio es solo de composición interna (componentes en vez de markup repetido).
 
 ## Supuestos asumidos (registro completo)
 
-1. Esta spec no construye pantallas de negocio reales — los ejemplos de la referencia (Devices,
-   Schedule, Split system, Power analytics) son solo estilo a copiar, no features de inDriver.
-2. Lo que se construye es un layout base reutilizable: sidebar + área de contenido con cards
-   genéricas, sin datos ni lógica de negocio.
-3. La paleta es exactamente `#000814` (oscuro), `#ffc300` (amarillo/acento), `#003566` (azul) —
-   guardada como tokens con nombre en Tailwind, no como hex sueltos en los componentes.
-4. Montserrat reemplaza la fuente actual de todo el proyecto, cargada vía Google Fonts.
-5. "100% responsivo" implica sidebar colapsable/oculto en mobile y cards en una sola columna,
-   mobile-first con Tailwind.
-6. Esta es la primera instalación de Tailwind CSS en `frontend`; se configura desde cero.
-7. Esta spec se documenta como guía de estilo (paleta, tipografía, componentes base) en vez de
-   como feature de negocio — las specs futuras la referencian en lugar de repetir estas decisiones.
-8. Los ítems del sidebar de la referencia son placeholders de navegación de ejemplo; las rutas
-   reales ya existentes (`/admin/login`, etc. de la spec 004) no se reorganizan, solo se les agrega
-   el shell visual mediante `AdminLayout.vue`.
-9. No se requiere modo oscuro/claro alternable; el estilo es fijo (sidebar oscuro, cards claras).
-10. Los componentes visuales complejos de la referencia (gráfica de barras, dial circular) se
-    agregan como ejemplos de la guía de estilo, sin conectarse a datos reales.
-11. Colores y tipografía se definen como tokens con nombre en `tailwind.config`
-    (`brand.dark/yellow/blue`, `fontFamily.sans`), no como códigos sueltos repetidos en cada
-    componente.
-12. Los componentes de UI (`UiCard`, `UiToggle`, `UiBadge`, `UiSidebar`, `UiBarChart`) se guardan
-    en `frontend/src/components/ui/`, separados de las vistas, para reutilizarse en specs futuras.
-13. Los íconos se resuelven con la librería `lucide-vue-next`.
-14. La gráfica de barras de ejemplo se hace solo con HTML/Tailwind (`<div>`s de alto variable), sin
-    instalar ninguna librería de charting.
-15. Se agrega una pantalla `/admin/style-guide` que junta todas las piezas (colores, tipografía,
-    componentes) en una sola página, registrada solo cuando `import.meta.env.DEV` es verdadero
-    (no existe en producción), sin requerir sesión iniciada.
-16. (Corrección) El layout de `AdminLayout.vue` mide exactamente el alto de la pantalla y nunca
-    genera scroll en la página completa. El sidebar (`UiSidebar`) queda siempre fijo e inmóvil, sin
-    scroll propio; solo el área de contenido a la derecha tiene scroll interno cuando su contenido
-    no cabe en la pantalla. Mismo patrón de layout ya usado en las vistas de auth (spec 006:
-    `h-screen` + `overflow-y-auto` en el contenido).
-17. En cualquier bloque de contenido (formulario de campos apilados, o lista de datos en solo
-    lectura) seguido de un botón o enlace de acción, ese botón lleva más espacio por encima que el
-    que ya separa a los elementos internos del bloque, y se distingue del contenido con una línea
-    divisoria sutil (borde superior), para que se perciba como la acción final y no como un campo o
-    dato más.
+1. Alcance: solo `frontend/` de inDriver; sin cambios de backend.
+2. Tailwind v4 ya estaba instalado — esta historia solo lo documenta, no lo reinstala.
+3. Se descarta shadcn-vue/Reka UI por completo: se documenta y completa el set de componentes ya
+   propio (`Ui*`), no se reemplaza por un kit externo.
+4. Paleta: se conserva la ya existente en `@theme` (`heading`/`body`/`default`/`accent`/
+   `neutral-primary`); no se agregan tokens semánticos de éxito/error/advertencia nuevos. Los
+   componentes con variantes de color usan clases nativas de Tailwind sueltas, como ya hace
+   `UiBadge`.
+5. Tipografía: se conserva "sin fuente externa"; no se agrega Google Fonts ni ninguna familia
+   tipográfica nueva.
+6. Iconografía: se conserva `@lucide/vue`; no se agrega Heroicons ni otra librería de íconos.
+7. Componentes base a completar: `UiButton`, `UiInput`, `UiAlert` — los únicos que faltaban del
+   inventario original (Button, Input, Card, Alert, Badge, Modal); el resto ya existía.
+8. Spacing/tokens: ya centralizados en `@theme`, sin cambios de fondo.
+9. Responsive mobile-first con breakpoints default de Tailwind: ya cumplido, sin cambios.
+10. Modo oscuro: fuera de alcance.
+11. Identidad visual: `logo.svg` + "inDriver" ya son la marca real (no un placeholder de texto
+    genérico).
+12. No se rehacen wireframes en gris de pantallas ya implementadas — el layout final de las 3
+    pantallas de acceso y el dashboard ya existe.
+13. La "página de design system" ya existe con el nombre `/admin/style-guide` (no `/design-system`)
+    — se conserva esa ruta.
+14. Se descarta la sección de reglas `NavigationMenu`/`DropdownMenu`/`Popover` de Reka UI: `UiNavbar`
+    es un componente propio sin esos primitivos.
+15. Se descarta la regla del valor centinela en `Select`: no existe ese componente en inDriver.
+16. La regla de "escribir y leer `defineModel` en el mismo manejador" se conserva como regla general
+    (no depende de shadcn-vue), aplicable a cualquier componente propio con `v-model`.
+17. Las reglas de `Dialog` con contenido dinámico y de ancho de tabla/`AppLayout` de la spec
+    original no se trasladan tal cual (son de Reka UI / de otro layout); se documentarán en esta
+    spec si el problema concreto aparece en `UiConfirmDialog`/`AdminLayout`/`TenantLayout`.
+18. `UiButton` cubre dos variantes (`primary`/`secondary`); no se agregan variantes de tamaño ni
+    variante `danger` hasta que una pantalla concreta lo necesite.
+19. `UiInput` solo cubre `type="text"`/`"email"`/`"password"` con label + error, sin soporte para
+    otros tipos de control (select, textarea, file) en esta historia.
+20. El checkbox "Recordarme" de `LoginView` (spec 006, puramente visual) no se convierte en
+    componente propio en esta historia — se deja como `<input type="checkbox">` suelto.

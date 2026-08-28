@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useAdminAuthStore } from '@/stores/adminAuth'
+import UiInput from '@/components/ui/UiInput.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiAlert from '@/components/ui/UiAlert.vue'
 import banner from '@/assets/banner.webp'
 import logo from '@/assets/logo.svg'
 
@@ -8,6 +11,7 @@ const auth = useAdminAuthStore()
 
 const email = ref('')
 const message = ref('')
+const messageIsError = ref(false)
 const loading = ref(false)
 
 async function onSubmit() {
@@ -15,8 +19,10 @@ async function onSubmit() {
   message.value = ''
   try {
     await auth.forgotPassword(email.value)
+    messageIsError.value = false
     message.value = 'Si el correo existe, se envió un enlace de recuperación.'
   } catch {
+    messageIsError.value = true
     message.value = 'No se pudo enviar el correo, intenta de nuevo.'
   } finally {
     loading.value = false
@@ -36,40 +42,33 @@ async function onSubmit() {
       <div class="w-full max-w-sm">
         <div class="mb-8 flex items-center gap-2">
           <img :src="logo" alt="" class="h-8 w-8" />
-          <span class="text-lg font-bold text-brand-dark">inDriver</span>
+          <span class="text-lg font-bold text-heading">inDriver</span>
         </div>
 
-        <h1 class="text-2xl font-semibold text-brand-dark">Recupera tu contraseña</h1>
+        <h1 class="text-2xl font-semibold text-heading">Recupera tu contraseña</h1>
         <p class="mt-1 text-sm text-gray-500">
           Escribe tu correo y te enviaremos un enlace para restablecerla.
         </p>
 
         <form class="mt-8 space-y-5" @submit.prevent="onSubmit">
-          <label class="block">
-            <span class="mb-1 block text-sm font-medium text-brand-dark">Correo electrónico</span>
-            <input
-              v-model="email"
-              type="email"
-              required
-              autocomplete="email"
-              placeholder="admin@indriver.com"
-              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
-            />
-          </label>
+          <UiInput
+            v-model="email"
+            label="Correo electrónico"
+            type="email"
+            required
+            autocomplete="email"
+            placeholder="admin@indriver.com"
+          />
 
-          <p v-if="message" class="text-sm text-brand-dark">{{ message }}</p>
+          <UiAlert v-if="message" :variant="messageIsError ? 'error' : 'success'">
+            {{ message }}
+          </UiAlert>
 
-          <button
-            type="submit"
-            :disabled="loading"
-            class="w-full rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Enviar enlace
-          </button>
+          <UiButton type="submit" :disabled="loading">Enviar enlace</UiButton>
 
           <RouterLink
             :to="{ name: 'admin-login' }"
-            class="block text-center text-sm text-brand-blue hover:underline"
+            class="block text-center text-sm text-accent hover:underline"
           >
             Volver a iniciar sesión
           </RouterLink>

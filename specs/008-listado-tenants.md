@@ -61,7 +61,11 @@ golpe en el navegador).
   - Un campo de búsqueda arriba de la tabla que filtra por nombre comercial. Dispara la consulta
     al backend 300ms después de que el usuario deja de escribir (debounce), reiniciando a la
     página 1 en cada búsqueda nueva.
-  - Tabla con columnas: nombre comercial, RFC, email, teléfono, estado, modo de estado.
+  - Tabla con columnas: nombre comercial, RFC, email, teléfono, estado, modo de estado. La tabla
+    ocupa el 100% del ancho interior disponible del card (`UiCard`), sin `max-width` ni centrado
+    propio (`mx-auto`); las columnas se distribuyen automáticamente según su contenido sobre ese
+    ancho completo. En pantallas angostas conserva un ancho mínimo (`min-width`) para seguir siendo
+    legible, con scroll horizontal dentro de su propio contenedor (no de la página completa).
   - Controles de paginación (anterior/siguiente + indicador de página).
   - Por fila, columna de acciones con dos botones (no enlaces de texto): "Ver detalle" (botón
     primario, con fondo sólido `brand-blue`, navega al detalle) y "Suspender"/"Activar" (botón
@@ -142,7 +146,10 @@ golpe en el navegador).
     error/éxito), no pegado a él.
 18. En `/admin/tenants/:id`, el enlace "Editar" se ve claramente separado de los datos del tenant
     (espacio adicional y línea divisoria), no pegado al último dato mostrado.
-19. Pint y ESLint/Prettier corren sin errores sobre el código nuevo.
+19. En `/admin/tenants`, la tabla ocupa el 100% del ancho interior del card (sin franjas vacías a
+    los lados) en pantallas anchas, y sigue siendo legible con scroll horizontal propio en
+    pantallas angostas.
+20. Pint y ESLint/Prettier corren sin errores sobre el código nuevo.
 
 ## Supuestos asumidos (registro completo)
 
@@ -182,3 +189,7 @@ golpe en el navegador).
 16. El enlace "Editar" de `DetalleTenantView.vue` sigue el mismo patrón de separación de acciones
     de la guía de diseño base (005): espacio adicional y línea divisoria sutil por encima, para no
     verse pegado al último dato del tenant.
+17. La tabla de `ListaTenantsView.vue` ocupa el 100% del ancho interior del card, sin `max-width`
+    ni centrado propio; solo conserva un ancho mínimo para pantallas angostas, resuelto con scroll
+    horizontal en su propio contenedor (no un ancho fijo de layout). Las columnas se distribuyen
+    automáticamente según su contenido sobre ese ancho completo, sin anchos fijos por columna.

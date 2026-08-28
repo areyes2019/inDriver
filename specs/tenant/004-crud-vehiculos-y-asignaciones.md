@@ -126,6 +126,9 @@ punto anterior — es el mecanismo normal para "cambiar" a alguien de vehículo)
   vehículo, fecha inicio, fecha fin, badge activo/finalizado, botón "Finalizar" solo en filas
   activas, botón "Asignar vehículo" arriba), `AsignarVehiculoView.vue` (selectores de conductor y
   vehículo + fecha de inicio).
+- Las tablas de `ListaVehiculosView.vue` y `ListaAsignacionesView.vue` ocupan el 100% del ancho
+  interior disponible del card, sin `max-width` ni centrado propio, igual que la corrección ya
+  aplicada en `ListaTenantsView.vue` (spec 008).
 - **Rutas** (`router/index.ts`): `/t/:slug/panel/vehiculos` (+`/crear`, `/:id/editar`),
   `/t/:slug/panel/asignaciones` (+`/asignar`), con `meta: { requiresTenantAuth: true }`.
 - **`layouts/TenantLayout.vue`**: agrega "Vehículos" y "Asignaciones" al arreglo `items`.
@@ -156,7 +159,10 @@ punto anterior — es el mecanismo normal para "cambiar" a alguien de vehículo)
    `401`; con sesión de `Despachador`/`Conductor` responden `403`.
 8. El frontend expone `/t/:slug/panel/vehiculos` y `/t/:slug/panel/asignaciones`, con el menú del
    tenant incluyendo ambos enlaces.
-9. Pint y ESLint/Prettier corren sin errores; `php artisan test` pasa.
+9. En `/t/:slug/panel/vehiculos` y `/t/:slug/panel/asignaciones`, cada tabla ocupa el 100% del
+   ancho interior del card (sin franjas vacías a los lados) en pantallas anchas, y sigue siendo
+   legible con scroll horizontal propio en pantallas angostas.
+10. Pint y ESLint/Prettier corren sin errores; `php artisan test` pasa.
 
 ## Supuestos asumidos (registro completo)
 
@@ -177,3 +183,7 @@ punto anterior — es el mecanismo normal para "cambiar" a alguien de vehículo)
    `conductor_vehiculo` no tiene ninguna función sin `vehiculos` y se construyen juntas.
 8. Sin restricciones `unique`/`check` nuevas en base de datos para "una fila activa a la vez" — se
    garantiza en la aplicación, porque las migraciones de ambas tablas ya corrieron.
+9. Las tablas de `ListaVehiculosView.vue` y `ListaAsignacionesView.vue` ocupan el 100% del ancho
+   interior del card, sin `max-width` ni centrado propio; solo conservan un ancho mínimo para
+   pantallas angostas, resuelto con scroll horizontal en su propio contenedor — misma corrección
+   aplicada a `ListaTenantsView.vue` (spec 008).

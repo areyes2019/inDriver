@@ -90,11 +90,11 @@ async function onSubmit() {
 
       <form v-else class="max-w-lg space-y-5" @submit.prevent="onSubmit">
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Alias</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Alias</span>
           <input
             v-model="form.alias"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.alias" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.alias }}
@@ -102,12 +102,12 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Calle</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Calle</span>
           <input
             v-model="form.calle"
             type="text"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.calle" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.calle }}
@@ -115,11 +115,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Número</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Número</span>
           <input
             v-model="form.numero"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.numero" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.numero }}
@@ -127,11 +127,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Colonia</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Colonia</span>
           <input
             v-model="form.colonia"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.colonia" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.colonia }}
@@ -139,11 +139,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Código postal</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Código postal</span>
           <input
             v-model="form.cp"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.cp" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.cp }}
@@ -151,11 +151,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Ciudad</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Ciudad</span>
           <input
             v-model="form.ciudad"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.ciudad" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.ciudad }}
@@ -163,11 +163,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Estado</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Estado</span>
           <input
             v-model="form.estado"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.estado" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.estado }}
@@ -175,11 +175,11 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">Referencia</span>
+          <span class="mb-1 block text-sm font-medium text-heading">Referencia</span>
           <input
             v-model="form.referencia"
             type="text"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.referencia" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.referencia }}
@@ -188,14 +188,14 @@ async function onSubmit() {
 
         <div class="grid grid-cols-2 gap-4">
           <label class="block">
-            <span class="mb-1 block text-sm font-medium text-brand-dark">Latitud</span>
+            <span class="mb-1 block text-sm font-medium text-heading">Latitud</span>
             <input
               v-model="form.latitud"
               type="number"
               step="any"
               min="-90"
               max="90"
-              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
             />
             <span v-if="fieldErrors.latitud" class="mt-1 block text-sm text-red-600">
               {{ fieldErrors.latitud }}
@@ -203,14 +203,14 @@ async function onSubmit() {
           </label>
 
           <label class="block">
-            <span class="mb-1 block text-sm font-medium text-brand-dark">Longitud</span>
+            <span class="mb-1 block text-sm font-medium text-heading">Longitud</span>
             <input
               v-model="form.longitud"
               type="number"
               step="any"
               min="-180"
               max="180"
-              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
             />
             <span v-if="fieldErrors.longitud" class="mt-1 block text-sm text-red-600">
               {{ fieldErrors.longitud }}
@@ -219,13 +219,13 @@ async function onSubmit() {
         </div>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-brand-dark">
+          <span class="mb-1 block text-sm font-medium text-heading">
             Instrucciones de entrega
           </span>
           <textarea
             v-model="form.instrucciones_entrega"
             rows="3"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-brand-dark placeholder:text-gray-400 focus:border-brand-blue focus:ring-1 focus:ring-brand-blue focus:outline-none"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.instrucciones_entrega" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.instrucciones_entrega }}
@@ -239,7 +239,7 @@ async function onSubmit() {
           <button
             type="submit"
             :disabled="loading"
-            class="w-full rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            class="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             Guardar cambios
           </button>

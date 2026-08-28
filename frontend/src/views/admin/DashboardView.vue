@@ -1,16 +1,9 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
 import { useAdminAuthStore } from '@/stores/adminAuth'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 
 const auth = useAdminAuthStore()
-const router = useRouter()
-
-async function onLogout() {
-  await auth.logout()
-  router.push({ name: 'admin-login' })
-}
 </script>
 
 <template>
@@ -22,29 +15,22 @@ async function onLogout() {
       <div class="mt-4 flex flex-wrap gap-3">
         <RouterLink
           :to="{ name: 'admin-tenants-lista' }"
-          class="rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark"
+          class="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-heading"
         >
           Ver tenants
         </RouterLink>
         <RouterLink
           :to="{ name: 'admin-tenants-crear' }"
-          class="rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark"
+          class="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-heading"
         >
           Crear tenant
         </RouterLink>
         <RouterLink
           :to="{ name: 'admin-paquetes-lista' }"
-          class="rounded-xl bg-brand-blue px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark"
+          class="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-heading"
         >
           Paquetes de viajes
         </RouterLink>
-        <button
-          type="button"
-          class="rounded-xl bg-brand-dark px-4 py-2 text-sm font-semibold text-white hover:bg-brand-blue"
-          @click="onLogout"
-        >
-          Cerrar sesión
-        </button>
       </div>
     </UiCard>
   </AdminLayout>
