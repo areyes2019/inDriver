@@ -3,9 +3,19 @@ import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Bell, Menu, Settings, X } from '@lucide/vue'
 
-defineProps<{
-  logoText: string
-  items: Array<{ label: string; to: string }>
+withDefaults(
+  defineProps<{
+    logoText: string
+    items: Array<{ label: string; to: string }>
+    mostrarConfiguracion?: boolean
+  }>(),
+  {
+    mostrarConfiguracion: true,
+  },
+)
+
+const emit = defineEmits<{
+  'click-configuracion': []
 }>()
 
 const mobileOpen = ref(false)
@@ -34,9 +44,11 @@ const mobileOpen = ref(false)
         <div class="ml-auto hidden items-center gap-3 md:flex">
           <slot name="badge" />
           <button
+            v-if="mostrarConfiguracion"
             type="button"
             class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-body hover:bg-black/5"
             aria-label="Configuración"
+            @click="emit('click-configuracion')"
           >
             <Settings class="h-5 w-5" />
           </button>

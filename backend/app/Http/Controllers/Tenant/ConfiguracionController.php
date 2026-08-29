@@ -1,0 +1,65 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers\Tenant;
+
+use App\Http\Controllers\Controller;
+use App\Models\Tenant\Auditoria;
+use App\Models\Tenant\CompraPaquete;
+use App\Models\Tenant\ConfiguracionTenant;
+use App\Models\Tenant\VentaViajeConductor;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+
+class ConfiguracionController extends Controller
+{
+    public function show(): JsonResponse
+    {
+        return response()->json($this->estadoActual());
+    }
+
+    public function update(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'tarifa_banderazo' => ['required', 'numeric', 'min:0'],
+            'tarifa_km_adicional' => ['required', 'numeric', 'min:0'],
+            'modalidad_conductores' => ['required', Rule::in(['Prepago', 'Comision'])],
+            'costo_viaje_prepago' => ['required_if:modalidad_conductores,Prepago', 'nullable', 'numeric', 'min:0'],
+            'comision_porcentaje' => ['required_if:modalidad_conductores,Comision', 'nullable', 'numeric', 'min:0', 'max:100'],
+        ]);
+
+        ConfiguracionTenant::establecer(ConfiguracionTenant::BANDERAZO, (string) $data['tarifa_banderazo']);
+        ConfiguracionTenant::establecer(ConfiguracionTenant::KM_ADICIONAL, (string) $data['tarifa_km_adicional']);
+        ConfiguracionTenant::establecer(ConfiguracionTenant::MODALIDAD, $data['modalidad_conductores']);
+        ConfiguracionTenant::establecer(ConfiguracionTenant::COSTO_VIAJE_PREPAGO, isset($data['costo_viaje_prepago']) ? (string) $data['costo_viaje_prepago'] : null);
+        ConfiguracionTenant::establecer(ConfiguracionTenant::COMISION_PORCENTAJE, isset($data['comision_porcentaje']) ? (string) $data['comision_porcentaje'] : null);
+
+        Auditoria::create([
+            'id_usuario' => $request->user('usuario')->id_usuario,
+            'tabla_afectada' => 'configuraciones_tenant',
+            'accion' => 'EDICION',
+            'descripcion' => 'Edición de la configuración de tarifas y comisión del tenant',
+        ]);
+
+        return response()->json($this->estadoActual());
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function estadoActual(): array
+    {
+        $saldoTenant = (int) CompraPaquete::sum('cantidad_viajes') - (int) VentaViajeConductor::sum('cantidad_viajes');
+
+        return [
+            'tarifa_banderazo' => ConfiguracionTenant::obtener(ConfiguracionTenant::BANDERAZO, '0'),
+            'tarifa_km_adicional' => ConfiguracionTenant::obtener(ConfiguracionTenant::KM_ADICIONAL, '0'),
+            'modalidad_conductores' => ConfiguracionTenant::obtener(ConfiguracionTenant::MODALIDAD, 'Prepago'),
+            'costo_viaje_prepago' => ConfiguracionTenant::obtener(ConfiguracionTenant::COSTO_VIAJE_PREPAGO),
+            'comision_porcentaje' => ConfiguracionTenant::obtener(ConfiguracionTenant::COMISION_PORCENTAJE),
+            'saldo_viajes_tenant' => $saldoTenant,
+        ];
+    }
+}

@@ -209,3 +209,74 @@ Deja funcionando:
     y usa un `z-index` por debajo del navbar (`z-40`) pero por encima del mapa.
 13. El layout final del panel derecho (010: flotante igual que el izquierdo, o un criterio distinto)
     no se define en esta ampliación — queda pendiente para cuando se implemente esa spec.
+
+## Corrección: el menú de Despachador se reduce a "Panel" y "Pedidos"
+
+> Hasta ahora `TenantLayout.vue` solo filtraba por rol el ítem "Panel" (visible solo para
+> `Despachador`); el resto de ítems del menú (`Clientes`, `Usuarios`, `Despachadores`,
+> `Conductores`, `Vehículos`, `Asignaciones`) se mostraban igual para todos los roles, aunque el
+> backend ya bloqueaba a `Despachador` con `403` en la mayoría de esos endpoints (ver
+> `tenant/002` a `tenant/005`). Esta corrección alinea el menú con esos permisos.
+
+### Objetivo / Alcance de esta corrección
+
+Deja funcionando:
+
+- Cuando el usuario autenticado es `Despachador`, el menú de `TenantLayout.vue` muestra únicamente
+  dos ítems, en este orden: "Panel" y "Pedidos".
+- Cuando el usuario autenticado es `AdminCliente`, el menú no cambia: sigue mostrando todos los
+  ítems actuales (`Pedidos`, `Clientes`, `Usuarios`, `Despachadores`, `Conductores`, `Vehículos`,
+  `Asignaciones`), sin "Panel".
+- El ítem "Pedidos" para `Despachador` apunta a la misma ruta que ya usa `AdminCliente`
+  (`/t/:slug/panel/pedidos`), sin ninguna vista ni filtro distinto (mismo listado completo del
+  tenant que documenta `tenant/006-crud-pedidos.md`).
+
+**No** incluye:
+
+- Ningún guard nuevo en el router — si un `Despachador` navega por URL directa a una ruta oculta
+  del menú (Clientes, Usuarios, etc.), el comportamiento no cambia respecto a hoy: entra al shell
+  de la vista sin protección de frontend, y solo al llamar a la API recibe el `403` que ya
+  documentan esas specs.
+- Cualquier cambio en los permisos de backend — ya bloqueaban a `Despachador` antes de esta
+  corrección; aquí solo se oculta el enlace del menú a esas pantallas.
+
+### Decisión técnica
+
+El `computed` de `items` en `TenantLayout.vue` deja de armar un solo arreglo con ítems que se
+agregan/quitan condicionalmente uno por uno (patrón que hoy solo cubre "Panel"). En su lugar, se
+arman dos arreglos completos y se elige cuál devolver según el rol: uno corto
+(`Panel` + `Pedidos`) para `Despachador`, y el arreglo completo de siempre (sin `Panel`) para el
+resto de roles. Esto evita que un ítem nuevo que se agregue más adelante aparezca por accidente
+para `Despachador` sin pasar por esta misma decisión explícita.
+
+### Frontend (Vue 3)
+
+- **`layouts/TenantLayout.vue`**: el `computed` `items` retorna, si
+  `auth.usuario?.rol === 'Despachador'`, el arreglo `[Panel, Pedidos]`; en cualquier otro caso,
+  retorna el arreglo completo existente (`Pedidos`, `Clientes`, `Usuarios`, `Despachadores`,
+  `Conductores`, `Vehículos`, `Asignaciones`), sin `Panel`.
+
+### Fuera de alcance (de esta corrección)
+
+- Guard de router para las rutas ocultas del menú.
+- Cambios en los permisos de backend de cualquier endpoint.
+
+### Criterios de aceptación (de esta corrección)
+
+1. Con sesión de `Despachador`, el menú de `TenantLayout` muestra solo "Panel" y "Pedidos" (en
+   escritorio y en el menú móvil, que usa el mismo arreglo).
+2. Con sesión de `AdminCliente`, el menú muestra los mismos ítems que antes de esta corrección,
+   sin "Panel".
+3. El enlace "Pedidos" del menú de `Despachador` navega a `/t/:slug/panel/pedidos`, la misma ruta
+   que ya usa `AdminCliente`.
+4. ESLint/Prettier corren sin errores.
+
+### Supuestos asumidos (continúa el registro de arriba)
+
+14. El menú de `Despachador` se reduce a exactamente "Panel" y "Pedidos", en ese orden; se ocultan
+    "Clientes", "Usuarios", "Despachadores", "Conductores", "Vehículos" y "Asignaciones".
+15. `AdminCliente` no cambia: sigue viendo todos los ítems actuales, sin "Panel".
+16. Es un cambio puramente de menú (frontend); no se agrega ningún guard de router nuevo para las
+    rutas ocultas — el backend ya las protegía con `403` antes de esta corrección.
+17. El ítem "Pedidos" de `Despachador` usa la misma ruta y vista que `AdminCliente`, sin filtro ni
+    vista distinta.

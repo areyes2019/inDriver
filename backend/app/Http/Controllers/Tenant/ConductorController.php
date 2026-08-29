@@ -54,6 +54,14 @@ class ConductorController extends Controller
         return response()->json(new ConductorResource($conductor));
     }
 
+    public function saldoViajes(Conductor $conductor): JsonResponse
+    {
+        return response()->json([
+            'id_conductor' => $conductor->id_conductor,
+            'saldo_viajes' => VentaViajeConductorController::saldoConductor($conductor),
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([

@@ -9,9 +9,11 @@ use App\Http\Resources\Tenant\PedidoResource;
 use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\Cliente;
 use App\Models\Tenant\Conductor;
+use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Vehiculo;
+use App\Models\Tenant\VentaViajeConductor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -172,6 +174,10 @@ class PedidoController extends Controller
             default => null,
         };
 
+        if ($nuevoEstado === 'ENTREGADO' && $pedido->id_conductor) {
+            $this->liquidarConductor($pedido);
+        }
+
         $pedido->save();
         $pedido->load(['cliente', 'despachador.usuario', 'conductor.usuario', 'vehiculo']);
 
@@ -183,6 +189,31 @@ class PedidoController extends Controller
         ]);
 
         return response()->json(new PedidoResource($pedido));
+    }
+
+    /**
+     * Descuenta 1 viaje del saldo prepagado del conductor, o calcula la comisión del pedido,
+     * según la modalidad de cobro configurada para el tenant (ver spec 015).
+     */
+    private function liquidarConductor(Pedido $pedido): void
+    {
+        $modalidad = ConfiguracionTenant::obtener(ConfiguracionTenant::MODALIDAD, 'Prepago');
+
+        if ($modalidad === 'Comision') {
+            $porcentaje = (float) ConfiguracionTenant::obtener(ConfiguracionTenant::COMISION_PORCENTAJE, '0');
+            $pedido->comision_calculada = round((float) $pedido->importe_cobro * $porcentaje / 100, 2);
+
+            return;
+        }
+
+        $vendidos = VentaViajeConductor::where('id_conductor', $pedido->id_conductor)->sum('cantidad_viajes');
+        $consumidos = Pedido::where('id_conductor', $pedido->id_conductor)
+            ->where('prepago_descontado', true)
+            ->count();
+
+        if (($vendidos - $consumidos) > 0) {
+            $pedido->prepago_descontado = true;
+        }
     }
 
     /**

@@ -1,17 +1,21 @@
 <?php
 
 use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\CreditoPaqueteController;
 use App\Http\Controllers\Admin\PaqueteViajeController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Tenant\AuthController as TenantAuthController;
 use App\Http\Controllers\Tenant\ClienteController;
 use App\Http\Controllers\Tenant\ConductorController;
 use App\Http\Controllers\Tenant\ConductorVehiculoController;
+use App\Http\Controllers\Tenant\ConfiguracionController;
 use App\Http\Controllers\Tenant\DespachadorController;
 use App\Http\Controllers\Tenant\DireccionClienteController;
 use App\Http\Controllers\Tenant\PedidoController;
 use App\Http\Controllers\Tenant\UsuarioController;
 use App\Http\Controllers\Tenant\VehiculoController;
+use App\Http\Controllers\Tenant\VentaViajeConductorController;
+use App\Http\Controllers\Tenant\ZonaCoberturaController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')->group(function () {
@@ -37,6 +41,8 @@ Route::prefix('admin')->group(function () {
             Route::put('/paquetes-viajes/{paquete}', [PaqueteViajeController::class, 'update']);
             Route::patch('/paquetes-viajes/{paquete}/estado', [PaqueteViajeController::class, 'cambiarEstado']);
             Route::delete('/paquetes-viajes/{paquete}', [PaqueteViajeController::class, 'destroy']);
+
+            Route::post('/tenants/{tenant}/creditos-paquetes', [CreditoPaqueteController::class, 'store']);
         });
     });
 });
@@ -65,6 +71,8 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::post('/conductores', [ConductorController::class, 'store']);
             Route::get('/conductores/{conductor}', [ConductorController::class, 'show']);
             Route::put('/conductores/{conductor}', [ConductorController::class, 'update']);
+            Route::get('/conductores/{conductor}/saldo-viajes', [ConductorController::class, 'saldoViajes']);
+            Route::post('/conductores/{conductor}/vender-viajes', [VentaViajeConductorController::class, 'store']);
 
             Route::get('/vehiculos', [VehiculoController::class, 'index']);
             Route::post('/vehiculos', [VehiculoController::class, 'store']);
@@ -87,6 +95,16 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::get('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'show']);
             Route::put('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'update']);
             Route::delete('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'destroy']);
+
+            Route::get('/configuracion', [ConfiguracionController::class, 'show']);
+            Route::put('/configuracion', [ConfiguracionController::class, 'update']);
+
+            Route::get('/zonas-cobertura', [ZonaCoberturaController::class, 'index']);
+            Route::post('/zonas-cobertura', [ZonaCoberturaController::class, 'store']);
+            Route::get('/zonas-cobertura/{zona}', [ZonaCoberturaController::class, 'show']);
+            Route::put('/zonas-cobertura/{zona}', [ZonaCoberturaController::class, 'update']);
+            Route::patch('/zonas-cobertura/{zona}/estado', [ZonaCoberturaController::class, 'cambiarEstado']);
+            Route::delete('/zonas-cobertura/{zona}', [ZonaCoberturaController::class, 'destroy']);
         });
 
         Route::middleware(['throttle:tenant-usuarios', 'rol.tenant:AdminCliente,Despachador'])->group(function () {

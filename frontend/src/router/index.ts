@@ -240,6 +240,12 @@ const router = createRouter({
       component: () => import('../views/tenant/pedidos/EditarPedidoView.vue'),
       meta: { requiresTenantAuth: true },
     },
+    {
+      path: '/t/:slug/panel/configuracion',
+      name: 'tenant-configuracion',
+      component: () => import('../views/tenant/configuracion/ConfiguracionView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
   ],
 })
 
@@ -267,6 +273,10 @@ router.beforeEach(async (to) => {
     }
 
     if (to.name === 'tenant-panel' && auth.usuario?.rol !== 'Despachador') {
+      return { name: 'tenant-clientes-lista', params: { slug } }
+    }
+
+    if (to.name === 'tenant-configuracion' && auth.usuario?.rol !== 'AdminCliente') {
       return { name: 'tenant-clientes-lista', params: { slug } }
     }
   }

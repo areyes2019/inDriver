@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import axios from 'axios'
 import http from '@/lib/http'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import UiCard from '@/components/ui/UiCard.vue'
@@ -16,6 +17,14 @@ interface Tenant {
   estado: string
   modo_estado: string
   created_at: string
+}
+
+interface PaqueteViaje {
+  id_paquete: number
+  nombre: string
+  cantidad_viajes: number
+  precio: string
+  estado: string
 }
 
 const route = useRoute()
@@ -38,7 +47,50 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+
+  fetchPaquetesActivos()
 })
+
+// --- Acreditar paquete ---
+
+const paquetesActivos = ref<PaqueteViaje[]>([])
+const formCredito = reactive({ id_paquete: '', cantidad_paquetes: '1' })
+const errorCredito = ref('')
+const successCredito = ref('')
+const acreditando = ref(false)
+
+async function fetchPaquetesActivos() {
+  try {
+    const { data } = await http.get('/admin/paquetes-viajes', { params: { search: '' } })
+    paquetesActivos.value = (data.data ?? []).filter((p: PaqueteViaje) => p.estado === 'Activo')
+  } catch {
+    paquetesActivos.value = []
+  }
+}
+
+async function onAcreditarPaquete() {
+  errorCredito.value = ''
+  successCredito.value = ''
+  acreditando.value = true
+
+  try {
+    const { data } = await http.post(`/admin/tenants/${route.params.id}/creditos-paquetes`, {
+      id_paquete: formCredito.id_paquete,
+      cantidad_paquetes: formCredito.cantidad_paquetes,
+    })
+    successCredito.value = `Se acreditaron ${data.cantidad_viajes_acreditados} viaje(s) al tenant.`
+    formCredito.id_paquete = ''
+    formCredito.cantidad_paquetes = '1'
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.data?.message) {
+      errorCredito.value = err.response.data.message
+    } else {
+      errorCredito.value = 'No se pudo acreditar el paquete, intenta de nuevo.'
+    }
+  } finally {
+    acreditando.value = false
+  }
+}
 </script>
 
 <template>
@@ -98,6 +150,43 @@ onMounted(async () => {
           Editar
         </RouterLink>
       </div>
+    </UiCard>
+
+    <UiCard v-if="tenant" title="Acreditar paquete" class="mt-6">
+      <form class="flex flex-wrap items-end gap-3" @submit.prevent="onAcreditarPaquete">
+        <label class="block">
+          <span class="mb-1 block text-sm font-medium text-heading">Paquete</span>
+          <select
+            v-model="formCredito.id_paquete"
+            required
+            class="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          >
+            <option value="" disabled>Selecciona un paquete...</option>
+            <option v-for="p in paquetesActivos" :key="p.id_paquete" :value="p.id_paquete">
+              {{ p.nombre }} ({{ p.cantidad_viajes }} viajes, ${{ p.precio }})
+            </option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-sm font-medium text-heading">Cantidad</span>
+          <input
+            v-model="formCredito.cantidad_paquetes"
+            type="number"
+            min="1"
+            required
+            class="w-24 rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          />
+        </label>
+        <button
+          type="submit"
+          :disabled="acreditando || !formCredito.id_paquete"
+          class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Acreditar
+        </button>
+      </form>
+      <p v-if="errorCredito" role="alert" class="mt-3 text-sm text-red-600">{{ errorCredito }}</p>
+      <p v-if="successCredito" class="mt-3 text-sm text-green-600">{{ successCredito }}</p>
     </UiCard>
   </AdminLayout>
 </template>
