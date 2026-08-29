@@ -117,3 +117,95 @@ en las rutas de API correspondientes), igual que ya existe para otros recursos.
    `Despachador`.
 6. La página es accesible en cualquier momento navegando directamente a la URL (no solo
    inmediatamente después del login), igual que el resto de páginas del panel.
+
+## Ampliación: mapa de fondo con paneles flotantes y datos ficticios
+
+> Primera iteración de contenido real sobre la página en blanco de la versión anterior. Sigue sin
+> depender de ningún endpoint de backend: los tres componentes usan datos ficticios (fixtures)
+> hasta que existan las integraciones reales. El detalle de cada componente vive en su propia spec:
+> `tenant/008-servicios.md` (panel flotante izquierdo), `tenant/009-mapa.md` (mapa de fondo) y
+> `tenant/010-drivers.md` (panel derecho, layout aún por definir).
+>
+> Esta sección reemplaza el layout de "3 columnas en CSS Grid" de la versión anterior: en vez de
+> columnas del mismo alto repartiéndose el ancho, el mapa (009) ocupa todo el espacio disponible
+> como capa de fondo, y `ServiciosEnTurno` (008) flota por encima, pegado al borde izquierdo real
+> de la ventana. El panel derecho (010) todavía no está implementado — su forma final (flotante
+> igual que el izquierdo, u otro criterio) se define al construirlo.
+
+### Objetivo / Alcance de esta ampliación
+
+Deja funcionando:
+
+- `PanelView.vue` deja de envolver un solo `UiCard`; monta los componentes del panel directo dentro
+  de `TenantLayout`, sin grid ni contenedor intermedio — cada componente resuelve su propia posición
+  (ver spec 008 para el detalle del panel izquierdo).
+- Mapa de fondo: componente `MapaConductores.vue` (spec 009), ocupa el 100% del área bajo el navbar.
+- Panel flotante izquierdo: componente `ServiciosEnTurno.vue` (spec 008), `position: fixed` pegado
+  al borde izquierdo real de la ventana, empezando debajo del navbar fijo de `TenantLayout`
+  (`top-[4.25rem]`) y llegando hasta el borde inferior de la pantalla (`h-[calc(100vh-4.25rem)]`),
+  con `z-index` por debajo del navbar pero por encima del mapa.
+- Panel derecho: componente `ConductoresActivos.vue` (spec 010) — su posición final queda pendiente
+  de definir en esa spec.
+
+**No** incluye (por ahora):
+
+- Ningún endpoint de backend nuevo — los componentes leen de fixtures ficticios en
+  `frontend/src/fixtures/panelDespachador.ts`.
+- Interacción entre componentes (seleccionar un conductor no resalta su marcador en el mapa, etc.).
+- Actualización en tiempo real (polling/websockets).
+- Un tratamiento específico para pantallas angostas (mobile) — el panel izquierdo usa el mismo
+  ancho fijo (`w-[30%]`) en cualquier tamaño de pantalla; no hay un layout mobile distinto todavía.
+
+### Frontend (Vue 3)
+
+- **`views/tenant/panel/PanelView.vue`**: monta `ServiciosEnTurno` (y, cuando existan,
+  `MapaConductores`/`ConductoresActivos`) directo dentro de `TenantLayout`, sin ningún `<div>`
+  contenedor especial — cada componente flotante usa `position: fixed`, que se posiciona contra el
+  viewport sin importar el padding/centrado de `TenantLayout` (ningún ancestro entre `body` y estos
+  componentes usa `transform`/`filter`/`contain`, así que `fixed` funciona como se espera).
+- **Fixture nuevo** `frontend/src/fixtures/panelDespachador.ts`: datos ficticios —
+  `viajesEnTurnoFixture` (usado solo por 008) y `conductoresActivosFixture` (compartido por 009 y
+  010, para no duplicar el mismo conductor inventado en dos archivos distintos).
+- **Componentes nuevos** en `frontend/src/components/panel/`: carpeta propia para estos
+  componentes específicos del Panel de Despachador, separada de `components/ui/` (piezas genéricas
+  reutilizables en toda la app). Los paneles flotantes (008, y el criterio que defina 010) no usan
+  `UiCard` — tienen su propio marcado porque necesitan una posición y un alto que `UiCard` no
+  soporta.
+
+### Fuera de alcance (de esta ampliación)
+
+- Conexión a datos reales (`/pedidos`, estado en vivo de conductores, etc.) — queda para una futura
+  ampliación de esta misma spec o de las specs 008/009/010.
+- Cualquier interacción entre los componentes.
+- Layout específico para mobile.
+
+### Criterios de aceptación (de esta ampliación)
+
+1. `/t/{slug}/panel` muestra el mapa (009, cuando esté implementado) ocupando todo el ancho
+   disponible bajo el navbar, con el panel de Servicios (008) flotando pegado al borde izquierdo
+   real de la ventana por encima de él.
+2. El panel flotante empieza justo debajo del navbar (no lo tapa) y llega hasta el borde inferior
+   de la pantalla.
+3. Ninguno de los componentes hace ninguna petición HTTP — los datos que muestran vienen del
+   fixture `panelDespachador.ts`.
+4. ESLint/Prettier corren sin errores.
+
+### Supuestos asumidos (continúa el registro de arriba)
+
+7. Los componentes nuevos son 100% frontend, con datos ficticios hardcodeados en fixtures — sin
+   endpoints de backend nuevos.
+8. No hay interacción entre componentes ni actualización en tiempo real en esta primera versión.
+9. ~~En mobile, las columnas se apilan en orden Servicios → Mapa → Conductores.~~ Reemplazado por el
+   supuesto 11: el panel izquierdo flota con el mismo ancho fijo en cualquier tamaño de pantalla, no
+   se apila.
+10. El detalle de cada componente (campos mostrados, filtros de datos ficticios, límites de ítems)
+    vive en su propia spec: `tenant/008-servicios.md`, `tenant/009-mapa.md`,
+    `tenant/010-drivers.md`.
+11. El layout deja de ser un grid de columnas del mismo alto: el mapa (009) es la capa de fondo a
+    todo el ancho, y el panel de Servicios (008) flota por encima con `position: fixed`, pegado al
+    borde izquierdo real del navegador — no al borde del área de contenido con padding de
+    `TenantLayout`.
+12. El panel flotante empieza en `top-[4.25rem]` (justo debajo del navbar fijo, que mide esa altura)
+    y usa un `z-index` por debajo del navbar (`z-40`) pero por encima del mapa.
+13. El layout final del panel derecho (010: flotante igual que el izquierdo, o un criterio distinto)
+    no se define en esta ampliación — queda pendiente para cuando se implemente esa spec.
