@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import TenantLayout from '@/layouts/TenantLayout.vue'
 import ServiciosEnTurno from '@/components/panel/ServiciosEnTurno.vue'
+import MapaConductores from '@/components/panel/MapaConductores.vue'
 import NuevaEntregaPanel from '@/components/panel/NuevaEntregaPanel.vue'
 
 const layoutRef = ref<InstanceType<typeof TenantLayout>>()
@@ -23,9 +24,13 @@ function cerrarNuevaEntrega() {
     :nueva-entrega-abierta="nuevaEntregaAbierta"
     @toggle-nueva-entrega="alternarNuevaEntrega"
   >
-    <!-- Mapa central, ocupa toda el área bajo el navbar: tenant/009-mapa.md -->
+    <!-- Columna izquierda (viajes en turno), fija sobre el 30% izquierdo: tenant/008-servicios.md -->
     <ServiciosEnTurno />
-    <!-- Columna derecha (conductores activos), flotante sobre el mapa: tenant/010-drivers.md -->
+    <!-- Columna central (mapa de conductores), desplazada para no quedar bajo la izquierda: tenant/009-mapa.md -->
+    <div class="ml-[30%] min-h-[calc(100vh-4.25rem-2rem)]">
+      <MapaConductores />
+    </div>
+    <!-- Panel deslizante de agendamiento rápido, se superpone a la columna izquierda al abrir: tenant/011-nueva-entrega.md -->
     <NuevaEntregaPanel
       :abierto="nuevaEntregaAbierta"
       @cerrar="cerrarNuevaEntrega"

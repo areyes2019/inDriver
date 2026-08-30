@@ -22,11 +22,11 @@ Deja funcionando:
   "Nueva Entrega", visible **únicamente** en esa ruta.
 - Al entrar a `/t/{slug}/panel`, el foco del teclado se posiciona automáticamente sobre ese botón.
 - Al activarlo (clic, o Enter/Espacio con el foco puesto en él), un panel se **desliza** desde fuera
-  de la pantalla por la izquierda hasta cubrir exactamente el mismo ancho que ocupa
-  `ServiciosEnTurno` (30% del viewport) — se superpone y tapa visualmente a Servicios en turno
-  mientras está abierto. La animación usa `transform: translateX(...)` con una transición de
-  `0.4s ease-in-out` (el panel siempre está en el DOM; lo que cambia es su posición, no su
-  visibilidad, para que el deslizamiento se vea).
+  de la pantalla por la izquierda hasta cubrir el 45% del ancho del viewport — más ancho que
+  `ServiciosEnTurno` (que ocupa 30%), así que al abrirse tapa visualmente tanto a Servicios en turno
+  como una franja adicional del contenido a su derecha. La animación usa `transform:
+  translateX(...)` con una transición de `0.4s ease-in-out` (el panel siempre está en el DOM; lo que
+  cambia es su posición, no su visibilidad, para que el deslizamiento se vea).
 - El panel ocupa la altura completa del navegador (de `top: 0` a `bottom: 100vh`) — a diferencia de
   `ServiciosEnTurno`, que arranca debajo del navbar. El navbar, con `z-index` más alto, queda
   visualmente por encima de la parte superior del panel.
@@ -81,10 +81,11 @@ pantalla), con `transition: transform 0.4s ease-in-out`.
 
 ### Por qué tapa a `ServiciosEnTurno` en vez de convivir a su lado
 
-El panel usa el mismo `left: 0` y el mismo ancho (`30%`) que `ServiciosEnTurno` (spec 008), así que
-al abrirse queda exactamente en su lugar. Su `z-index` va entre el de `ServiciosEnTurno` (30) y el
-del navbar (40): por encima de Servicios en turno (lo tapa mientras está abierto) pero por debajo
-del navbar (que siempre queda visible y utilizable).
+El panel usa `left: 0` igual que `ServiciosEnTurno` (spec 008), pero un ancho mayor (`45%` contra el
+`30%` de `ServiciosEnTurno`): al abrirse no solo coincide con su lugar, sino que se extiende más
+allá. Su `z-index` va entre el de `ServiciosEnTurno` (30) y el del navbar (40): por encima de
+Servicios en turno y de lo que haya a su derecha dentro de ese 45% (los tapa mientras está abierto)
+pero por debajo del navbar (que siempre queda visible y utilizable).
 
 ### Por qué ocupa toda la altura del navegador y no solo debajo del navbar
 
@@ -107,7 +108,7 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
   `:abierto` y escucha `@cerrar`/`@agendar` hacia `NuevaEntregaPanel` (ambos eventos cierran el
   panel y devuelven el foco al botón del navbar).
 - **`components/panel/NuevaEntregaPanel.vue`**: deja de tener botón propio y deja de usar `UiCard`.
-  Pasa a ser un `<aside>` de posición fija (`fixed left-0 top-0 h-screen w-[30%]`, `z-[35]`,
+  Pasa a ser un `<aside>` de posición fija (`fixed left-0 top-0 h-screen w-[45%]`, `z-[35]`,
   `transition-transform duration-[400ms] ease-in-out`, clase `translate-x-0`/`-translate-x-full`
   según la prop `abierto`), con el mismo formulario ya definido (campos de spec 006). Recibe
   `abierto` por prop y emite `cerrar` y `agendar`; ya no importa ningún composable.
@@ -128,8 +129,9 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
    tenant, el navbar no lo muestra.
 2. Al entrar a `/t/{slug}/panel`, el foco del teclado queda posicionado sobre el botón "Nueva
    Entrega" del navbar.
-3. Al activar el botón, el panel se desliza desde la izquierda hasta cubrir el mismo ancho que
-   `ServiciosEnTurno`, tapándolo, con una transición de 0.4s.
+3. Al activar el botón, el panel se desliza desde la izquierda hasta cubrir el 45% del ancho del
+   viewport, tapando a `ServiciosEnTurno` (30%) y la franja adicional a su derecha, con una
+   transición de 0.4s.
 4. El panel ocupa toda la altura del navegador (de arriba abajo); el navbar se mantiene visible y
    utilizable por encima de él.
 5. Activar el botón de nuevo, o "Cancelar", o Escape con el foco dentro del formulario, desliza el
@@ -148,8 +150,9 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
    árbol de componentes (`TenantLayout` ⇄ `PanelView` ⇄ `NuevaEntregaPanel`), sin ningún estado
    compartido en un módulo aparte.
 3. El formulario deja de ser una tarjeta a la derecha de Servicios en turno; pasa a ser un panel
-   deslizante (`transform: translateX`, transición `0.4s ease-in-out`) que cubre exactamente el
-   mismo ancho que `ServiciosEnTurno` (30% del viewport) al abrirse, superponiéndose a él.
+   deslizante (`transform: translateX`, transición `0.4s ease-in-out`) que cubre el 45% del
+   viewport al abrirse — más ancho que `ServiciosEnTurno` (30%) — superponiéndose a él y a la
+   franja adicional a su derecha.
 4. El panel deslizante ocupa toda la altura del navegador (`top: 0` a `100vh`), a diferencia de
    `ServiciosEnTurno`; el navbar (z-index más alto) se mantiene visualmente por encima de él.
 5. El foco inicial al entrar a `/panel` se posiciona sobre el botón del navbar.

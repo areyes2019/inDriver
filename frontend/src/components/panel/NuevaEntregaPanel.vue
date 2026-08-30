@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { nextTick, reactive, ref, watch } from 'vue'
+import UiAddressAutocomplete from '@/components/ui/UiAddressAutocomplete.vue'
+import UiVistaPreviaRuta from '@/components/ui/UiVistaPreviaRuta.vue'
+import type { LatLngLike } from '@/services/maps/types'
 
 interface NuevaEntregaPayload {
   nombre_solicitante: string
@@ -43,6 +46,17 @@ function formInicial(): NuevaEntregaPayload {
 const form = reactive<NuevaEntregaPayload>(formInicial())
 const horaError = ref('')
 
+const recogidaCoord = ref<LatLngLike | null>(null)
+const entregaCoord = ref<LatLngLike | null>(null)
+
+function onSeleccionaRecogida(p: { lat: number | null; lng: number | null }) {
+  recogidaCoord.value = p.lat !== null && p.lng !== null ? { lat: p.lat, lng: p.lng } : null
+}
+
+function onSeleccionaEntrega(p: { lat: number | null; lng: number | null }) {
+  entregaCoord.value = p.lat !== null && p.lng !== null ? { lat: p.lat, lng: p.lng } : null
+}
+
 const primerCampoRef = ref<HTMLInputElement>()
 
 watch(
@@ -76,12 +90,14 @@ function onSubmit() {
 
   emit('agendar', { ...form })
   Object.assign(form, formInicial())
+  recogidaCoord.value = null
+  entregaCoord.value = null
 }
 </script>
 
 <template>
   <aside
-    class="fixed left-0 top-0 z-[35] flex h-screen w-[30%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
+    class="fixed left-0 top-0 z-[35] flex h-screen w-[45%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
     :class="abierto ? 'translate-x-0' : '-translate-x-full'"
     @keydown="onKeydown"
   >
@@ -115,23 +131,23 @@ function onSubmit() {
 
       <label class="block">
         <span class="mb-1 block text-sm font-medium text-heading">Dirección de recogida</span>
-        <input
+        <UiAddressAutocomplete
           v-model="form.direccion_recogida"
-          type="text"
           required
-          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          @select="onSeleccionaRecogida"
         />
       </label>
 
       <label class="block">
         <span class="mb-1 block text-sm font-medium text-heading">Dirección de entrega</span>
-        <input
+        <UiAddressAutocomplete
           v-model="form.direccion_entrega"
-          type="text"
           required
-          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          @select="onSeleccionaEntrega"
         />
       </label>
+
+      <UiVistaPreviaRuta :origen="recogidaCoord" :destino="entregaCoord" />
 
       <label class="block">
         <span class="mb-1 block text-sm font-medium text-heading">Fecha de servicio</span>

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import http from '@/lib/http'
 import TenantLayout from '@/layouts/TenantLayout.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiAddressAutocomplete from '@/components/ui/UiAddressAutocomplete.vue'
+import UiVistaPreviaRuta from '@/components/ui/UiVistaPreviaRuta.vue'
 
 interface Recurso {
   id_cliente?: number
@@ -43,6 +45,25 @@ const form = reactive({
   id_conductor: '',
   id_vehiculo: '',
 })
+
+function coordenada(lat: string, lng: string) {
+  const latNum = parseFloat(lat)
+  const lngNum = parseFloat(lng)
+  return Number.isFinite(latNum) && Number.isFinite(lngNum) ? { lat: latNum, lng: lngNum } : null
+}
+
+const origenRuta = computed(() => coordenada(form.latitud_recogida, form.longitud_recogida))
+const destinoRuta = computed(() => coordenada(form.latitud_entrega, form.longitud_entrega))
+
+function onSeleccionaRecogida(p: { lat: number | null; lng: number | null }) {
+  if (p.lat !== null) form.latitud_recogida = String(p.lat)
+  if (p.lng !== null) form.longitud_recogida = String(p.lng)
+}
+
+function onSeleccionaEntrega(p: { lat: number | null; lng: number | null }) {
+  if (p.lat !== null) form.latitud_entrega = String(p.lat)
+  if (p.lng !== null) form.longitud_entrega = String(p.lng)
+}
 
 const clientes = ref<Recurso[]>([])
 const despachadores = ref<Recurso[]>([])
@@ -179,11 +200,10 @@ async function onSubmit() {
 
         <label class="block">
           <span class="mb-1 block text-sm font-medium text-heading">Dirección de recogida</span>
-          <input
+          <UiAddressAutocomplete
             v-model="form.direccion_recogida"
-            type="text"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+            @select="onSeleccionaRecogida"
           />
           <span v-if="fieldErrors.direccion_recogida" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.direccion_recogida }}
@@ -213,11 +233,10 @@ async function onSubmit() {
 
         <label class="block">
           <span class="mb-1 block text-sm font-medium text-heading">Dirección de entrega</span>
-          <input
+          <UiAddressAutocomplete
             v-model="form.direccion_entrega"
-            type="text"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+            @select="onSeleccionaEntrega"
           />
           <span v-if="fieldErrors.direccion_entrega" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.direccion_entrega }}
@@ -244,6 +263,8 @@ async function onSubmit() {
             />
           </label>
         </div>
+
+        <UiVistaPreviaRuta :origen="origenRuta" :destino="destinoRuta" />
 
         <label class="block">
           <span class="mb-1 block text-sm font-medium text-heading">Fecha de servicio</span>

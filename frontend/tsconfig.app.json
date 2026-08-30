@@ -6,6 +6,11 @@
     // Extra safety for array and object lookups, but may have false positives.
     "noUncheckedIndexedAccess": true,
 
+    // Habilita los tipos globales de `google.maps` (servicio de mapas, tenant/009-mapa.md).
+    // El tsconfig base de Vue deja `types: []` para evitar incluir de más, así que se agrega
+    // explícitamente solo el paquete que sí se necesita.
+    "types": ["google.maps"],
+
     // Path mapping for cleaner imports.
     "paths": {
       "@/*": ["./src/*"]

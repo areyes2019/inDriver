@@ -15,6 +15,7 @@
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {
+    "@googlemaps/js-api-loader": "^2.1.1",
     "@lucide/vue": "^1.35.0",
     "@tailwindcss/vite": "^4.3.3",
     "axios": "^1.20.0",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
+    "@types/google.maps": "^3.66.0",
     "@types/node": "^24.13.3",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/eslint-config-typescript": "^14.9.0",
