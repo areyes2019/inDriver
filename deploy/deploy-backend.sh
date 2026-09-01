@@ -182,6 +182,20 @@ say "Recacheando configuración, rutas y eventos"
 remote "cd '$REMOTE_APP' && $REMOTE_PHP artisan config:cache && $REMOTE_PHP artisan route:cache && $REMOTE_PHP artisan event:cache"
 ok "cachés reconstruidas"
 
+# --- Dueño de los archivos ----------------------------------------------------
+# Este script se corre por SSH como root (VPS propio, no el hosting compartido
+# de antes): el código subido por tar y todo lo que generan composer/artisan
+# arriba quedan root:root. PHP-FPM corre como www-data, así que sin este chown
+# no puede escribir storage/logs/laravel.log ni las sesiones en cada request —
+# el síntoma es un 500 con storage/logs/ vacío (el propio intento de loguear
+# el error falla por permisos). Va AL FINAL, después de todos los pasos que
+# corren como root y podrían recrear archivos dentro de storage/ (p. ej. si
+# algún artisan de arriba llega a loguear algo), para que el dueño final sea
+# siempre el correcto sin importar qué haya tocado el despliegue.
+say "Ajustando el dueño de los archivos (www-data)"
+remote "chown -R www-data:www-data '$REMOTE_APP'"
+ok "dueño ajustado"
+
 say "Levantando el sitio"
 levantar
 EN_MANTENIMIENTO=0
