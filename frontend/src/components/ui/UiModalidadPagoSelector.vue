@@ -50,13 +50,14 @@ function onKeydown(event: KeyboardEvent, valor: ModalidadPago) {
 
   const indiceActual = opciones.findIndex((o) => o.valor === valor)
   const paso = event.key === 'ArrowRight' ? 1 : -1
-  const siguiente = opciones[(indiceActual + paso + opciones.length) % opciones.length]
+  const indiceSiguiente = (indiceActual + paso + opciones.length) % opciones.length
+  const siguiente = opciones[indiceSiguiente]!
 
   emit('update:modelValue', siguiente.valor)
   ;(event.currentTarget as HTMLElement | null)
     ?.closest('[role="radiogroup"]')
     ?.querySelectorAll<HTMLElement>('[role="radio"]')
-    [(indiceActual + paso + opciones.length) % opciones.length]?.focus()
+    [indiceSiguiente]?.focus()
 }
 </script>
 
