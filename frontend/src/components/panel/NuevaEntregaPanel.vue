@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import http from '@/lib/http'
@@ -12,6 +12,7 @@ import { useTenantAuthStore } from '@/stores/tenantAuth'
 import type { LatLngLike } from '@/services/maps/types'
 
 interface NuevaEntregaForm {
+  id_cliente: number | null
   nombre_solicitante: string
   telefono_solicitante: string
   direccion_recogida: string
@@ -23,6 +24,23 @@ interface NuevaEntregaForm {
   modalidad_pago: ModalidadPago
   importe_envio: string
   importe_cobro: string
+}
+
+interface ClienteFrecuente {
+  id_cliente: number
+  nombre: string
+  telefono: string
+  estado: string
+}
+
+interface DireccionClienteApi {
+  id_direccion: number
+  calle: string
+  numero: string | null
+  colonia: string | null
+  ciudad: string | null
+  latitud: string | number | null
+  longitud: string | number | null
 }
 
 const props = defineProps<{
@@ -41,6 +59,7 @@ const coberturaBounds = computed(() => tenantAuth.usuario?.cobertura_bounds ?? n
 
 function formInicial(): NuevaEntregaForm {
   return {
+    id_cliente: null,
     nombre_solicitante: '',
     telefono_solicitante: '',
     direccion_recogida: '',
@@ -62,6 +81,7 @@ const loading = ref(false)
 
 const recogidaCoord = ref<LatLngLike | null>(null)
 const entregaCoord = ref<LatLngLike | null>(null)
+const recogidaResuelta = ref(false)
 
 function onSeleccionaRecogida(p: { lat: number | null; lng: number | null }) {
   recogidaCoord.value = p.lat !== null && p.lng !== null ? { lat: p.lat, lng: p.lng } : null
@@ -71,7 +91,92 @@ function onSeleccionaEntrega(p: { lat: number | null; lng: number | null }) {
   entregaCoord.value = p.lat !== null && p.lng !== null ? { lat: p.lat, lng: p.lng } : null
 }
 
-const primerCampoRef = ref<HTMLInputElement>()
+const clientes = ref<ClienteFrecuente[]>([])
+
+async function cargarClientes() {
+  try {
+    const { data } = await http.get(`/t/${slug}/clientes`)
+    clientes.value = (data.data as ClienteFrecuente[]).filter((c) => c.estado === 'Activo')
+  } catch {
+    clientes.value = []
+  }
+}
+
+function formatearDireccion(d: DireccionClienteApi): string {
+  return [[d.calle, d.numero].filter(Boolean).join(' '), d.colonia, d.ciudad]
+    .filter((parte): parte is string => Boolean(parte && parte.trim()))
+    .join(', ')
+}
+
+async function onClienteChange() {
+  const cliente = clientes.value.find((c) => c.id_cliente === form.id_cliente)
+  if (!cliente) return
+
+  form.nombre_solicitante = cliente.nombre
+  form.telefono_solicitante = cliente.telefono
+
+  try {
+    const { data } = await http.get(`/t/${slug}/clientes/${cliente.id_cliente}/direcciones`)
+    const direcciones = data.data as DireccionClienteApi[]
+    if (direcciones.length !== 1) return
+
+    const [direccion] = direcciones as [DireccionClienteApi]
+    form.direccion_recogida = formatearDireccion(direccion)
+
+    const lat = direccion.latitud !== null ? Number(direccion.latitud) : null
+    const lng = direccion.longitud !== null ? Number(direccion.longitud) : null
+    if (lat !== null && lng !== null && !Number.isNaN(lat) && !Number.isNaN(lng)) {
+      recogidaCoord.value = { lat, lng }
+      recogidaResuelta.value = true
+    } else {
+      recogidaCoord.value = null
+      recogidaResuelta.value = false
+    }
+  } catch {
+    // Sin acceso a las direcciones del cliente: solo queda el autocompletado de nombre/teléfono.
+  }
+}
+
+const tarifaBanderazo = ref(0)
+const tarifaKmAdicional = ref(0)
+
+async function cargarConfiguracion() {
+  try {
+    const { data } = await http.get(`/t/${slug}/configuracion`)
+    tarifaBanderazo.value = Number(data.tarifa_banderazo) || 0
+    tarifaKmAdicional.value = Number(data.tarifa_km_adicional) || 0
+  } catch {
+    tarifaBanderazo.value = 0
+    tarifaKmAdicional.value = 0
+  }
+}
+
+const distanciaKm = ref<number | null>(null)
+
+function onDistancia(km: number | null) {
+  distanciaKm.value = km
+}
+
+const totalViaje = computed(() => {
+  if (distanciaKm.value === null) return null
+  return tarifaBanderazo.value + distanciaKm.value * tarifaKmAdicional.value
+})
+
+watch(
+  () => form.modalidad_pago,
+  (modalidad) => {
+    if (modalidad !== 'RECEPTOR_PAGA_ENVIO_PRODUCTOS') {
+      form.importe_cobro = '0'
+    }
+  },
+)
+
+onMounted(() => {
+  cargarClientes()
+  cargarConfiguracion()
+})
+
+const primerCampoRef = ref<HTMLSelectElement>()
 
 watch(
   () => props.abierto,
@@ -93,6 +198,8 @@ function limpiarFormulario() {
   Object.assign(form, formInicial())
   recogidaCoord.value = null
   entregaCoord.value = null
+  recogidaResuelta.value = false
+  distanciaKm.value = null
   Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key])
   error.value = ''
 }
@@ -102,6 +209,10 @@ async function onSubmit() {
   Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key])
 
   if (!form.lo_antes_posible) {
+    if (!form.fecha_servicio) {
+      fieldErrors.fecha_servicio = 'Indica la fecha del servicio o marca "Lo antes posible".'
+      return
+    }
     if (!form.hora_desde || !form.hora_hasta) {
       fieldErrors.hora_desde = 'Indica la hora desde y hasta, o marca "Lo antes posible".'
       return
@@ -143,11 +254,25 @@ async function onSubmit() {
     </header>
 
     <form class="flex-1 space-y-4 overflow-y-auto p-4" @submit.prevent="onSubmit">
-      <div class="grid grid-cols-1 gap-4">
+      <label class="block">
+        <span class="mb-1 block text-sm font-medium text-heading">Cliente frecuente</span>
+        <select
+          ref="primerCampoRef"
+          v-model="form.id_cliente"
+          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          @change="onClienteChange"
+        >
+          <option :value="null">Ninguno / solicitante ocasional</option>
+          <option v-for="cliente in clientes" :key="cliente.id_cliente" :value="cliente.id_cliente">
+            {{ cliente.nombre }}
+          </option>
+        </select>
+      </label>
+
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label class="block">
           <span class="mb-1 block text-sm font-medium text-heading">Nombre del solicitante</span>
           <input
-            ref="primerCampoRef"
             v-model="form.nombre_solicitante"
             type="text"
             required
@@ -177,6 +302,8 @@ async function onSubmit() {
         <UiAddressAutocomplete
           v-model="form.direccion_recogida"
           required
+          mostrar-indicador
+          :resuelta="recogidaResuelta"
           :bounds="coberturaBounds"
           @select="onSeleccionaRecogida"
         />
@@ -190,6 +317,7 @@ async function onSubmit() {
         <UiAddressAutocomplete
           v-model="form.direccion_entrega"
           required
+          mostrar-indicador
           :bounds="coberturaBounds"
           @select="onSeleccionaEntrega"
         />
@@ -198,14 +326,13 @@ async function onSubmit() {
         </span>
       </label>
 
-      <UiVistaPreviaRuta :origen="recogidaCoord" :destino="entregaCoord" />
+      <UiVistaPreviaRuta :origen="recogidaCoord" :destino="entregaCoord" @distancia="onDistancia" />
 
-      <label class="block">
+      <label v-if="!form.lo_antes_posible" class="block">
         <span class="mb-1 block text-sm font-medium text-heading">Fecha de servicio</span>
         <input
           v-model="form.fecha_servicio"
           type="date"
-          required
           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
         />
         <span v-if="fieldErrors.fecha_servicio" class="mt-1 block text-sm text-red-600">
@@ -265,7 +392,7 @@ async function onSubmit() {
             {{ fieldErrors.importe_envio }}
           </span>
         </label>
-        <label class="block">
+        <label v-if="form.modalidad_pago === 'RECEPTOR_PAGA_ENVIO_PRODUCTOS'" class="block">
           <span class="mb-1 block text-sm font-medium text-heading">Importe de cobro</span>
           <input
             v-model="form.importe_cobro"
@@ -278,6 +405,14 @@ async function onSubmit() {
             {{ fieldErrors.importe_cobro }}
           </span>
         </label>
+      </div>
+
+      <div
+        v-if="totalViaje !== null"
+        class="rounded-lg border border-accent/30 bg-accent/5 px-4 py-3"
+      >
+        <span class="block text-sm font-medium text-heading">Total del viaje</span>
+        <span class="block text-lg font-semibold text-heading">$ {{ totalViaje.toFixed(2) }}</span>
       </div>
 
       <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>

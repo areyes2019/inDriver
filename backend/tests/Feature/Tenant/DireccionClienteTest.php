@@ -78,13 +78,27 @@ it('rejects listing direcciones without a session', function () {
     $this->getJson("/api/v1/t/cafe-luna/clientes/{$cliente->id_cliente}/direcciones")->assertUnauthorized();
 });
 
-it('rejects direcciones access for a non-AdminCliente role', function () {
+it('rejects direcciones access for a Conductor role', function () {
+    $tenant = direccionTenant();
+    $conductor = direccionAdminUsuario($tenant, ['email' => 'x@cafeluna.com', 'rol' => 'Conductor']);
+    $cliente = direccionCliente($tenant);
+
+    $this->actingAs($conductor, 'usuario')
+        ->getJson("/api/v1/t/cafe-luna/clientes/{$cliente->id_cliente}/direcciones")
+        ->assertForbidden();
+});
+
+it('allows a Despachador to list direcciones but not manage them', function () {
     $tenant = direccionTenant();
     $despachador = direccionAdminUsuario($tenant, ['email' => 'x@cafeluna.com', 'rol' => 'Despachador']);
     $cliente = direccionCliente($tenant);
 
     $this->actingAs($despachador, 'usuario')
         ->getJson("/api/v1/t/cafe-luna/clientes/{$cliente->id_cliente}/direcciones")
+        ->assertOk();
+
+    $this->actingAs($despachador, 'usuario')
+        ->postJson("/api/v1/t/cafe-luna/clientes/{$cliente->id_cliente}/direcciones", ['calle' => 'Av. Tecnológico'])
         ->assertForbidden();
 });
 

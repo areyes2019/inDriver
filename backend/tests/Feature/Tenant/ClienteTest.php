@@ -70,7 +70,21 @@ it('rejects listing clientes without a session', function () {
     $this->getJson('/api/v1/t/cafe-luna/clientes')->assertUnauthorized();
 });
 
-it('rejects clientes access for a non-AdminCliente role', function () {
+it('rejects clientes access for a Conductor role', function () {
+    $tenant = makeClienteTenant();
+    $conductor = makeClienteAdminUsuario($tenant, [
+        'email' => 'pedro@cafeluna.com',
+        'rol' => 'Conductor',
+    ]);
+
+    tenancy()->initialize($tenant);
+    $this->actingAs($conductor, 'usuario')
+        ->getJson('/api/v1/t/cafe-luna/clientes')
+        ->assertForbidden();
+    tenancy()->end();
+});
+
+it('allows a Despachador to list clientes but not manage them', function () {
     $tenant = makeClienteTenant();
     $despachador = makeClienteAdminUsuario($tenant, [
         'email' => 'pedro@cafeluna.com',
@@ -80,6 +94,10 @@ it('rejects clientes access for a non-AdminCliente role', function () {
     tenancy()->initialize($tenant);
     $this->actingAs($despachador, 'usuario')
         ->getJson('/api/v1/t/cafe-luna/clientes')
+        ->assertOk();
+
+    $this->actingAs($despachador, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/clientes', ['nombre' => 'Juan Pérez'])
         ->assertForbidden();
     tenancy()->end();
 });

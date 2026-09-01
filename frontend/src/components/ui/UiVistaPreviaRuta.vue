@@ -8,6 +8,10 @@ const props = defineProps<{
   destino: LatLngLike | null
 }>()
 
+const emit = defineEmits<{
+  distancia: [km: number | null]
+}>()
+
 const containerId = `ruta-preview-${useId()}`
 const mapReady = ref(false)
 const resultado = ref<RouteResult | null>(null)
@@ -17,6 +21,7 @@ watch(
   async () => {
     if (!mapService.hasApiKey() || !props.origen || !props.destino) {
       resultado.value = null
+      emit('distancia', null)
       return
     }
 
@@ -29,6 +34,7 @@ watch(
       props.origen,
       props.destino,
     ])
+    emit('distancia', resultado.value?.distanceKm ?? null)
   },
   { immediate: true },
 )

@@ -194,7 +194,7 @@ class PedidoController extends Controller
             'telefono_solicitante' => ['required', 'string', 'max:255'],
             'direccion_recogida' => ['required', 'string', 'max:255'],
             'direccion_entrega' => ['required', 'string', 'max:255'],
-            'fecha_servicio' => ['required', 'date'],
+            'fecha_servicio' => ['nullable', 'date'],
             'lo_antes_posible' => ['sometimes', 'boolean'],
             'hora_desde' => ['nullable', 'date_format:H:i'],
             'hora_hasta' => ['nullable', 'date_format:H:i'],
@@ -213,6 +213,12 @@ class PedidoController extends Controller
         $loAntesPosible = $request->boolean('lo_antes_posible');
 
         if (! $loAntesPosible) {
+            if (empty($data['fecha_servicio'])) {
+                throw ValidationException::withMessages([
+                    'fecha_servicio' => 'Indica la fecha del servicio o marca "Lo antes posible".',
+                ]);
+            }
+
             if (empty($data['hora_desde']) || empty($data['hora_hasta'])) {
                 throw ValidationException::withMessages([
                     'hora_desde' => 'Indica el horario del servicio o marca "Lo antes posible".',
@@ -227,8 +233,11 @@ class PedidoController extends Controller
         }
 
         $data['lo_antes_posible'] = $loAntesPosible;
+        $data['fecha_servicio'] = $data['fecha_servicio'] ?? now()->toDateString();
         $data['importe_envio'] = $data['importe_envio'] ?? 0;
-        $data['importe_cobro'] = $data['importe_cobro'] ?? 0;
+        $data['importe_cobro'] = $data['modalidad_pago'] === 'RECEPTOR_PAGA_ENVIO_PRODUCTOS'
+            ? ($data['importe_cobro'] ?? 0)
+            : 0;
 
         return $data;
     }

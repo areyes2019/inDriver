@@ -26,6 +26,7 @@ const FLAT_COLOR_ICON_NAMES = [
   'globe',
   'paid',
   'shop',
+  'checkmark',
 ]
 
 // fluent-color solo cubre los íconos que no existen en flat-color-icons (ej. no tiene campana ni

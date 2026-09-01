@@ -88,19 +88,14 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::post('/conductor-vehiculo', [ConductorVehiculoController::class, 'store']);
             Route::patch('/conductor-vehiculo/{conductorVehiculo}/finalizar', [ConductorVehiculoController::class, 'finalizar']);
 
-            Route::get('/clientes', [ClienteController::class, 'index']);
             Route::post('/clientes', [ClienteController::class, 'store']);
-            Route::get('/clientes/{cliente}', [ClienteController::class, 'show']);
             Route::put('/clientes/{cliente}', [ClienteController::class, 'update']);
             Route::patch('/clientes/{cliente}/estado', [ClienteController::class, 'cambiarEstado']);
 
-            Route::get('/clientes/{cliente}/direcciones', [DireccionClienteController::class, 'index']);
             Route::post('/clientes/{cliente}/direcciones', [DireccionClienteController::class, 'store']);
-            Route::get('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'show']);
             Route::put('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'update']);
             Route::delete('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'destroy']);
 
-            Route::get('/configuracion', [ConfiguracionController::class, 'show']);
             Route::put('/configuracion', [ConfiguracionController::class, 'update']);
 
             Route::get('/zonas-cobertura', [ZonaCoberturaController::class, 'index']);
@@ -120,6 +115,13 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::get('/pedidos/{pedido}', [PedidoController::class, 'show']);
             Route::put('/pedidos/{pedido}', [PedidoController::class, 'update']);
             Route::patch('/pedidos/{pedido}/estado', [PedidoController::class, 'cambiarEstado']);
+
+            Route::get('/clientes', [ClienteController::class, 'index']);
+            Route::get('/clientes/{cliente}', [ClienteController::class, 'show']);
+            Route::get('/clientes/{cliente}/direcciones', [DireccionClienteController::class, 'index']);
+            Route::get('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'show']);
+
+            Route::get('/configuracion', [ConfiguracionController::class, 'show']);
         });
     });
 });

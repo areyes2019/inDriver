@@ -22,6 +22,7 @@ export interface RouteOptions {
 export interface RouteResult {
   distance: string
   duration: string
+  distanceKm: number
 }
 
 export interface AddressSuggestion {

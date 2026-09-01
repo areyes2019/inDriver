@@ -170,7 +170,11 @@ export default class GoogleProvider extends BaseProvider {
       const leg = response.routes[0]?.legs[0]
       if (!leg?.distance || !leg?.duration) return null
 
-      return { distance: leg.distance.text, duration: leg.duration.text }
+      return {
+        distance: leg.distance.text,
+        duration: leg.duration.text,
+        distanceKm: leg.distance.value / 1000,
+      }
     } catch {
       const polyline = new google.maps.Polyline({
         map: instance.map,
