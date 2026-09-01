@@ -2,7 +2,7 @@
 withDefaults(
   defineProps<{
     text: string | number
-    color?: 'orange' | 'blue' | 'green' | 'red' | 'gray'
+    color?: 'orange' | 'blue' | 'green' | 'red' | 'gray' | 'purple'
   }>(),
   {
     color: 'gray',
@@ -10,11 +10,12 @@ withDefaults(
 )
 
 const colorClasses: Record<string, string> = {
-  orange: 'bg-orange-100 text-orange-700',
-  blue: 'bg-blue-100 text-blue-700',
-  green: 'bg-green-100 text-green-700',
+  orange: 'bg-warning-bg text-warning-text',
+  blue: 'bg-info-bg text-info-text',
+  green: 'bg-success-bg text-success-text',
   red: 'bg-red-100 text-red-700',
   gray: 'bg-slate-100 text-slate-700',
+  purple: 'bg-purple-bg text-purple-text',
 }
 </script>
 

@@ -54,3 +54,10 @@ export interface FitTarget {
   lng: number
   bounds?: LatLngBoundsLike | null
 }
+
+export interface PolygonDrawOptions {
+  /** Vértices iniciales para editar un polígono existente; sin ellos, arranca el modo de dibujo. */
+  initialPoints?: LatLngLike[]
+  /** Se dispara con el arreglo de vértices vigente cada vez que el polígono cambia. */
+  onChange: (points: LatLngLike[]) => void
+}

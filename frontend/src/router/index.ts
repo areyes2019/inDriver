@@ -223,24 +223,6 @@ const router = createRouter({
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/pedidos',
-      name: 'tenant-pedidos-lista',
-      component: () => import('../views/tenant/pedidos/ListaPedidosView.vue'),
-      meta: { requiresTenantAuth: true },
-    },
-    {
-      path: '/t/:slug/panel/pedidos/crear',
-      name: 'tenant-pedidos-crear',
-      component: () => import('../views/tenant/pedidos/CrearPedidoView.vue'),
-      meta: { requiresTenantAuth: true },
-    },
-    {
-      path: '/t/:slug/panel/pedidos/:id/editar',
-      name: 'tenant-pedidos-editar',
-      component: () => import('../views/tenant/pedidos/EditarPedidoView.vue'),
-      meta: { requiresTenantAuth: true },
-    },
-    {
       path: '/t/:slug/panel/configuracion',
       name: 'tenant-configuracion',
       component: () => import('../views/tenant/configuracion/ConfiguracionView.vue'),

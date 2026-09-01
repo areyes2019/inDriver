@@ -3,9 +3,11 @@ import BaseProvider from './BaseProvider'
 import type {
   AddressSuggestion,
   FitTarget,
+  LatLngBoundsLike,
   LatLngLike,
   MapInitOptions,
   MarkerOptions,
+  PolygonDrawOptions,
   ResolvedAddress,
   ResolvedCity,
   RouteOptions,
@@ -17,6 +19,8 @@ interface MapInstance {
   markers: Map<string, google.maps.Marker>
   routes: Map<string, google.maps.DirectionsRenderer | google.maps.Polyline>
   directionsService: google.maps.DirectionsService
+  polygon?: google.maps.Polygon
+  polygonListeners: google.maps.MapsEventListener[]
 }
 
 declare global {
@@ -43,7 +47,10 @@ function loadSdk(apiKey: string): Promise<void> {
     }
 
     setOptions({ key: apiKey })
-    // `maps` trae Map/Marker/Polyline, `places` el autocompletado y `routes` Directions.
+    // `maps` trae Map/Marker/Polyline/Polygon, `places` el autocompletado y `routes` Directions.
+    // No se carga `drawing`: `DrawingManager` está deprecado desde la versión 3.65 de la API
+    // (ver "Decisión técnica" de tenant/016-geocerca-area-servicio.md) — el polígono de la
+    // geocerca se arma a mano con clics sobre el mapa (ver `enablePolygonDrawing`).
     loaderPromise = Promise.all([
       importLibrary('maps'),
       importLibrary('places'),
@@ -90,6 +97,7 @@ export default class GoogleProvider extends BaseProvider {
       markers: new Map(),
       routes: new Map(),
       directionsService: new google.maps.DirectionsService(),
+      polygonListeners: [],
     })
   }
 
@@ -192,7 +200,10 @@ export default class GoogleProvider extends BaseProvider {
     }
   }
 
-  async searchAddress(query: string): Promise<AddressSuggestion[]> {
+  async searchAddress(
+    query: string,
+    bounds?: LatLngBoundsLike | null,
+  ): Promise<AddressSuggestion[]> {
     if (!this.apiKey || !query.trim()) return []
 
     await loadSdk(this.apiKey)
@@ -200,6 +211,16 @@ export default class GoogleProvider extends BaseProvider {
     const { suggestions } =
       await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
         input: query,
+        ...(bounds
+          ? {
+              locationRestriction: {
+                north: bounds.north,
+                south: bounds.south,
+                east: bounds.east,
+                west: bounds.west,
+              },
+            }
+          : {}),
       })
 
     this.suggestionCache.clear()
@@ -291,9 +312,67 @@ export default class GoogleProvider extends BaseProvider {
     instance.map.fitBounds(bounds)
   }
 
+  /**
+   * `google.maps.drawing.DrawingManager` está deprecado desde la versión 3.65 de la Maps
+   * JavaScript API (ya no crea overlays), así que el polígono se arma a mano: un
+   * `google.maps.Polygon` editable vacío, y cada clic sobre el mapa le agrega un vértice a su
+   * `path` mientras no vengan `initialPoints` (editar una geocerca ya dibujada solo la carga
+   * editable, sin escuchar más clics).
+   */
+  enablePolygonDrawing(containerId: string, options: PolygonDrawOptions): void {
+    const instance = this.instances.get(containerId)
+    if (!instance) return
+
+    this.disablePolygonDrawing(containerId)
+
+    // `paths: []` (arreglo vacío) deja `polygon.getPath()` en `undefined` de forma permanente en
+    // esta versión de la API — hay que omitir la propiedad para dibujar desde cero (sin vértices).
+    const polygon = new google.maps.Polygon({
+      map: instance.map,
+      ...(options.initialPoints ? { paths: options.initialPoints } : {}),
+      editable: true,
+    })
+    instance.polygon = polygon
+
+    const emitChange = () => {
+      const points: LatLngLike[] = []
+      polygon.getPath().forEach((latLng) => points.push({ lat: latLng.lat(), lng: latLng.lng() }))
+      options.onChange(points)
+    }
+
+    const path = polygon.getPath()
+    instance.polygonListeners.push(
+      path.addListener('insert_at', emitChange),
+      path.addListener('remove_at', emitChange),
+      path.addListener('set_at', emitChange),
+    )
+
+    if (!options.initialPoints || options.initialPoints.length === 0) {
+      instance.polygonListeners.push(
+        instance.map.addListener('click', (event: google.maps.MapMouseEvent) => {
+          if (event.latLng) polygon.getPath().push(event.latLng)
+        }),
+      )
+    } else {
+      emitChange()
+    }
+  }
+
+  disablePolygonDrawing(containerId: string): void {
+    const instance = this.instances.get(containerId)
+    if (!instance) return
+
+    instance.polygonListeners.forEach((listener) => listener.remove())
+    instance.polygonListeners = []
+
+    instance.polygon?.setMap(null)
+    instance.polygon = undefined
+  }
+
   destroy(containerId: string): void {
     this.clearMarkers(containerId)
     this.clearRoutes(containerId)
+    this.disablePolygonDrawing(containerId)
     this.instances.delete(containerId)
   }
 }

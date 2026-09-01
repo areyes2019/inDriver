@@ -23,6 +23,7 @@ export interface UsuarioTenant {
   ultimo_acceso: string | null
   ciudades: CiudadAsignada[]
   ciudades_tenant: CiudadAsignada[]
+  cobertura_bounds: { north: number; south: number; east: number; west: number } | null
 }
 
 interface ResetPasswordPayload {

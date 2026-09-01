@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import axios from 'axios'
+import http from '@/lib/http'
 import UiAddressAutocomplete from '@/components/ui/UiAddressAutocomplete.vue'
 import UiVistaPreviaRuta from '@/components/ui/UiVistaPreviaRuta.vue'
+import UiModalidadPagoSelector, {
+  type ModalidadPago,
+} from '@/components/ui/UiModalidadPagoSelector.vue'
+import { useTenantAuthStore } from '@/stores/tenantAuth'
 import type { LatLngLike } from '@/services/maps/types'
 
-interface NuevaEntregaPayload {
+interface NuevaEntregaForm {
   nombre_solicitante: string
   telefono_solicitante: string
   direccion_recogida: string
@@ -13,7 +20,7 @@ interface NuevaEntregaPayload {
   lo_antes_posible: boolean
   hora_desde: string
   hora_hasta: string
-  modalidad_pago: 'RECEPTOR_PAGA_ENVIO' | 'REMITENTE_PAGA_ENVIO' | 'RECEPTOR_PAGA_ENVIO_PRODUCTOS'
+  modalidad_pago: ModalidadPago
   importe_envio: string
   importe_cobro: string
 }
@@ -24,10 +31,15 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   cerrar: []
-  agendar: [payload: NuevaEntregaPayload]
+  agendado: []
 }>()
 
-function formInicial(): NuevaEntregaPayload {
+const route = useRoute()
+const slug = route.params.slug as string
+const tenantAuth = useTenantAuthStore()
+const coberturaBounds = computed(() => tenantAuth.usuario?.cobertura_bounds ?? null)
+
+function formInicial(): NuevaEntregaForm {
   return {
     nombre_solicitante: '',
     telefono_solicitante: '',
@@ -43,8 +55,10 @@ function formInicial(): NuevaEntregaPayload {
   }
 }
 
-const form = reactive<NuevaEntregaPayload>(formInicial())
-const horaError = ref('')
+const form = reactive<NuevaEntregaForm>(formInicial())
+const fieldErrors = reactive<Record<string, string>>({})
+const error = ref('')
+const loading = ref(false)
 
 const recogidaCoord = ref<LatLngLike | null>(null)
 const entregaCoord = ref<LatLngLike | null>(null)
@@ -75,23 +89,46 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
-function onSubmit() {
-  horaError.value = ''
+function limpiarFormulario() {
+  Object.assign(form, formInicial())
+  recogidaCoord.value = null
+  entregaCoord.value = null
+  Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key])
+  error.value = ''
+}
+
+async function onSubmit() {
+  error.value = ''
+  Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key])
+
   if (!form.lo_antes_posible) {
     if (!form.hora_desde || !form.hora_hasta) {
-      horaError.value = 'Indica la hora desde y hasta, o marca "Lo antes posible".'
+      fieldErrors.hora_desde = 'Indica la hora desde y hasta, o marca "Lo antes posible".'
       return
     }
     if (form.hora_hasta <= form.hora_desde) {
-      horaError.value = 'La hora hasta debe ser posterior a la hora desde.'
+      fieldErrors.hora_hasta = 'La hora hasta debe ser posterior a la hora desde.'
       return
     }
   }
 
-  emit('agendar', { ...form })
-  Object.assign(form, formInicial())
-  recogidaCoord.value = null
-  entregaCoord.value = null
+  loading.value = true
+  try {
+    await http.post(`/t/${slug}/pedidos`, { ...form })
+    limpiarFormulario()
+    emit('agendado')
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 422) {
+      const errors = err.response.data?.errors ?? {}
+      for (const [field, messages] of Object.entries(errors)) {
+        fieldErrors[field] = (messages as string[])[0] ?? ''
+      }
+    } else {
+      error.value = 'No se pudo agendar el pedido, intenta de nuevo.'
+    }
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -116,6 +153,9 @@ function onSubmit() {
             required
             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
+          <span v-if="fieldErrors.nombre_solicitante" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.nombre_solicitante }}
+          </span>
         </label>
 
         <label class="block">
@@ -126,6 +166,9 @@ function onSubmit() {
             required
             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
+          <span v-if="fieldErrors.telefono_solicitante" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.telefono_solicitante }}
+          </span>
         </label>
       </div>
 
@@ -134,8 +177,12 @@ function onSubmit() {
         <UiAddressAutocomplete
           v-model="form.direccion_recogida"
           required
+          :bounds="coberturaBounds"
           @select="onSeleccionaRecogida"
         />
+        <span v-if="fieldErrors.direccion_recogida" class="mt-1 block text-sm text-red-600">
+          {{ fieldErrors.direccion_recogida }}
+        </span>
       </label>
 
       <label class="block">
@@ -143,8 +190,12 @@ function onSubmit() {
         <UiAddressAutocomplete
           v-model="form.direccion_entrega"
           required
+          :bounds="coberturaBounds"
           @select="onSeleccionaEntrega"
         />
+        <span v-if="fieldErrors.direccion_entrega" class="mt-1 block text-sm text-red-600">
+          {{ fieldErrors.direccion_entrega }}
+        </span>
       </label>
 
       <UiVistaPreviaRuta :origen="recogidaCoord" :destino="entregaCoord" />
@@ -157,6 +208,9 @@ function onSubmit() {
           required
           class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
         />
+        <span v-if="fieldErrors.fecha_servicio" class="mt-1 block text-sm text-red-600">
+          {{ fieldErrors.fecha_servicio }}
+        </span>
       </label>
 
       <label class="flex items-center gap-2">
@@ -172,6 +226,9 @@ function onSubmit() {
             type="time"
             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
+          <span v-if="fieldErrors.hora_desde" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.hora_desde }}
+          </span>
         </label>
         <label class="block">
           <span class="mb-1 block text-sm font-medium text-heading">Hora hasta</span>
@@ -180,19 +237,18 @@ function onSubmit() {
             type="time"
             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
+          <span v-if="fieldErrors.hora_hasta" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.hora_hasta }}
+          </span>
         </label>
       </div>
 
       <label class="block">
         <span class="mb-1 block text-sm font-medium text-heading">Modalidad de pago</span>
-        <select
-          v-model="form.modalidad_pago"
-          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-        >
-          <option value="RECEPTOR_PAGA_ENVIO">Receptor paga envío</option>
-          <option value="REMITENTE_PAGA_ENVIO">Remitente paga envío</option>
-          <option value="RECEPTOR_PAGA_ENVIO_PRODUCTOS">Receptor paga envío y productos</option>
-        </select>
+        <UiModalidadPagoSelector v-model="form.modalidad_pago" />
+        <span v-if="fieldErrors.modalidad_pago" class="mt-1 block text-sm text-red-600">
+          {{ fieldErrors.modalidad_pago }}
+        </span>
       </label>
 
       <div class="grid grid-cols-1 gap-4">
@@ -205,6 +261,9 @@ function onSubmit() {
             min="0"
             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
+          <span v-if="fieldErrors.importe_envio" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.importe_envio }}
+          </span>
         </label>
         <label class="block">
           <span class="mb-1 block text-sm font-medium text-heading">Importe de cobro</span>
@@ -215,15 +274,19 @@ function onSubmit() {
             min="0"
             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
+          <span v-if="fieldErrors.importe_cobro" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.importe_cobro }}
+          </span>
         </label>
       </div>
 
-      <p v-if="horaError" role="alert" class="text-sm text-red-600">{{ horaError }}</p>
+      <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
 
       <div class="flex flex-wrap gap-3 border-t border-gray-100 pt-4">
         <button
           type="submit"
-          class="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-heading focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+          :disabled="loading"
+          class="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
         >
           Agendar
         </button>

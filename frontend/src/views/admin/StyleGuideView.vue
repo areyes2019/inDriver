@@ -7,30 +7,41 @@ import UiBadge from '@/components/ui/UiBadge.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiAlert from '@/components/ui/UiAlert.vue'
+import UiChip from '@/components/ui/UiChip.vue'
+import UiStat from '@/components/ui/UiStat.vue'
 import UiBarChart from '@/components/ui/UiBarChart.vue'
 import UiStatusBar from '@/components/ui/UiStatusBar.vue'
 import UiPersonListItem from '@/components/ui/UiPersonListItem.vue'
-import { Bell, Car, LayoutDashboard, Menu, Package, Rocket, Search, Settings, TrendingUp, X, Zap } from '@lucide/vue'
+import { Icon } from '@iconify/vue'
 
 const swatches = [
   { name: 'heading', hex: '#0f172a', class: 'bg-heading' },
   { name: 'body', hex: '#64748b', class: 'bg-body' },
   { name: 'default', hex: '#e2e8f0', class: 'bg-default border border-default' },
-  { name: 'accent', hex: '#4f46e5', class: 'bg-accent' },
+  { name: 'accent', hex: '#6366f1', class: 'bg-accent' },
+  { name: 'accent-hover', hex: '#4f46e5', class: 'bg-accent-hover' },
+  { name: 'accent-soft', hex: '#eef0ff', class: 'bg-accent-soft border border-default' },
   { name: 'neutral-primary', hex: '#ffffff', class: 'bg-neutral-primary border border-default' },
+  { name: 'warning-bg / warning-text', hex: '#fef3c7 / #92400e', class: 'bg-warning-bg' },
+  { name: 'info-bg / info-text', hex: '#dbeafe / #1e40af', class: 'bg-info-bg' },
+  { name: 'success-bg / success-text', hex: '#d1fae5 / #065f46', class: 'bg-success-bg' },
+  { name: 'purple-bg / purple-text', hex: '#f3e8ff / #6d28d9', class: 'bg-purple-bg' },
 ]
 
 const icons = [
-  { name: 'Rocket', component: Rocket },
-  { name: 'LayoutDashboard', component: LayoutDashboard },
-  { name: 'Car', component: Car },
-  { name: 'Package', component: Package },
-  { name: 'TrendingUp', component: TrendingUp },
-  { name: 'Settings', component: Settings },
-  { name: 'Bell', component: Bell },
-  { name: 'Menu', component: Menu },
-  { name: 'X', component: X },
-  { name: 'Search', component: Search },
+  { name: 'menu', icon: 'flat-color-icons:menu' },
+  { name: 'cancel', icon: 'flat-color-icons:cancel' },
+  { name: 'settings', icon: 'flat-color-icons:settings' },
+  { name: 'search', icon: 'flat-color-icons:search' },
+  { name: 'flash-on', icon: 'flat-color-icons:flash-on' },
+  { name: 'package', icon: 'flat-color-icons:package' },
+  { name: 'automotive', icon: 'flat-color-icons:automotive' },
+  { name: 'shipped', icon: 'flat-color-icons:shipped' },
+  { name: 'statistics', icon: 'flat-color-icons:statistics' },
+  { name: 'positive-dynamic', icon: 'flat-color-icons:positive-dynamic' },
+  { name: 'organization', icon: 'flat-color-icons:organization' },
+  { name: 'globe', icon: 'flat-color-icons:globe' },
+  { name: 'alert-badge (fluent-color)', icon: 'fluent-color:alert-badge-24' },
 ]
 
 const toggleOn = ref(true)
@@ -77,28 +88,35 @@ const flotilla = [
           </div>
         </div>
         <p class="mt-4 text-xs text-body">
-          Los badges y la línea de degradado del navbar usan colores nativos de Tailwind
-          directamente (orange, blue, green, red, gray, pink, purple), sin token adicional.
+          Los badges usan los tokens semánticos de arriba (warning/info/success/purple); solo `red`
+          y `gray` siguen usando clases nativas de Tailwind, porque no tienen token propio.
         </p>
       </UiCard>
 
       <UiCard title="Tipografía">
         <p class="mb-3 text-xs text-body">
-          Sin fuente externa: se usa la pila sans-serif nativa del sistema operativo del usuario.
+          Outfit (<code>--font-heading</code>) para títulos, Inter (<code>--font-sans</code>) para
+          el resto del texto.
         </p>
         <div class="flex flex-col gap-3">
           <p class="text-3xl font-bold text-heading">Título grande — 3xl bold</p>
           <p class="text-xl font-semibold text-heading">Título mediano — xl semibold</p>
-          <p class="text-base font-medium text-heading">Texto medio — base medium</p>
+          <p class="text-base font-medium" style="font-family: var(--font-sans)">
+            Texto medio — base medium
+          </p>
           <p class="text-sm text-black/70">Texto de párrafo — sm regular</p>
           <p class="text-xs text-black/50">Texto pequeño / auxiliar — xs regular</p>
         </div>
       </UiCard>
 
-      <UiCard title="Iconos (lucide-vue)">
+      <UiCard title="Iconos (Iconify)">
+        <p class="mb-3 text-xs text-body">
+          Colección principal <code>flat-color-icons</code>, con <code>fluent-color</code> de
+          respaldo para íconos que no existen en la primera (ej. la campana de notificaciones).
+        </p>
         <div class="grid grid-cols-3 gap-4 sm:grid-cols-5">
           <div v-for="icon in icons" :key="icon.name" class="flex flex-col items-center gap-2">
-            <component :is="icon.component" class="h-5 w-5 text-heading" />
+            <Icon :icon="icon.icon" width="24" height="24" aria-hidden="true" />
             <span class="text-xs text-body">{{ icon.name }}</span>
           </div>
         </div>
@@ -131,7 +149,12 @@ const flotilla = [
 
       <UiCard title="Campos de texto (UiInput)">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <UiInput v-model="sampleInput" label="Correo electrónico" type="email" placeholder="admin@indriver.com" />
+          <UiInput
+            v-model="sampleInput"
+            label="Correo electrónico"
+            type="email"
+            placeholder="admin@indriver.com"
+          />
           <UiInput
             v-model="sampleInputWithError"
             label="Contraseña"
@@ -155,14 +178,43 @@ const flotilla = [
           <UiBadge text="274" color="green" />
           <UiBadge text="1 en cola" color="orange" />
           <UiBadge text="3 conductores" color="blue" />
+          <UiBadge text="5 programados" color="purple" />
           <UiBadge text="EN VIVO" color="red" />
           <UiBadge text="Beta" color="gray" />
         </div>
       </UiCard>
 
-      <UiCard title="Tarjeta con encabezado oscuro" variant="dark-header" subtitle="Centro de monitoreo operativo">
+      <UiCard title="Chip (UiChip)">
+        <div class="flex flex-wrap items-center gap-3">
+          <UiChip text="12 en cola" />
+        </div>
+      </UiCard>
+
+      <UiCard title="Stat (UiStat)">
+        <div class="flex flex-wrap gap-4">
+          <UiStat icon="flat-color-icons:automotive" label="Mis conductores" value="64" />
+          <UiStat
+            icon="flat-color-icons:package"
+            icon-bg="bg-warning-bg"
+            label="Entregas activas"
+            value="12"
+          />
+          <UiStat
+            icon="flat-color-icons:positive-dynamic"
+            icon-bg="bg-success-bg"
+            label="Mi saldo"
+            value="$842.50"
+          />
+        </div>
+      </UiCard>
+
+      <UiCard
+        title="Tarjeta con encabezado oscuro"
+        variant="dark-header"
+        subtitle="Centro de monitoreo operativo"
+      >
         <template #icon>
-          <Zap class="h-5 w-5" />
+          <Icon icon="flat-color-icons:flash-on" width="20" height="20" aria-hidden="true" />
         </template>
         <template #header-end>
           <UiBadge text="EN VIVO" color="red" />

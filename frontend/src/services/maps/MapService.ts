@@ -2,9 +2,11 @@ import GoogleProvider from './GoogleProvider'
 import type {
   AddressSuggestion,
   FitTarget,
+  LatLngBoundsLike,
   LatLngLike,
   MapInitOptions,
   MarkerOptions,
+  PolygonDrawOptions,
   ResolvedAddress,
   ResolvedCity,
   RouteOptions,
@@ -61,8 +63,8 @@ class MapService {
     this.provider.centerOn(containerId, position, zoom)
   }
 
-  searchAddress(query: string): Promise<AddressSuggestion[]> {
-    return this.provider.searchAddress(query)
+  searchAddress(query: string, bounds?: LatLngBoundsLike | null): Promise<AddressSuggestion[]> {
+    return this.provider.searchAddress(query, bounds)
   }
 
   resolveAddress(suggestionId: string): Promise<ResolvedAddress | null> {
@@ -79,6 +81,14 @@ class MapService {
 
   fitToPositions(containerId: string, targets: FitTarget[]): void {
     this.provider.fitToPositions(containerId, targets)
+  }
+
+  enablePolygonDrawing(containerId: string, options: PolygonDrawOptions): void {
+    this.provider.enablePolygonDrawing(containerId, options)
+  }
+
+  disablePolygonDrawing(containerId: string): void {
+    this.provider.disablePolygonDrawing(containerId)
   }
 
   destroy(containerId: string): void {

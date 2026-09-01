@@ -1,23 +1,36 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
+import { Icon } from '@iconify/vue'
 import http from '@/lib/http'
 import TenantLayout from '@/layouts/TenantLayout.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiAlert from '@/components/ui/UiAlert.vue'
+import UiBadge from '@/components/ui/UiBadge.vue'
 import UiConfirmDialog from '@/components/ui/UiConfirmDialog.vue'
+import mapService from '@/services/maps/MapService'
+import type { LatLngLike } from '@/services/maps/types'
+import { useTenantAuthStore } from '@/stores/tenantAuth'
 
 interface ZonaServicio {
   id_zona: number
   nombre: string
-  descripcion: string | null
   estado: string
   poligono: Array<{ lat: number; lng: number }> | null
 }
 
 const route = useRoute()
 const slug = computed(() => route.params.slug as string)
+const tenantAuth = useTenantAuthStore()
+
+function puntosCiudadesTenant() {
+  return (tenantAuth.usuario?.ciudades_tenant ?? []).map((ciudad) => ({
+    lat: ciudad.lat,
+    lng: ciudad.lng,
+    bounds: ciudad.bounds,
+  }))
+}
 
 type Pestana = 'tarifas' | 'comision' | 'zonas'
 const pestanaActiva = ref<Pestana>('tarifas')
@@ -92,7 +105,7 @@ async function onSubmitConfiguracion() {
 const zonas = ref<ZonaServicio[]>([])
 const loadingZonas = ref(false)
 const errorZonas = ref('')
-const nuevaZona = reactive({ nombre: '', descripcion: '' })
+const nuevaZona = reactive({ nombre: '' })
 const creandoZona = ref(false)
 const togglingZonaId = ref<number | null>(null)
 const zonaToDelete = ref<ZonaServicio | null>(null)
@@ -112,6 +125,7 @@ async function fetchZonas() {
   }
 }
 
+// Sin API key de Google configurada no hay picker de mapa: solo se administra el nombre.
 async function onCrearZona() {
   if (!nuevaZona.nombre.trim()) return
 
@@ -119,10 +133,11 @@ async function onCrearZona() {
   errorZonas.value = ''
 
   try {
-    const { data } = await http.post(`/t/${slug.value}/zonas-cobertura`, nuevaZona)
+    const { data } = await http.post(`/t/${slug.value}/zonas-cobertura`, {
+      nombre: nuevaZona.nombre,
+    })
     zonas.value.push(data.data ?? data)
     nuevaZona.nombre = ''
-    nuevaZona.descripcion = ''
   } catch {
     errorZonas.value = 'No se pudo crear la zona de cobertura.'
   } finally {
@@ -168,9 +183,143 @@ async function confirmDeleteZona() {
   }
 }
 
+// --- Picker visual de la geocerca (dibujar/editar el polígono de una zona) ---
+
+function containerIdZona(idZona: number) {
+  return `zona-mapa-${idZona}`
+}
+
+const zonaDibujando = ref<number | null>(null)
+const puntosPoligono = reactive<Record<number, LatLngLike[]>>({})
+const guardandoPoligonoId = ref<number | null>(null)
+
+async function abrirDibujoZona(zona: ZonaServicio) {
+  if (zonaDibujando.value === zona.id_zona) {
+    cerrarDibujoZona(zona.id_zona)
+    return
+  }
+  if (zonaDibujando.value !== null) cerrarDibujoZona(zonaDibujando.value)
+  if (nuevaZonaAbierta.value) cerrarNuevaZona()
+
+  errorZonas.value = ''
+  zonaDibujando.value = zona.id_zona
+  puntosPoligono[zona.id_zona] = zona.poligono ?? []
+
+  await nextTick()
+  if (!mapService.hasApiKey()) return
+
+  const containerId = containerIdZona(zona.id_zona)
+  await mapService.initialize(containerId, { zoom: 12 })
+  const ciudades = puntosCiudadesTenant()
+  if (ciudades.length > 0) mapService.fitToPositions(containerId, ciudades)
+  mapService.enablePolygonDrawing(containerId, {
+    initialPoints: zona.poligono ?? undefined,
+    onChange: (points) => {
+      puntosPoligono[zona.id_zona] = points
+    },
+  })
+}
+
+function cerrarDibujoZona(idZona: number) {
+  const containerId = containerIdZona(idZona)
+  mapService.disablePolygonDrawing(containerId)
+  mapService.destroy(containerId)
+  if (zonaDibujando.value === idZona) zonaDibujando.value = null
+}
+
+async function guardarPoligonoZona(zona: ZonaServicio) {
+  const puntos = puntosPoligono[zona.id_zona] ?? []
+  if (puntos.length < 3) {
+    errorZonas.value = 'Dibuja al menos 3 vértices antes de guardar la geocerca.'
+    return
+  }
+
+  guardandoPoligonoId.value = zona.id_zona
+  errorZonas.value = ''
+  try {
+    const { data } = await http.put(`/t/${slug.value}/zonas-cobertura/${zona.id_zona}`, {
+      nombre: zona.nombre,
+      poligono: puntos,
+    })
+    const updated = data.data ?? data
+    const index = zonas.value.findIndex((z) => z.id_zona === zona.id_zona)
+    if (index !== -1) zonas.value[index] = updated
+    cerrarDibujoZona(zona.id_zona)
+  } catch {
+    errorZonas.value = 'No se pudo guardar la geocerca.'
+  } finally {
+    guardandoPoligonoId.value = null
+  }
+}
+
+// --- Alta de una geocerca nueva: se dibuja primero, se nombra y guarda después, en un solo paso ---
+
+const NUEVA_ZONA_CONTAINER = 'zona-mapa-nueva'
+const nuevaZonaAbierta = ref(false)
+const nombreNuevaZona = ref('')
+const puntosNuevaZona = ref<LatLngLike[]>([])
+
+async function abrirNuevaZona() {
+  if (zonaDibujando.value !== null) cerrarDibujoZona(zonaDibujando.value)
+
+  errorZonas.value = ''
+  nuevaZonaAbierta.value = true
+  nombreNuevaZona.value = ''
+  puntosNuevaZona.value = []
+
+  await nextTick()
+  if (!mapService.hasApiKey()) return
+
+  await mapService.initialize(NUEVA_ZONA_CONTAINER, { zoom: 12 })
+  const ciudades = puntosCiudadesTenant()
+  if (ciudades.length > 0) mapService.fitToPositions(NUEVA_ZONA_CONTAINER, ciudades)
+  mapService.enablePolygonDrawing(NUEVA_ZONA_CONTAINER, {
+    onChange: (points) => {
+      puntosNuevaZona.value = points
+    },
+  })
+}
+
+function cerrarNuevaZona() {
+  mapService.disablePolygonDrawing(NUEVA_ZONA_CONTAINER)
+  mapService.destroy(NUEVA_ZONA_CONTAINER)
+  nuevaZonaAbierta.value = false
+}
+
+async function guardarNuevaZona() {
+  if (!nombreNuevaZona.value.trim()) {
+    errorZonas.value = 'Escribe un nombre para la geocerca.'
+    return
+  }
+  if (puntosNuevaZona.value.length < 3) {
+    errorZonas.value = 'Dibuja al menos 3 vértices antes de guardar la geocerca.'
+    return
+  }
+
+  creandoZona.value = true
+  errorZonas.value = ''
+  try {
+    const { data } = await http.post(`/t/${slug.value}/zonas-cobertura`, {
+      nombre: nombreNuevaZona.value,
+      poligono: puntosNuevaZona.value,
+    })
+    zonas.value.push(data.data ?? data)
+    cerrarNuevaZona()
+  } catch {
+    errorZonas.value = 'No se pudo crear la zona de cobertura.'
+  } finally {
+    creandoZona.value = false
+  }
+}
+
 onMounted(() => {
   fetchConfiguracion()
   fetchZonas()
+})
+
+onBeforeUnmount(() => {
+  if (zonaDibujando.value !== null) cerrarDibujoZona(zonaDibujando.value)
+  if (nuevaZonaAbierta.value) cerrarNuevaZona()
 })
 </script>
 
@@ -315,38 +464,82 @@ onMounted(() => {
         </form>
 
         <div v-else>
-          <UiAlert variant="warning" class="mb-4">
-            El dibujo del polígono sobre un mapa todavía no está disponible (depende de
-            <code>MapService</code>/<code>GoogleProvider</code>, specs 012-014, aún no
-            implementadas). Por ahora solo se administra el nombre y estado de cada zona.
+          <UiAlert v-if="!mapService.hasApiKey()" variant="warning" class="mb-4">
+            Configura <code>VITE_GOOGLE_MAPS_API_KEY</code> para poder dibujar la geocerca de cada
+            zona sobre un mapa. Mientras tanto puedes administrar nombre y estado.
           </UiAlert>
 
-          <form class="mb-6 flex flex-wrap items-end gap-3" @submit.prevent="onCrearZona">
-            <label class="block">
-              <span class="mb-1 block text-sm font-medium text-heading">Nombre de la zona</span>
-              <input
-                v-model="nuevaZona.nombre"
-                type="text"
-                required
-                class="w-56 rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-              />
-            </label>
-            <label class="block">
-              <span class="mb-1 block text-sm font-medium text-heading">Descripción</span>
-              <input
-                v-model="nuevaZona.descripcion"
-                type="text"
-                class="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-              />
-            </label>
+          <div class="mb-6">
             <button
-              type="submit"
-              :disabled="creandoZona"
-              class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60"
+              v-if="mapService.hasApiKey() && !nuevaZonaAbierta"
+              type="button"
+              class="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-heading"
+              @click="abrirNuevaZona"
             >
-              Agregar zona
+              <Icon icon="fluent-color:pin-24" width="16" height="16" aria-hidden="true" />
+              Nueva geocerca
             </button>
-          </form>
+
+            <form
+              v-else-if="!mapService.hasApiKey()"
+              class="flex flex-wrap items-end gap-3"
+              @submit.prevent="onCrearZona"
+            >
+              <label class="block">
+                <span class="mb-1 block text-sm font-medium text-heading">Nombre de la zona</span>
+                <input
+                  v-model="nuevaZona.nombre"
+                  type="text"
+                  required
+                  class="w-56 rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+                />
+              </label>
+              <button
+                type="submit"
+                :disabled="creandoZona"
+                class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Agregar zona
+              </button>
+            </form>
+
+            <div v-else class="rounded-lg border border-gray-200 p-3">
+              <p class="mb-2 text-sm text-body">
+                Haz clic sobre el mapa para ir agregando los vértices de la geocerca (mínimo 3);
+                arrastra un vértice para ajustarlo.
+              </p>
+              <div :id="NUEVA_ZONA_CONTAINER" class="h-80 w-full overflow-hidden rounded-lg" />
+              <div class="mt-3 flex flex-wrap items-end gap-3">
+                <label class="block">
+                  <span class="mb-1 block text-sm font-medium text-heading">
+                    Nombre de la zona
+                  </span>
+                  <input
+                    v-model="nombreNuevaZona"
+                    type="text"
+                    required
+                    class="w-56 rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+                  />
+                </label>
+                <button
+                  type="button"
+                  :disabled="creandoZona"
+                  class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60"
+                  @click="guardarNuevaZona"
+                >
+                  Guardar geocerca
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-heading transition-colors hover:bg-gray-50"
+                  @click="cerrarNuevaZona"
+                >
+                  Cancelar
+                </button>
+                <span class="text-sm text-body">{{ puntosNuevaZona.length }} vértices</span>
+              </div>
+            </div>
+          </div>
 
           <p v-if="errorZonas" role="alert" class="mb-4 text-sm text-red-600">{{ errorZonas }}</p>
 
@@ -357,61 +550,104 @@ onMounted(() => {
                   class="border-b border-gray-200 text-xs font-semibold tracking-wide text-black/50 uppercase"
                 >
                   <th class="py-2 pr-4">Nombre</th>
-                  <th class="py-2 pr-4">Descripción</th>
                   <th class="py-2 pr-4">Estado</th>
                   <th class="py-2 pr-4">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-if="loadingZonas">
-                  <td colspan="4" class="py-6 text-center text-black/50">Cargando...</td>
+                  <td colspan="3" class="py-6 text-center text-black/50">Cargando...</td>
                 </tr>
                 <tr v-else-if="zonas.length === 0">
-                  <td colspan="4" class="py-6 text-center text-black/50">
+                  <td colspan="3" class="py-6 text-center text-black/50">
                     No hay zonas de cobertura.
                   </td>
                 </tr>
-                <tr
-                  v-for="zona in zonas"
-                  v-else
-                  :key="zona.id_zona"
-                  class="border-b border-gray-100 text-heading"
-                >
-                  <td class="py-2 pr-4 font-medium">{{ zona.nombre }}</td>
-                  <td class="py-2 pr-4">{{ zona.descripcion ?? '—' }}</td>
-                  <td class="py-2 pr-4">
-                    <span
-                      class="rounded-full px-2 py-0.5 text-xs font-semibold"
-                      :class="
-                        zona.estado === 'Activo'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-orange-100 text-orange-700'
-                      "
-                    >
-                      {{ zona.estado }}
-                    </span>
-                  </td>
-                  <td class="py-2 pr-4">
-                    <div class="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        :disabled="togglingZonaId === zona.id_zona"
-                        class="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                        @click="onToggleEstadoZona(zona)"
-                      >
-                        {{ zona.estado === 'Activo' ? 'Desactivar' : 'Activar' }}
-                      </button>
-                      <button
-                        type="button"
-                        :disabled="deletingZonaId === zona.id_zona"
-                        class="rounded-lg border border-red-600 px-3 py-1.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                        @click="requestDeleteZona(zona)"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                <template v-else v-for="zona in zonas" :key="zona.id_zona">
+                  <tr class="border-b border-gray-100 text-heading">
+                    <td class="py-2 pr-4 font-medium">{{ zona.nombre }}</td>
+                    <td class="py-2 pr-4">
+                      <UiBadge
+                        :text="zona.estado"
+                        :color="zona.estado === 'Activo' ? 'green' : 'orange'"
+                      />
+                    </td>
+                    <td class="py-2 pr-4">
+                      <div class="flex flex-wrap gap-2">
+                        <button
+                          v-if="mapService.hasApiKey()"
+                          type="button"
+                          class="inline-flex items-center gap-1.5 rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white"
+                          @click="abrirDibujoZona(zona)"
+                        >
+                          <Icon
+                            icon="fluent-color:pin-24"
+                            width="16"
+                            height="16"
+                            aria-hidden="true"
+                          />
+                          {{
+                            zonaDibujando === zona.id_zona
+                              ? 'Cerrar'
+                              : zona.poligono
+                                ? 'Editar geocerca'
+                                : 'Dibujar geocerca'
+                          }}
+                        </button>
+                        <button
+                          type="button"
+                          :disabled="togglingZonaId === zona.id_zona"
+                          class="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          @click="onToggleEstadoZona(zona)"
+                        >
+                          {{ zona.estado === 'Activo' ? 'Desactivar' : 'Activar' }}
+                        </button>
+                        <button
+                          type="button"
+                          :disabled="deletingZonaId === zona.id_zona"
+                          class="rounded-lg border border-red-600 px-3 py-1.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          @click="requestDeleteZona(zona)"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr v-if="zonaDibujando === zona.id_zona" :key="`${zona.id_zona}-mapa`">
+                    <td colspan="3" class="pt-2 pb-4">
+                      <div class="rounded-lg border border-gray-200 p-3">
+                        <p class="mb-2 text-sm text-body">
+                          Haz clic sobre el mapa para ir agregando los vértices de la geocerca
+                          (mínimo 3); arrastra un vértice para ajustarlo.
+                        </p>
+                        <div
+                          :id="containerIdZona(zona.id_zona)"
+                          class="h-80 w-full overflow-hidden rounded-lg"
+                        />
+                        <div class="mt-3 flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            :disabled="guardandoPoligonoId === zona.id_zona"
+                            class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60"
+                            @click="guardarPoligonoZona(zona)"
+                          >
+                            Guardar geocerca
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-heading transition-colors hover:bg-gray-50"
+                            @click="cerrarDibujoZona(zona.id_zona)"
+                          >
+                            Cancelar
+                          </button>
+                          <span class="text-sm text-body">
+                            {{ (puntosPoligono[zona.id_zona] ?? []).length }} vértices
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>

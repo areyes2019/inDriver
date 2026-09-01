@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Bell, Menu, Settings, X } from '@lucide/vue'
+import { Icon } from '@iconify/vue'
 
 withDefaults(
   defineProps<{
@@ -23,7 +23,7 @@ const mobileOpen = ref(false)
 
 <template>
   <header class="fixed inset-x-0 top-0 z-40">
-    <div class="h-1 bg-gradient-to-r from-pink-500 to-purple-600" />
+    <div class="h-1 bg-gradient-to-r from-accent via-[#8b5cf6] to-[#ec4899]" />
 
     <nav class="h-16 border-b border-default bg-neutral-primary">
       <div class="mx-auto flex h-full max-w-screen-xl items-center gap-4 px-4">
@@ -50,14 +50,14 @@ const mobileOpen = ref(false)
             aria-label="Configuración"
             @click="emit('click-configuracion')"
           >
-            <Settings class="h-5 w-5" />
+            <Icon icon="flat-color-icons:settings" width="20" height="20" aria-hidden="true" />
           </button>
           <button
             type="button"
             class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-body hover:bg-black/5"
             aria-label="Notificaciones"
           >
-            <Bell class="h-5 w-5" />
+            <Icon icon="fluent-color:alert-badge-24" width="20" height="20" aria-hidden="true" />
           </button>
           <slot name="actions" />
         </div>
@@ -69,8 +69,14 @@ const mobileOpen = ref(false)
           aria-label="Abrir menú"
           @click="mobileOpen = !mobileOpen"
         >
-          <Menu v-if="!mobileOpen" class="h-5 w-5" />
-          <X v-else class="h-5 w-5" />
+          <Icon
+            v-if="!mobileOpen"
+            icon="flat-color-icons:menu"
+            width="20"
+            height="20"
+            aria-hidden="true"
+          />
+          <Icon v-else icon="flat-color-icons:cancel" width="20" height="20" aria-hidden="true" />
         </button>
       </div>
     </nav>

@@ -30,11 +30,11 @@ function cerrarNuevaEntrega() {
     <div class="ml-[30%] min-h-[calc(100vh-4.25rem-2rem)]">
       <MapaConductores />
     </div>
-    <!-- Panel deslizante de agendamiento rápido, se superpone a la columna izquierda al abrir: tenant/011-nueva-entrega.md -->
+    <!-- Panel deslizante de agendamiento rápido, se superpone a la columna izquierda al abrir: tenant/006-crud-pedidos.md -->
     <NuevaEntregaPanel
       :abierto="nuevaEntregaAbierta"
       @cerrar="cerrarNuevaEntrega"
-      @agendar="cerrarNuevaEntrega"
+      @agendado="cerrarNuevaEntrega"
     />
   </TenantLayout>
 </template>

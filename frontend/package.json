@@ -12,11 +12,12 @@
     "lint": "run-s \"lint:*\"",
     "lint:oxlint": "oxlint . --fix",
     "lint:eslint": "eslint . --fix --cache",
-    "format": "prettier --write --experimental-cli src/"
+    "format": "prettier --write --experimental-cli src/",
+    "icons:build": "node scripts/generate-icon-data.mjs"
   },
   "dependencies": {
     "@googlemaps/js-api-loader": "^2.1.1",
-    "@lucide/vue": "^1.35.0",
+    "@iconify/vue": "^5.0.1",
     "@tailwindcss/vite": "^4.3.3",
     "axios": "^1.20.0",
     "pinia": "^4.0.2",
@@ -25,6 +26,10 @@
     "vue-router": "^5.2.0"
   },
   "devDependencies": {
+    "@iconify-json/flat-color-icons": "^1.2.3",
+    "@iconify-json/fluent-color": "^1.2.21",
+    "@iconify/types": "^2.0.0",
+    "@iconify/utils": "^3.1.4",
     "@tsconfig/node24": "^24.0.4",
     "@types/google.maps": "^3.66.0",
     "@types/node": "^24.13.3",

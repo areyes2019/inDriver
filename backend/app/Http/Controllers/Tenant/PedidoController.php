@@ -7,12 +7,8 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Tenant\PedidoResource;
 use App\Models\Tenant\Auditoria;
-use App\Models\Tenant\Cliente;
-use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConfiguracionTenant;
-use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Pedido;
-use App\Models\Tenant\Vehiculo;
 use App\Models\Tenant\VentaViajeConductor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,35 +37,6 @@ class PedidoController extends Controller
         'RECHAZADO' => [],
         'CANCELADO' => [],
     ];
-
-    public function recursos(): JsonResponse
-    {
-        return response()->json([
-            'clientes' => Cliente::query()->orderBy('nombre')->get(['id_cliente', 'nombre']),
-            'despachadores' => Despachador::query()
-                ->with('usuario:id_usuario,nombre,apellido_paterno')
-                ->where('estado', 'Activo')
-                ->get(['id_despachador', 'id_usuario'])
-                ->map(fn (Despachador $despachador) => [
-                    'id_despachador' => $despachador->id_despachador,
-                    'nombre' => trim("{$despachador->usuario->nombre} {$despachador->usuario->apellido_paterno}"),
-                ])
-                ->values(),
-            'conductores' => Conductor::query()
-                ->with('usuario:id_usuario,nombre,apellido_paterno')
-                ->where('estado', 'ACTIVO')
-                ->get(['id_conductor', 'id_usuario'])
-                ->map(fn (Conductor $conductor) => [
-                    'id_conductor' => $conductor->id_conductor,
-                    'nombre' => trim("{$conductor->usuario->nombre} {$conductor->usuario->apellido_paterno}"),
-                ])
-                ->values(),
-            'vehiculos' => Vehiculo::query()
-                ->where('estado', 'ACTIVO')
-                ->orderBy('placa')
-                ->get(['id_vehiculo', 'placa', 'marca', 'modelo']),
-        ]);
-    }
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -226,11 +193,7 @@ class PedidoController extends Controller
             'nombre_solicitante' => ['required', 'string', 'max:255'],
             'telefono_solicitante' => ['required', 'string', 'max:255'],
             'direccion_recogida' => ['required', 'string', 'max:255'],
-            'latitud_recogida' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitud_recogida' => ['nullable', 'numeric', 'between:-180,180'],
             'direccion_entrega' => ['required', 'string', 'max:255'],
-            'latitud_entrega' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitud_entrega' => ['nullable', 'numeric', 'between:-180,180'],
             'fecha_servicio' => ['required', 'date'],
             'lo_antes_posible' => ['sometimes', 'boolean'],
             'hora_desde' => ['nullable', 'date_format:H:i'],

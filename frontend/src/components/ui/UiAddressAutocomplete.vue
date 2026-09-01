@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref } from 'vue'
 import mapService from '@/services/maps/MapService'
-import type { AddressSuggestion } from '@/services/maps/types'
+import type { AddressSuggestion, LatLngBoundsLike } from '@/services/maps/types'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     modelValue: string
     placeholder?: string
     required?: boolean
+    /** Área de servicio del tenant — acota las sugerencias de Google a este rectángulo. */
+    bounds?: LatLngBoundsLike | null
   }>(),
-  { placeholder: undefined, required: false },
+  { placeholder: undefined, required: false, bounds: null },
 )
 
 const emit = defineEmits<{
@@ -33,7 +35,7 @@ function onInput(event: Event) {
   }
 
   timeoutId = setTimeout(async () => {
-    sugerencias.value = await mapService.searchAddress(value)
+    sugerencias.value = await mapService.searchAddress(value, props.bounds)
     mostrarLista.value = sugerencias.value.length > 0
   }, 300)
 }

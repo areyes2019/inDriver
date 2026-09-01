@@ -1,9 +1,11 @@
 import type {
   AddressSuggestion,
   FitTarget,
+  LatLngBoundsLike,
   LatLngLike,
   MapInitOptions,
   MarkerOptions,
+  PolygonDrawOptions,
   ResolvedAddress,
   ResolvedCity,
   RouteOptions,
@@ -57,7 +59,10 @@ export default class BaseProvider {
     throw new Error('Method "centerOn" must be implemented')
   }
 
-  async searchAddress(_query: string): Promise<AddressSuggestion[]> {
+  async searchAddress(
+    _query: string,
+    _bounds?: LatLngBoundsLike | null,
+  ): Promise<AddressSuggestion[]> {
     throw new Error('Method "searchAddress" must be implemented')
   }
 
@@ -75,6 +80,14 @@ export default class BaseProvider {
 
   fitToPositions(_containerId: string, _targets: FitTarget[]): void {
     throw new Error('Method "fitToPositions" must be implemented')
+  }
+
+  enablePolygonDrawing(_containerId: string, _options: PolygonDrawOptions): void {
+    throw new Error('Method "enablePolygonDrawing" must be implemented')
+  }
+
+  disablePolygonDrawing(_containerId: string): void {
+    throw new Error('Method "disablePolygonDrawing" must be implemented')
   }
 
   destroy(_containerId: string): void {

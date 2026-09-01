@@ -125,23 +125,28 @@ estado: cuando el nuevo estado es `ENTREGADO` y el pedido tiene `id_conductor`,
   y se guarda en el propio pedido, usando el porcentaje vigente **en ese momento** (si luego cambia
   la configuración, los pedidos ya entregados no se recalculan).
 
-### Geofence: dependencia con MapService/GoogleProvider (specs 012-014)
+### Geofence: `MapService`/`GoogleProvider` ya existen, pero sin soporte de polígonos
 
-Las specs `012-map-servide.md` y `013-google-service.md` documentan un servicio de mapas
-(`MapService` + `GoogleProvider`) pensado como punto único de acceso a Google Maps — pero **ese
-código todavía no existe** en `frontend/src/services/` (verificado: la carpeta no existe). La
-pestaña "Zonas de cobertura" de esta spec depende de que ese servicio exista para dibujar el
-polígono sobre un mapa.
+**Corrección** (esta afirmación original de la spec ya no es cierta): se anticipaban aquí las
+specs `012-map-servide.md` y `013-google-service.md` para un servicio de mapas centralizado, y se
+daba por hecho que ese código "todavía no existe" en `frontend/src/services/`. Esos dos archivos
+nunca se crearon con ese nombre/numeración — en su lugar, el servicio de mapas se construyó
+completo dentro de `tenant/009-mapa.md` (autocompletado, rutas reales, mapa de conductores), y hoy
+sí existe en `frontend/src/services/maps/` (`MapService.ts`, `BaseProvider.ts`,
+`GoogleProvider.ts`).
 
-El contrato documentado en la spec 013 no incluye un método para dibujar polígonos (solo
-marcadores, rutas y centrado) — sí expone `getNativeMap()` para "acceso avanzado cuando algo muy
-específico lo requiere". Este es exactamente ese caso: la pantalla de Zonas de cobertura usa
-`MapService.initialize()` para mostrar el mapa y luego `MapService.getNativeMap()` para adjuntar un
-`google.maps.drawing.DrawingManager` directamente, sin modificar el contrato de `GoogleProvider`.
+Lo que **no** es cierto tampoco es que su contrato exponga `getNativeMap()` como escape para casos
+avanzados — ese método nunca se implementó. El contrato real de `MapService`
+(`initialize`, `addMarker`, `updateMarker`, `clearMarkers`, `drawRoute`, `clearRoutes`,
+`centerOn`, `searchAddress`, `resolveAddress`, `searchCity`, `resolveCity`, `fitToPositions`,
+`destroy`) no incluye ningún método para dibujar o editar un polígono.
 
-**Esto bloquea la parte visual de "dibujar en el mapa"** hasta que `MapService`/`GoogleProvider`
-estén implementados. El resto de esta spec (backend de zonas, CRUD sin mapa, acreditación,
-reventa, tarifas, comisión) no depende de ellos y puede construirse de forma independiente.
+**Esto sigue bloqueando la parte visual de "dibujar en el mapa"** — ya no porque el servicio no
+exista, sino porque su contrato no cubre polígonos todavía. Extender `BaseProvider`/
+`GoogleProvider` con algo como `drawPolygon`/`DrawingManager` queda fuera de esta historia, sin
+spec numerada todavía (se documentará cuando se aborde). El resto de esta spec (backend de zonas,
+CRUD sin mapa, acreditación, reventa, tarifas, comisión) no depende de eso y puede construirse de
+forma independiente.
 
 ## Reglas de negocio
 
@@ -228,9 +233,10 @@ reventa, tarifas, comisión) no depende de ellos y puede construirse de forma in
 - Aplicar banderazo/km adicional al importe de un pedido nuevo (spec 006).
 - Usar el geofence para validar cobertura al crear un pedido.
 - Bloquear pedidos por falta de saldo prepagado.
-- El `DrawingManager` de Google Maps en sí (la pestaña de Zonas de cobertura queda con su CRUD
-  listo, pero el dibujo visual del polígono depende de que se implemente `MapService`/
-  `GoogleProvider`, specs 012-014, que hoy solo están especificadas, no construidas).
+- El `DrawingManager` de Google Maps en sí: `MapService`/`GoogleProvider` (`tenant/009-mapa.md`)
+  ya existen, pero su contrato no incluye dibujar/editar polígonos todavía (ver "Decisión
+  técnica"). La pestaña de Zonas de cobertura queda con su CRUD de nombre/estado listo; el picker
+  visual queda para una historia futura, sin spec numerada aún.
 - Historial/bitácora visual de cambios de configuración (solo se guarda el valor vigente en
   `configuraciones_tenant`; sí queda auditado quién acreditó vía `LogCentral` y quién vendió a un
   conductor vía `ventas_viajes_conductor.id_usuario`).
@@ -290,6 +296,7 @@ reventa, tarifas, comisión) no depende de ellos y puede construirse de forma in
     creación de pedidos (spec 006) — solo la configuración y el guardado de esos valores.
 15. Esta historia no incluye cobro real (pasarela de pago) del prepago del conductor ni de la venta
     de paquetes — solo el registro de los movimientos.
-16. La pestaña de Zonas de cobertura depende de que `MapService`/`GoogleProvider` (specs 012-014)
-    existan como código; hoy solo están especificados. El CRUD de zonas sin el picker visual del
-    mapa no depende de ellos y se construye igual.
+16. La pestaña de Zonas de cobertura depende de que se extienda el contrato de `MapService`/
+    `GoogleProvider` (ya existen, ver `tenant/009-mapa.md`) con soporte para dibujar polígonos —
+    hoy no lo tienen. El CRUD de zonas sin el picker visual del mapa no depende de eso y se
+    construye igual.

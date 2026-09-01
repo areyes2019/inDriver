@@ -9,6 +9,7 @@ use App\Http\Resources\Tenant\CiudadResource;
 use App\Http\Resources\Tenant\UsuarioResource;
 use App\Models\Tenant\Ciudad;
 use App\Models\Tenant\Usuario;
+use App\Models\Tenant\ZonaServicio;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -100,6 +101,10 @@ class AuthController extends Controller
      * Despachador) se centra con `ciudades_tenant`, no con `ciudades`, porque el Despachador nunca
      * tiene ciudades propias pero debe ver el mismo encuadre que su AdminCliente configuró.
      *
+     * También agrega `cobertura_bounds`: el rectángulo que envuelve las zonas de cobertura
+     * (`zonas_servicio`) activas del tenant, usado para acotar el autocompletado de direcciones de
+     * pedidos al área de servicio configurada (spec `tenant/016-geocerca-area-servicio.md`).
+     *
      * @return array<string, mixed>
      */
     private function respuestaUsuario(Usuario $usuario): array
@@ -110,6 +115,7 @@ class AuthController extends Controller
         $ciudadesTenant = Ciudad::whereHas('usuarios', fn ($query) => $query->where('rol', 'AdminCliente'))
             ->get();
         $data['ciudades_tenant'] = CiudadResource::collection($ciudadesTenant)->resolve();
+        $data['cobertura_bounds'] = ZonaServicio::boundsDeZonasActivas();
 
         return $data;
     }

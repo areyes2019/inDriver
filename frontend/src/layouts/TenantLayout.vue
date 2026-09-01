@@ -23,11 +23,13 @@ const auth = useTenantAuthStore()
 
 const slug = computed(() => route.params.slug as string)
 const enPanel = computed(() => route.name === 'tenant-panel')
+const esDespachador = computed(() => auth.usuario?.rol === 'Despachador')
+const mostrarNuevaEntrega = computed(() => enPanel.value && esDespachador.value)
 
 const botonNuevaEntregaRef = ref<HTMLButtonElement>()
 
 onMounted(() => {
-  if (enPanel.value) {
+  if (mostrarNuevaEntrega.value) {
     nextTick(() => botonNuevaEntregaRef.value?.focus())
   }
 })
@@ -44,16 +46,12 @@ defineExpose({
 })
 
 const items = computed(() => {
-  if (auth.usuario?.rol === 'Despachador') {
-    return [
-      { label: 'Panel', to: `/t/${slug.value}/panel` },
-      { label: 'Pedidos', to: `/t/${slug.value}/panel/pedidos` },
-    ]
+  if (esDespachador.value) {
+    return [{ label: 'Panel', to: `/t/${slug.value}/panel` }]
   }
 
   return [
     { label: 'Panel', to: `/t/${slug.value}/panel` },
-    { label: 'Pedidos', to: `/t/${slug.value}/panel/pedidos` },
     { label: 'Clientes', to: `/t/${slug.value}/panel/clientes` },
     { label: 'Usuarios', to: `/t/${slug.value}/panel/usuarios` },
     { label: 'Despachadores', to: `/t/${slug.value}/panel/despachadores` },
@@ -83,7 +81,7 @@ function onClickConfiguracion() {
     >
       <template #actions>
         <button
-          v-if="enPanel"
+          v-if="mostrarNuevaEntrega"
           ref="botonNuevaEntregaRef"
           type="button"
           :aria-expanded="nuevaEntregaAbierta"
