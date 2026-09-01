@@ -66,7 +66,10 @@ descrito en `tenant/007-panel-despachador.md`. Usa datos ficticios (fixture comp
 `tenant/010-drivers.md`), sin rastreo en tiempo real:
 
 - `UiCard` con título "Mapa" ocupando la columna central.
-- Mapa centrado en una ciudad ficticia fija, con zoom fijo.
+- Mapa centrado en una ciudad ficticia fija, con zoom fijo. **Corrección** (ver
+  `011-asignacion-ciudades-admin-cliente.md`): si el tenant tiene ciudades asignadas a algún
+  `AdminCliente`, el mapa ajusta su encuadre (`fitBounds`) a esas ciudades en vez de usar el centro
+  fijo; sin ciudades asignadas, el comportamiento original de esta spec no cambia.
 - Un marcador por cada conductor ficticio activo de `conductoresActivosFixture`.
 - Si el conductor tiene un pedido asignado (ver extensión del fixture en "Decisión técnica"), se
   dibuja la ruta real desde la posición del conductor hasta el punto de recogida (si todavía no
@@ -85,7 +88,9 @@ descrito en `tenant/007-panel-despachador.md`. Usa datos ficticios (fixture comp
 - Implementar un proveedor de mapas alternativo (ej. Leaflet) — solo se deja preparado el
   contrato (`BaseProvider`) para que sea más fácil hacerlo en el futuro; Google sigue siendo el
   único proveedor real.
-- Ubicación real del tenant como centro del mapa (sigue sin existir ese dato).
+- ~~Ubicación real del tenant como centro del mapa (sigue sin existir ese dato).~~ Implementado en
+  `011-asignacion-ciudades-admin-cliente.md`: ciudades (Google Places) asignadas por ADMIN_CENTRAL
+  a cada `AdminCliente`, usadas para el encuadre.
 
 ## Decisión técnica
 
@@ -168,8 +173,14 @@ requiere una librería aparte. No cambia nada visual de lo que ya existía.
   trazo si ambos puntos son válidos.
 - En el mapa de conductores, solo se dibuja ruta para conductores con `pedidoAsignado`; el destino
   (recogida o entrega) depende del estado de ese pedido, según lo descrito arriba.
-- El mapa se centra en coordenadas fijas ficticias y usa un zoom fijo (ej. 12), sin ajustar
-  automáticamente el encuadre a los marcadores.
+- ~~El mapa se centra en coordenadas fijas ficticias y usa un zoom fijo (ej. 12), sin ajustar
+  automáticamente el encuadre a los marcadores.~~ Corrección (spec 011): con ciudades asignadas,
+  el mapa sí ajusta el encuadre a ellas (`fitBounds`); sin ciudades, se mantiene el centro/zoom
+  fijos aquí descritos. Como parte de esa corrección se encontró que `drawRoute` (Directions API)
+  reencuadraba el mapa a cada ruta dibujada por defecto, pisando cualquier `fitBounds` previo —
+  `MapaConductores.vue` ahora pasa `{ preserveViewport: true }` en sus llamadas a `drawRoute` para
+  evitarlo; `UiVistaPreviaRuta.vue` no cambia (sigue sin pasar esa opción, porque ahí sí se quiere
+  que la ruta autoencuadre su propio mapa pequeño).
 - Sin `VITE_GOOGLE_MAPS_API_KEY` configurada, ningún componente que use `MapService` intenta cargar
   el SDK — todos muestran el mismo tipo de mensaje de configuración pendiente.
 
@@ -212,7 +223,8 @@ fixture que `tenant/010-drivers.md`), agregando el campo opcional `pedidoAsignad
   pedido — queda como referencia visual.
 - Validar que una dirección esté dentro de una zona de cobertura/geofence (spec 015).
 - Implementar un segundo proveedor de mapas (Leaflet u otro) — solo se prepara el contrato.
-- Ubicación real del tenant como centro del mapa.
+- ~~Ubicación real del tenant como centro del mapa.~~ Implementado en
+  `011-asignacion-ciudades-admin-cliente.md`.
 - Conseguir/gestionar la clave real de Google Maps — pendiente operativo, no de código.
 
 ## Criterios de aceptación

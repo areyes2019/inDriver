@@ -1,9 +1,11 @@
 import type {
   AddressSuggestion,
+  FitTarget,
   LatLngLike,
   MapInitOptions,
   MarkerOptions,
   ResolvedAddress,
+  ResolvedCity,
   RouteOptions,
   RouteResult,
 } from './types'
@@ -61,6 +63,18 @@ export default class BaseProvider {
 
   async resolveAddress(_suggestionId: string): Promise<ResolvedAddress | null> {
     throw new Error('Method "resolveAddress" must be implemented')
+  }
+
+  async searchCity(_query: string): Promise<AddressSuggestion[]> {
+    throw new Error('Method "searchCity" must be implemented')
+  }
+
+  async resolveCity(_suggestionId: string): Promise<ResolvedCity | null> {
+    throw new Error('Method "resolveCity" must be implemented')
+  }
+
+  fitToPositions(_containerId: string, _targets: FitTarget[]): void {
+    throw new Error('Method "fitToPositions" must be implemented')
   }
 
   destroy(_containerId: string): void {

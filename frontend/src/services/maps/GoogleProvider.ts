@@ -2,10 +2,12 @@ import { importLibrary, setOptions } from '@googlemaps/js-api-loader'
 import BaseProvider from './BaseProvider'
 import type {
   AddressSuggestion,
+  FitTarget,
   LatLngLike,
   MapInitOptions,
   MarkerOptions,
   ResolvedAddress,
+  ResolvedCity,
   RouteOptions,
   RouteResult,
 } from './types'
@@ -151,6 +153,7 @@ export default class GoogleProvider extends BaseProvider {
       const renderer = new google.maps.DirectionsRenderer({
         map: instance.map,
         suppressMarkers: true,
+        preserveViewport: options.preserveViewport ?? false,
         polylineOptions: { strokeColor: color, strokeWeight: 5 },
       })
       renderer.setDirections(response)
@@ -223,6 +226,69 @@ export default class GoogleProvider extends BaseProvider {
       lat: place.location.lat(),
       lng: place.location.lng(),
     }
+  }
+
+  async searchCity(query: string): Promise<AddressSuggestion[]> {
+    if (!this.apiKey || !query.trim()) return []
+
+    await loadSdk(this.apiKey)
+
+    const { suggestions } =
+      await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        input: query,
+        includedPrimaryTypes: ['locality'],
+      })
+
+    this.suggestionCache.clear()
+    const results: AddressSuggestion[] = []
+    for (const suggestion of suggestions) {
+      const prediction = suggestion.placePrediction
+      if (!prediction) continue
+      this.suggestionCache.set(prediction.placeId, prediction)
+      results.push({ id: prediction.placeId, label: prediction.text.text })
+    }
+    return results
+  }
+
+  async resolveCity(suggestionId: string): Promise<ResolvedCity | null> {
+    const prediction = this.suggestionCache.get(suggestionId)
+    if (!prediction) return null
+
+    const place = prediction.toPlace()
+    await place.fetchFields({ fields: ['displayName', 'location', 'viewport'] })
+    if (!place.location) return null
+
+    const viewport = place.viewport
+
+    return {
+      nombre: place.displayName ?? prediction.text.text,
+      lat: place.location.lat(),
+      lng: place.location.lng(),
+      bounds: viewport
+        ? {
+            north: viewport.getNorthEast().lat(),
+            east: viewport.getNorthEast().lng(),
+            south: viewport.getSouthWest().lat(),
+            west: viewport.getSouthWest().lng(),
+          }
+        : null,
+    }
+  }
+
+  fitToPositions(containerId: string, targets: FitTarget[]): void {
+    const instance = this.instances.get(containerId)
+    if (!instance || targets.length === 0) return
+
+    const bounds = new google.maps.LatLngBounds()
+    for (const target of targets) {
+      if (target.bounds) {
+        bounds.extend({ lat: target.bounds.north, lng: target.bounds.east })
+        bounds.extend({ lat: target.bounds.south, lng: target.bounds.west })
+      } else {
+        bounds.extend({ lat: target.lat, lng: target.lng })
+      }
+    }
+    instance.map.fitBounds(bounds)
   }
 
   destroy(containerId: string): void {

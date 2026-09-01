@@ -272,7 +272,10 @@ router.beforeEach(async (to) => {
       return { name: 'tenant-login', params: { slug } }
     }
 
-    if (to.name === 'tenant-panel' && auth.usuario?.rol !== 'Despachador') {
+    if (
+      to.name === 'tenant-panel' &&
+      !['Despachador', 'AdminCliente'].includes(auth.usuario?.rol ?? '')
+    ) {
       return { name: 'tenant-clientes-lista', params: { slug } }
     }
 

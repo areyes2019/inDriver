@@ -52,6 +52,7 @@ const items = computed(() => {
   }
 
   return [
+    { label: 'Panel', to: `/t/${slug.value}/panel` },
     { label: 'Pedidos', to: `/t/${slug.value}/panel/pedidos` },
     { label: 'Clientes', to: `/t/${slug.value}/panel/clientes` },
     { label: 'Usuarios', to: `/t/${slug.value}/panel/usuarios` },

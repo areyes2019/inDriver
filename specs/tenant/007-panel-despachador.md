@@ -108,8 +108,9 @@ en las rutas de API correspondientes), igual que ya existe para otros recursos.
 
 1. El landing tras login solo cambia para el rol `Despachador`; `AdminCliente` mantiene su
    comportamiento actual (va a Clientes).
-2. `/t/{slug}/panel` es exclusiva de `Despachador`: un `AdminCliente` que intente entrar por URL es
-   redirigido a Clientes, no ve la página ni un error.
+2. ~~`/t/{slug}/panel` es exclusiva de `Despachador`: un `AdminCliente` que intente entrar por URL
+   es redirigido a Clientes, no ve la página ni un error.~~ Reemplazado por el supuesto 18: también
+   entra `AdminCliente`.
 3. Esta primera versión no tiene datos ni funcionalidad real, solo un texto identificador, y esta
    misma spec se irá ampliando en el futuro en vez de crear specs nuevas por cada adición.
 4. No requiere endpoint de backend nuevo; la restricción de acceso es solo de frontend por ahora.
@@ -280,3 +281,70 @@ para `Despachador` sin pasar por esta misma decisión explícita.
     rutas ocultas — el backend ya las protegía con `403` antes de esta corrección.
 17. El ítem "Pedidos" de `Despachador` usa la misma ruta y vista que `AdminCliente`, sin filtro ni
     vista distinta.
+
+## Corrección: `AdminCliente` también accede a `/panel` (mapa centrado por ciudades)
+
+> `011-asignacion-ciudades-admin-cliente.md` (ADMIN_CENTRAL asigna ciudades a cada AdminCliente
+> para que "el mapa central aparezca cuando abran su panel de control") reveló, ya en pruebas de
+> extremo a extremo, que `/panel` era exclusiva de `Despachador` (ver "Por qué es exclusiva de
+> `Despachador` y no de `AdminCliente`" arriba) — es decir, `AdminCliente` nunca había tenido forma
+> de llegar al mapa que esa historia le prometía. En vez de mover el mapa a otra pantalla, se le
+> preguntó al usuario y se decidió abrir `/panel` también a `AdminCliente`.
+
+### Objetivo / Alcance de esta corrección
+
+Deja funcionando:
+
+- El guard de `tenant-panel` en `router/index.ts` deja de redirigir a `AdminCliente`: ahora solo
+  redirige a `tenant-clientes-lista` si el rol autenticado no es `Despachador` **ni** `AdminCliente`.
+- El menú de `TenantLayout.vue` agrega el ítem "Panel" también para `AdminCliente`, como primer
+  ítem (mismo lugar que ya ocupaba para `Despachador`), sin quitar ningún ítem existente de
+  `AdminCliente`.
+- `AdminCliente` ve exactamente el mismo contenido de `/panel` que `Despachador` (Servicios en
+  turno, mapa, botón "Nueva Entrega") — no hay una versión reducida ni filtrada para este rol.
+- El encuadre del mapa (`011-asignacion-ciudades-admin-cliente.md`) es el mismo para ambos roles:
+  se calcula con la unión de ciudades de todos los `AdminCliente` del tenant (`ciudades_tenant`),
+  no con las ciudades propias de quien inició sesión — así ambos ven siempre la misma vista, en vez
+  de una personalizada por usuario.
+
+**No** incluye:
+
+- Ocultar o filtrar contenido de `/panel` según el rol — a diferencia de la corrección anterior
+  (que sí reduce el menú de `Despachador`), aquí `AdminCliente` gana acceso sin restricciones
+  adicionales dentro de la página.
+- Ningún cambio al guard de `tenant-configuracion`, que sigue siendo exclusivo de `AdminCliente`.
+- Ningún endpoint de backend nuevo — la asignación de ciudades y el campo `ciudades_tenant` se
+  documentan en `011-asignacion-ciudades-admin-cliente.md`.
+
+### Frontend (Vue 3)
+
+- **`router/index.ts`** (`beforeEach`): la condición de `tenant-panel` cambia de
+  `auth.usuario?.rol !== 'Despachador'` a
+  `!['Despachador', 'AdminCliente'].includes(auth.usuario?.rol ?? '')`.
+- **`layouts/TenantLayout.vue`**: el arreglo de ítems para roles distintos a `Despachador` agrega
+  `{ label: 'Panel', to: '/t/${slug}/panel' }` al inicio, antes de "Pedidos".
+
+### Fuera de alcance (de esta corrección)
+
+- Cambios de contenido dentro de `/panel` según el rol.
+- Cambios al guard de `tenant-configuracion`.
+
+### Criterios de aceptación (de esta corrección)
+
+1. Con sesión de `AdminCliente`, el menú de `TenantLayout` muestra "Panel" como primer ítem, antes
+   de "Pedidos".
+2. Visitar `/t/{slug}/panel` autenticado como `AdminCliente` muestra la página del panel (ya no
+   redirige a Clientes).
+3. El contenido de `/panel` es idéntico para `AdminCliente` y `Despachador`.
+4. ESLint/Prettier corren sin errores.
+
+### Supuestos asumidos (continúa el registro de arriba)
+
+18. `/t/{slug}/panel` deja de ser exclusiva de `Despachador`: también entra `AdminCliente`, sin
+    redirección ni error.
+19. El encuadre del mapa dentro de `/panel` no se personaliza por usuario — es el mismo para
+    cualquier tenant user que lo abra, calculado a partir de las ciudades de todos los
+    `AdminCliente` del tenant (`ciudades_tenant`, spec 011), no de las ciudades propias de quien
+    inició sesión.
+20. `AdminCliente` no obtiene una versión reducida ni distinta de `/panel` — ve exactamente el
+    mismo contenido que ya veía `Despachador`.

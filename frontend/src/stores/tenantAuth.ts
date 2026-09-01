@@ -2,6 +2,15 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import http, { ensureCsrfCookie } from '@/lib/http'
 
+export interface CiudadAsignada {
+  id_ciudad: number
+  nombre: string
+  place_id: string
+  lat: number
+  lng: number
+  bounds: { north: number; south: number; east: number; west: number } | null
+}
+
 export interface UsuarioTenant {
   id_usuario: number
   nombre: string
@@ -12,6 +21,8 @@ export interface UsuarioTenant {
   rol: string
   estado: string
   ultimo_acceso: string | null
+  ciudades: CiudadAsignada[]
+  ciudades_tenant: CiudadAsignada[]
 }
 
 interface ResetPasswordPayload {

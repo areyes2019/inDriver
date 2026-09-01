@@ -2,14 +2,24 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import mapService from '@/services/maps/MapService'
+import { useTenantAuthStore } from '@/stores/tenantAuth'
 import { conductoresActivosFixture } from '@/fixtures/panelDespachador'
 
 const CONTAINER_ID = 'mapa-conductores'
+const tenantAuth = useTenantAuthStore()
 
 onMounted(async () => {
   if (!mapService.hasApiKey()) return
 
   await mapService.initialize(CONTAINER_ID, { zoom: 12 })
+
+  const ciudades = tenantAuth.usuario?.ciudades_tenant ?? []
+  if (ciudades.length > 0) {
+    mapService.fitToPositions(
+      CONTAINER_ID,
+      ciudades.map((ciudad) => ({ lat: ciudad.lat, lng: ciudad.lng, bounds: ciudad.bounds })),
+    )
+  }
 
   for (const conductor of conductoresActivosFixture) {
     const posicion = { lat: conductor.latitud, lng: conductor.longitud }
@@ -23,7 +33,9 @@ onMounted(async () => {
         ? { lat: pedido.latitud_recogida, lng: pedido.longitud_recogida }
         : { lat: pedido.latitud_entrega, lng: pedido.longitud_entrega }
 
-    mapService.drawRoute(CONTAINER_ID, `ruta-${conductor.id}`, [posicion, destino])
+    mapService.drawRoute(CONTAINER_ID, `ruta-${conductor.id}`, [posicion, destino], {
+      preserveViewport: true,
+    })
   }
 })
 

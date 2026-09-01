@@ -1,10 +1,12 @@
 import GoogleProvider from './GoogleProvider'
 import type {
   AddressSuggestion,
+  FitTarget,
   LatLngLike,
   MapInitOptions,
   MarkerOptions,
   ResolvedAddress,
+  ResolvedCity,
   RouteOptions,
   RouteResult,
 } from './types'
@@ -65,6 +67,18 @@ class MapService {
 
   resolveAddress(suggestionId: string): Promise<ResolvedAddress | null> {
     return this.provider.resolveAddress(suggestionId)
+  }
+
+  searchCity(query: string): Promise<AddressSuggestion[]> {
+    return this.provider.searchCity(query)
+  }
+
+  resolveCity(suggestionId: string): Promise<ResolvedCity | null> {
+    return this.provider.resolveCity(suggestionId)
+  }
+
+  fitToPositions(containerId: string, targets: FitTarget[]): void {
+    this.provider.fitToPositions(containerId, targets)
   }
 
   destroy(containerId: string): void {

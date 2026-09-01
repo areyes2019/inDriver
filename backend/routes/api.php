@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminClienteCiudadController;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\CreditoPaqueteController;
 use App\Http\Controllers\Admin\PaqueteViajeController;
@@ -43,6 +44,9 @@ Route::prefix('admin')->group(function () {
             Route::delete('/paquetes-viajes/{paquete}', [PaqueteViajeController::class, 'destroy']);
 
             Route::post('/tenants/{tenant}/creditos-paquetes', [CreditoPaqueteController::class, 'store']);
+
+            Route::get('/tenants/{tenant}/admins-cliente', [AdminClienteCiudadController::class, 'index']);
+            Route::put('/tenants/{tenant}/admins-cliente/{idUsuario}/ciudades', [AdminClienteCiudadController::class, 'update']);
         });
     });
 });

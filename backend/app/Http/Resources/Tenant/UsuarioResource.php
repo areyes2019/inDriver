@@ -29,6 +29,7 @@ class UsuarioResource extends JsonResource
             'estado' => $this->estado,
             'ultimo_acceso' => $this->ultimo_acceso,
             'created_at' => $this->created_at,
+            'ciudades' => CiudadResource::collection($this->whenLoaded('ciudades')),
         ];
     }
 }

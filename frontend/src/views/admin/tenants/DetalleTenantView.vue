@@ -6,6 +6,8 @@ import http from '@/lib/http'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiBadge from '@/components/ui/UiBadge.vue'
+import UiCiudadAutocomplete from '@/components/ui/UiCiudadAutocomplete.vue'
+import type { ResolvedCity } from '@/services/maps/types'
 
 interface Tenant {
   id_tenant: number
@@ -25,6 +27,31 @@ interface PaqueteViaje {
   cantidad_viajes: number
   precio: string
   estado: string
+}
+
+interface CiudadAsignada {
+  id_ciudad: number
+  nombre: string
+  place_id: string
+  lat: number
+  lng: number
+  bounds: unknown
+}
+
+interface AdminCliente {
+  id_usuario: number
+  nombre: string
+  apellido_paterno: string
+  email: string
+  ciudades: CiudadAsignada[]
+}
+
+interface CiudadPendiente {
+  place_id: string
+  nombre: string
+  lat: number
+  lng: number
+  bounds: unknown
 }
 
 const route = useRoute()
@@ -49,7 +76,72 @@ onMounted(async () => {
   }
 
   fetchPaquetesActivos()
+  fetchAdminsCliente()
 })
+
+// --- Administradores y ciudades ---
+
+const adminsCliente = ref<AdminCliente[]>([])
+const ciudadesPendientes = reactive<Record<number, CiudadPendiente[]>>({})
+const guardandoCiudades = reactive<Record<number, boolean>>({})
+const mensajeCiudades = reactive<Record<number, string>>({})
+const errorCiudades = reactive<Record<number, boolean>>({})
+
+async function fetchAdminsCliente() {
+  try {
+    const { data } = await http.get(`/admin/tenants/${route.params.id}/admins-cliente`)
+    adminsCliente.value = data.data ?? data
+
+    for (const admin of adminsCliente.value) {
+      ciudadesPendientes[admin.id_usuario] = admin.ciudades.map((ciudad) => ({
+        place_id: ciudad.place_id,
+        nombre: ciudad.nombre,
+        lat: ciudad.lat,
+        lng: ciudad.lng,
+        bounds: ciudad.bounds,
+      }))
+    }
+  } catch {
+    adminsCliente.value = []
+  }
+}
+
+function agregarCiudad(idUsuario: number, ciudad: ResolvedCity & { placeId: string }) {
+  const lista = ciudadesPendientes[idUsuario] ?? (ciudadesPendientes[idUsuario] = [])
+  if (lista.some((c) => c.place_id === ciudad.placeId)) return
+
+  lista.push({
+    place_id: ciudad.placeId,
+    nombre: ciudad.nombre,
+    lat: ciudad.lat,
+    lng: ciudad.lng,
+    bounds: ciudad.bounds,
+  })
+}
+
+function quitarCiudad(idUsuario: number, placeId: string) {
+  ciudadesPendientes[idUsuario] = (ciudadesPendientes[idUsuario] ?? []).filter(
+    (c) => c.place_id !== placeId,
+  )
+}
+
+async function guardarCiudades(idUsuario: number) {
+  guardandoCiudades[idUsuario] = true
+  mensajeCiudades[idUsuario] = ''
+
+  try {
+    await http.put(`/admin/tenants/${route.params.id}/admins-cliente/${idUsuario}/ciudades`, {
+      ciudades: ciudadesPendientes[idUsuario] ?? [],
+    })
+    mensajeCiudades[idUsuario] = 'Ciudades guardadas correctamente.'
+    errorCiudades[idUsuario] = false
+  } catch {
+    mensajeCiudades[idUsuario] = 'No se pudieron guardar las ciudades, intenta de nuevo.'
+    errorCiudades[idUsuario] = true
+  } finally {
+    guardandoCiudades[idUsuario] = false
+  }
+}
 
 // --- Acreditar paquete ---
 
@@ -187,6 +279,59 @@ async function onAcreditarPaquete() {
       </form>
       <p v-if="errorCredito" role="alert" class="mt-3 text-sm text-red-600">{{ errorCredito }}</p>
       <p v-if="successCredito" class="mt-3 text-sm text-green-600">{{ successCredito }}</p>
+    </UiCard>
+
+    <UiCard v-if="adminsCliente.length" title="Administradores y ciudades" class="mt-6">
+      <div
+        v-for="admin in adminsCliente"
+        :key="admin.id_usuario"
+        class="mb-6 border-b border-gray-100 pb-6 last:mb-0 last:border-0 last:pb-0"
+      >
+        <p class="text-sm font-semibold text-heading">
+          {{ admin.nombre }} {{ admin.apellido_paterno }}
+        </p>
+        <p class="text-xs text-black/50">{{ admin.email }}</p>
+
+        <div class="mt-3 max-w-sm">
+          <UiCiudadAutocomplete @select="(ciudad) => agregarCiudad(admin.id_usuario, ciudad)" />
+        </div>
+
+        <div class="mt-3 flex flex-wrap gap-2">
+          <span
+            v-for="ciudad in ciudadesPendientes[admin.id_usuario]"
+            :key="ciudad.place_id"
+            class="inline-flex items-center gap-1 rounded-full bg-accent/10 px-3 py-1 text-xs text-heading"
+          >
+            {{ ciudad.nombre }}
+            <button
+              type="button"
+              class="text-black/40 hover:text-red-600"
+              @click="quitarCiudad(admin.id_usuario, ciudad.place_id)"
+            >
+              ×
+            </button>
+          </span>
+          <span v-if="!ciudadesPendientes[admin.id_usuario]?.length" class="text-xs text-black/40">
+            Sin ciudades asignadas.
+          </span>
+        </div>
+
+        <button
+          type="button"
+          :disabled="guardandoCiudades[admin.id_usuario]"
+          class="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60"
+          @click="guardarCiudades(admin.id_usuario)"
+        >
+          Guardar
+        </button>
+        <p
+          v-if="mensajeCiudades[admin.id_usuario]"
+          class="mt-2 text-sm"
+          :class="errorCiudades[admin.id_usuario] ? 'text-red-600' : 'text-green-600'"
+        >
+          {{ mensajeCiudades[admin.id_usuario] }}
+        </p>
+      </div>
     </UiCard>
   </AdminLayout>
 </template>

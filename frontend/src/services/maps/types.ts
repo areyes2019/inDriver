@@ -15,6 +15,8 @@ export interface MarkerOptions {
 
 export interface RouteOptions {
   color?: string
+  /** Si es true, dibujar la ruta no mueve el centro/zoom del mapa (default: false). */
+  preserveViewport?: boolean
 }
 
 export interface RouteResult {
@@ -31,4 +33,24 @@ export interface ResolvedAddress {
   address: string
   lat: number
   lng: number
+}
+
+export interface LatLngBoundsLike {
+  north: number
+  south: number
+  east: number
+  west: number
+}
+
+export interface ResolvedCity {
+  nombre: string
+  lat: number
+  lng: number
+  bounds: LatLngBoundsLike | null
+}
+
+export interface FitTarget {
+  lat: number
+  lng: number
+  bounds?: LatLngBoundsLike | null
 }
