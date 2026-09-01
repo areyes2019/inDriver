@@ -79,11 +79,21 @@ class TenantController extends Controller
                 $data['apellido_materno'] ?? null,
             );
         } catch (\Throwable $e) {
-            if ($tenant->exists) {
-                $tenant->delete();
-            }
-
             Log::error('No se pudo crear el tenant', ['error' => $e->getMessage()]);
+
+            if ($tenant->exists) {
+                try {
+                    $tenant->delete();
+                } catch (\Throwable $cleanupError) {
+                    // No relanzar: si la reversión falla (p. ej. el usuario de MySQL no tiene
+                    // permiso DROP DATABASE sobre bases fuera del panel del hosting), no debe
+                    // enmascarar el error original ni tumbar la respuesta con un 500 sin JSON.
+                    Log::error('No se pudo revertir el tenant tras un fallo de aprovisionamiento', [
+                        'id_tenant' => $tenant->id_tenant,
+                        'error' => $cleanupError->getMessage(),
+                    ]);
+                }
+            }
 
             return response()->json([
                 'message' => 'No se pudo crear el tenant, intenta de nuevo.',
