@@ -8,6 +8,12 @@ import UiCard from '@/components/ui/UiCard.vue'
 import UiBadge from '@/components/ui/UiBadge.vue'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
 
+interface DespachadorInfo {
+  id_despachador: number
+  nombre: string
+  apellido_paterno: string
+}
+
 interface Conductor {
   id_conductor: number
   id_usuario: number
@@ -16,8 +22,12 @@ interface Conductor {
   email: string
   numero_licencia: string
   tipo_licencia: string | null
+  fecha_vencimiento_licencia: string | null
+  telefono_emergencia: string | null
   estado: string
   disponibilidad: string
+  id_despachador: number | null
+  despachador: DespachadorInfo | null
   created_at: string
 }
 
@@ -135,9 +145,57 @@ async function confirmarVenderViajes() {
   }
 }
 
+// --- Despachador asignado (solo si el tenant usa despachadores, spec tenant/011) ---
+
+const usaDespachadores = computed(() => auth.usuario?.usar_despachadores === 'Sí')
+const despachadoresActivos = ref<{ id_despachador: number; nombre: string }[]>([])
+// Con 0 o 1 despachador activo no se pide el selector: sin ninguno no hay nada que elegir, y con
+// uno solo se asigna automático en el backend.
+const mostrarSelectorDespachador = computed(
+  () => usaDespachadores.value && despachadoresActivos.value.length >= 2,
+)
+const reasignandoId = ref<number | null>(null)
+const errorReasignar = ref('')
+
+async function fetchDespachadoresActivos() {
+  if (!usaDespachadores.value) return
+
+  try {
+    const { data } = await http.get(`/t/${slug.value}/despachadores/activos`)
+    despachadoresActivos.value = data.data
+  } catch {
+    despachadoresActivos.value = []
+  }
+}
+
+async function onCambiarDespachador(conductor: Conductor, idDespachador: string) {
+  errorReasignar.value = ''
+  reasignandoId.value = conductor.id_conductor
+
+  try {
+    const { data } = await http.put(`/t/${slug.value}/conductores/${conductor.id_conductor}`, {
+      numero_licencia: conductor.numero_licencia,
+      tipo_licencia: conductor.tipo_licencia,
+      fecha_vencimiento_licencia: conductor.fecha_vencimiento_licencia,
+      telefono_emergencia: conductor.telefono_emergencia,
+      estado: conductor.estado,
+      disponibilidad: conductor.disponibilidad,
+      id_despachador: idDespachador,
+    })
+    const actualizado = data.data ?? data
+    const index = conductores.value.findIndex((c) => c.id_conductor === conductor.id_conductor)
+    if (index !== -1) conductores.value[index] = actualizado
+  } catch {
+    errorReasignar.value = 'No se pudo reasignar el despachador, intenta de nuevo.'
+  } finally {
+    reasignandoId.value = null
+  }
+}
+
 onMounted(() => {
   fetchConductores()
   fetchModalidad()
+  fetchDespachadoresActivos()
 })
 </script>
 
@@ -160,6 +218,9 @@ onMounted(() => {
       </div>
 
       <p v-if="error" role="alert" class="mb-4 text-sm text-red-600">{{ error }}</p>
+      <p v-if="errorReasignar" role="alert" class="mb-4 text-sm text-red-600">
+        {{ errorReasignar }}
+      </p>
 
       <div class="overflow-x-auto">
         <table class="w-full min-w-[760px] text-left text-sm">
@@ -172,15 +233,16 @@ onMounted(() => {
               <th class="py-2 pr-4">Licencia</th>
               <th class="py-2 pr-4">Estado</th>
               <th class="py-2 pr-4">Disponibilidad</th>
+              <th v-if="usaDespachadores" class="py-2 pr-4">Despachador</th>
               <th class="py-2 pr-4">Acciones</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="6" class="py-6 text-center text-black/50">Cargando...</td>
+              <td colspan="7" class="py-6 text-center text-black/50">Cargando...</td>
             </tr>
             <tr v-else-if="conductores.length === 0">
-              <td colspan="6" class="py-6 text-center text-black/50">No hay conductores.</td>
+              <td colspan="7" class="py-6 text-center text-black/50">No hay conductores.</td>
             </tr>
             <tr
               v-for="conductor in conductores"
@@ -200,6 +262,28 @@ onMounted(() => {
                 />
               </td>
               <td class="py-2 pr-4">{{ conductor.disponibilidad }}</td>
+              <td v-if="usaDespachadores" class="py-2 pr-4">
+                <select
+                  v-if="mostrarSelectorDespachador"
+                  :value="conductor.id_despachador ?? ''"
+                  :disabled="reasignandoId === conductor.id_conductor"
+                  class="rounded-lg border border-gray-300 px-2 py-1 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+                  @change="onCambiarDespachador(conductor, ($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="" disabled>Sin asignar</option>
+                  <option
+                    v-for="despachador in despachadoresActivos"
+                    :key="despachador.id_despachador"
+                    :value="despachador.id_despachador"
+                  >
+                    {{ despachador.nombre }}
+                  </option>
+                </select>
+                <span v-else-if="conductor.despachador">
+                  {{ conductor.despachador.nombre }} {{ conductor.despachador.apellido_paterno }}
+                </span>
+                <UiBadge v-else text="Sin asignar" color="orange" />
+              </td>
               <td class="py-2 pr-4">
                 <div class="flex flex-wrap gap-2">
                   <RouterLink

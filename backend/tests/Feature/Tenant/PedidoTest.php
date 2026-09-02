@@ -2,6 +2,7 @@
 
 use App\Models\Tenant;
 use App\Models\Tenant\Auditoria;
+use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Usuario;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -61,6 +62,17 @@ function pedidoUsuario(Tenant $tenant, array $overrides = []): Usuario
     return $usuario;
 }
 
+/**
+ * Por defecto el tenant no usa despachadores (spec tenant/011), así que solo AdminCliente puede
+ * crear pedidos. Los tests que quieren probar el flujo con despachadores activan esta config.
+ */
+function pedidoHabilitarDespachadores(Tenant $tenant): void
+{
+    tenancy()->initialize($tenant);
+    ConfiguracionTenant::establecer(ConfiguracionTenant::USAR_DESPACHADORES, 'Sí');
+    tenancy()->end();
+}
+
 function pedidoDatosValidos(array $overrides = []): array
 {
     return array_merge([
@@ -99,8 +111,37 @@ it('allows a Despachador to list pedidos', function () {
         ->assertOk();
 });
 
-it('rejects creating a pedido for an AdminCliente role', function () {
+it('allows an AdminCliente to create a pedido when the tenant does not use despachadores', function () {
     $tenant = pedidoTenant();
+    $admin = pedidoUsuario($tenant);
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos())
+        ->assertCreated();
+});
+
+it('rejects creating a pedido for a Despachador role when the tenant does not use despachadores', function () {
+    $tenant = pedidoTenant();
+    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
+
+    $this->actingAs($despachador, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos())
+        ->assertForbidden();
+});
+
+it('allows a Despachador to create a pedido when the tenant uses despachadores', function () {
+    $tenant = pedidoTenant();
+    pedidoHabilitarDespachadores($tenant);
+    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
+
+    $this->actingAs($despachador, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos())
+        ->assertCreated();
+});
+
+it('rejects creating a pedido for an AdminCliente role when the tenant uses despachadores', function () {
+    $tenant = pedidoTenant();
+    pedidoHabilitarDespachadores($tenant);
     $admin = pedidoUsuario($tenant);
 
     $this->actingAs($admin, 'usuario')
@@ -110,9 +151,9 @@ it('rejects creating a pedido for an AdminCliente role', function () {
 
 it('rejects creating a pedido without required fields', function () {
     $tenant = pedidoTenant();
-    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
+    $admin = pedidoUsuario($tenant);
 
-    $this->actingAs($despachador, 'usuario')
+    $this->actingAs($admin, 'usuario')
         ->postJson('/api/v1/t/cafe-luna/pedidos', [])
         ->assertUnprocessable()
         ->assertJsonValidationErrors([
@@ -123,9 +164,9 @@ it('rejects creating a pedido without required fields', function () {
 
 it('rejects creating a pedido with a fixed horario but no fecha_servicio', function () {
     $tenant = pedidoTenant();
-    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
+    $admin = pedidoUsuario($tenant);
 
-    $this->actingAs($despachador, 'usuario')
+    $this->actingAs($admin, 'usuario')
         ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos([
             'lo_antes_posible' => false,
             'fecha_servicio' => null,
@@ -138,9 +179,9 @@ it('rejects creating a pedido with a fixed horario but no fecha_servicio', funct
 
 it('rejects creating a pedido with a fixed horario but no hora_desde/hora_hasta', function () {
     $tenant = pedidoTenant();
-    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
+    $admin = pedidoUsuario($tenant);
 
-    $this->actingAs($despachador, 'usuario')
+    $this->actingAs($admin, 'usuario')
         ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos(['lo_antes_posible' => false]))
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['hora_desde']);
@@ -148,9 +189,9 @@ it('rejects creating a pedido with a fixed horario but no hora_desde/hora_hasta'
 
 it('creates a pedido without fecha_servicio when lo_antes_posible is true, defaulting to today', function () {
     $tenant = pedidoTenant();
-    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
+    $admin = pedidoUsuario($tenant);
 
-    $response = $this->actingAs($despachador, 'usuario')
+    $response = $this->actingAs($admin, 'usuario')
         ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos(['fecha_servicio' => null]))
         ->assertCreated();
 
@@ -159,9 +200,9 @@ it('creates a pedido without fecha_servicio when lo_antes_posible is true, defau
 
 it('rejects creating a pedido without importe_envio', function () {
     $tenant = pedidoTenant();
-    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
+    $admin = pedidoUsuario($tenant);
 
-    $this->actingAs($despachador, 'usuario')
+    $this->actingAs($admin, 'usuario')
         ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos(['importe_envio' => null]))
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['importe_envio']);
@@ -169,9 +210,9 @@ it('rejects creating a pedido without importe_envio', function () {
 
 it('forces importe_cobro to zero when modalidad_pago does not involve producto', function () {
     $tenant = pedidoTenant();
-    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
+    $admin = pedidoUsuario($tenant);
 
-    $response = $this->actingAs($despachador, 'usuario')
+    $response = $this->actingAs($admin, 'usuario')
         ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos([
             'modalidad_pago' => 'RECEPTOR_PAGA_ENVIO',
             'importe_cobro' => 500,
@@ -183,9 +224,9 @@ it('forces importe_cobro to zero when modalidad_pago does not involve producto',
 
 it('keeps importe_cobro when modalidad_pago is RECEPTOR_PAGA_ENVIO_PRODUCTOS', function () {
     $tenant = pedidoTenant();
-    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
+    $admin = pedidoUsuario($tenant);
 
-    $response = $this->actingAs($despachador, 'usuario')
+    $response = $this->actingAs($admin, 'usuario')
         ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos([
             'modalidad_pago' => 'RECEPTOR_PAGA_ENVIO_PRODUCTOS',
             'importe_cobro' => 500,
@@ -218,9 +259,9 @@ it('allows a Despachador to read clientes and configuracion, but not manage them
 
 it('creates a pedido with an autogenerated numero_pedido, PENDIENTE estado, and logs it', function () {
     $tenant = pedidoTenant();
-    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
+    $admin = pedidoUsuario($tenant);
 
-    $response = $this->actingAs($despachador, 'usuario')
+    $response = $this->actingAs($admin, 'usuario')
         ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos())
         ->assertCreated()
         ->assertJsonPath('estado', 'PENDIENTE');
@@ -235,9 +276,8 @@ it('creates a pedido with an autogenerated numero_pedido, PENDIENTE estado, and 
 it('updates a pedido and logs it', function () {
     $tenant = pedidoTenant();
     $admin = pedidoUsuario($tenant);
-    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
 
-    $creado = $this->actingAs($despachador, 'usuario')
+    $creado = $this->actingAs($admin, 'usuario')
         ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos())
         ->json();
 
@@ -267,9 +307,8 @@ it('rejects updating a pedido that is already in a final estado', function () {
 it('advances a pedido through a valid transition and stamps the matching fecha', function () {
     $tenant = pedidoTenant();
     $admin = pedidoUsuario($tenant);
-    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
 
-    $creado = $this->actingAs($despachador, 'usuario')
+    $creado = $this->actingAs($admin, 'usuario')
         ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos())
         ->json();
 
@@ -288,9 +327,8 @@ it('advances a pedido through a valid transition and stamps the matching fecha',
 it('rejects an invalid estado transition', function () {
     $tenant = pedidoTenant();
     $admin = pedidoUsuario($tenant);
-    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
 
-    $creado = $this->actingAs($despachador, 'usuario')
+    $creado = $this->actingAs($admin, 'usuario')
         ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos())
         ->json();
 
@@ -303,9 +341,8 @@ it('rejects an invalid estado transition', function () {
 it('cancels a pedido and stamps fecha_cancelacion', function () {
     $tenant = pedidoTenant();
     $admin = pedidoUsuario($tenant);
-    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
 
-    $creado = $this->actingAs($despachador, 'usuario')
+    $creado = $this->actingAs($admin, 'usuario')
         ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos())
         ->json();
 

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['id_usuario', 'numero_licencia', 'tipo_licencia', 'fecha_vencimiento_licencia', 'telefono_emergencia', 'estado', 'disponibilidad'])]
+#[Fillable(['id_usuario', 'id_despachador', 'numero_licencia', 'tipo_licencia', 'fecha_vencimiento_licencia', 'telefono_emergencia', 'estado', 'disponibilidad'])]
 class Conductor extends Model
 {
     protected $table = 'conductores';
@@ -26,6 +26,11 @@ class Conductor extends Model
     public function usuario(): BelongsTo
     {
         return $this->belongsTo(Usuario::class, 'id_usuario', 'id_usuario');
+    }
+
+    public function despachador(): BelongsTo
+    {
+        return $this->belongsTo(Despachador::class, 'id_despachador', 'id_despachador');
     }
 
     public function pedidos(): HasMany

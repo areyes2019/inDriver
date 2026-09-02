@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Tenant\CiudadResource;
 use App\Http\Resources\Tenant\UsuarioResource;
 use App\Models\Tenant\Ciudad;
+use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\ZonaServicio;
 use Illuminate\Auth\Events\PasswordReset;
@@ -136,6 +137,7 @@ class AuthController extends Controller
             ->get();
         $data['ciudades_tenant'] = CiudadResource::collection($ciudadesTenant)->resolve();
         $data['cobertura_bounds'] = ZonaServicio::boundsDeZonasActivas();
+        $data['usar_despachadores'] = ConfiguracionTenant::obtener(ConfiguracionTenant::USAR_DESPACHADORES, 'No');
 
         return $data;
     }

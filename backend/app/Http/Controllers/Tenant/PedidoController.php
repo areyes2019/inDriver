@@ -68,6 +68,7 @@ class PedidoController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $this->validarPuedeCrearPedido($request);
         $data = $this->validarDatos($request);
 
         $pedido = DB::transaction(function () use ($data) {
@@ -180,6 +181,23 @@ class PedidoController extends Controller
 
         if (($vendidos - $consumidos) > 0) {
             $pedido->prepago_descontado = true;
+        }
+    }
+
+    /**
+     * Solo un rol "opera" la creación de pedidos a la vez, según la configuración del tenant
+     * (spec tenant/011): AdminCliente cuando el tenant no usa despachadores, Despachador cuando sí
+     * los usa. Nunca ambos al mismo tiempo.
+     */
+    private function validarPuedeCrearPedido(Request $request): void
+    {
+        $usaDespachadores = ConfiguracionTenant::obtener(ConfiguracionTenant::USAR_DESPACHADORES, 'No') === 'Sí';
+        $rol = $request->user('usuario')->rol;
+
+        $puedeCrear = ($rol === 'Despachador' && $usaDespachadores) || ($rol === 'AdminCliente' && ! $usaDespachadores);
+
+        if (! $puedeCrear) {
+            abort(403, 'No puedes crear pedidos con la configuración actual de despachadores del tenant.');
         }
     }
 

@@ -267,6 +267,21 @@ router.beforeEach(async (to) => {
       return { name: 'tenant-clientes-lista', params: { slug } }
     }
 
+    // El "operativo" (quien ve el Panel) depende de la configuración del tenant, no solo del rol:
+    // Despachador cuando usa despachadores, AdminCliente cuando no (spec tenant/011).
+    const usaDespachadores = auth.usuario?.usar_despachadores === 'Sí'
+    const esOperativo =
+      (auth.usuario?.rol === 'Despachador' && usaDespachadores) ||
+      (auth.usuario?.rol === 'AdminCliente' && !usaDespachadores)
+
+    if (to.name === 'tenant-panel' && !esOperativo) {
+      return { name: 'tenant-clientes-lista', params: { slug } }
+    }
+
+    if (to.name === 'tenant-despachadores-lista' && !usaDespachadores) {
+      return { name: 'tenant-clientes-lista', params: { slug } }
+    }
+
     if (to.name === 'tenant-configuracion' && auth.usuario?.rol !== 'AdminCliente') {
       return { name: 'tenant-clientes-lista', params: { slug } }
     }

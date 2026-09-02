@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import http from '@/lib/http'
 import TenantLayout from '@/layouts/TenantLayout.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import { useTenantAuthStore } from '@/stores/tenantAuth'
 
 interface UsuarioDisponible {
   id_usuario: number
@@ -13,12 +14,24 @@ interface UsuarioDisponible {
   email: string
 }
 
+interface DespachadorActivo {
+  id_despachador: number
+  nombre: string
+}
+
 const route = useRoute()
 const router = useRouter()
 const slug = route.params.slug as string
+const auth = useTenantAuthStore()
+const usaDespachadores = computed(() => auth.usuario?.usar_despachadores === 'Sí')
 
 const usuariosDisponibles = ref<UsuarioDisponible[]>([])
 const loadingUsuarios = ref(true)
+
+const despachadoresActivos = ref<DespachadorActivo[]>([])
+// Con 0 o 1 despachador activo no se pide el campo: sin ninguno no hay nada que elegir, y con uno
+// solo se asigna automático en el backend (spec tenant/011).
+const requiereElegirDespachador = computed(() => despachadoresActivos.value.length >= 2)
 
 const form = reactive({
   id_usuario: '',
@@ -26,6 +39,7 @@ const form = reactive({
   tipo_licencia: '',
   fecha_vencimiento_licencia: '',
   telefono_emergencia: '',
+  id_despachador: '',
 })
 
 const fieldErrors = reactive<Record<string, string>>({})
@@ -41,6 +55,15 @@ onMounted(async () => {
     error.value = 'No se pudo cargar la lista de usuarios disponibles.'
   } finally {
     loadingUsuarios.value = false
+  }
+
+  if (usaDespachadores.value) {
+    try {
+      const { data } = await http.get(`/t/${slug}/despachadores/activos`)
+      despachadoresActivos.value = data.data
+    } catch {
+      despachadoresActivos.value = []
+    }
   }
 })
 
@@ -98,6 +121,27 @@ async function onSubmit() {
           </select>
           <span v-if="fieldErrors.id_usuario" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.id_usuario }}
+          </span>
+        </label>
+
+        <label v-if="requiereElegirDespachador" class="block">
+          <span class="mb-1 block text-sm font-medium text-heading">Despachador responsable</span>
+          <select
+            v-model="form.id_despachador"
+            required
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          >
+            <option value="" disabled>Selecciona un despachador</option>
+            <option
+              v-for="despachador in despachadoresActivos"
+              :key="despachador.id_despachador"
+              :value="despachador.id_despachador"
+            >
+              {{ despachador.nombre }}
+            </option>
+          </select>
+          <span v-if="fieldErrors.id_despachador" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.id_despachador }}
           </span>
         </label>
 

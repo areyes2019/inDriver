@@ -1,15 +1,28 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import http from '@/lib/http'
 import TenantLayout from '@/layouts/TenantLayout.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import { useTenantAuthStore } from '@/stores/tenantAuth'
+
+interface DespachadorActivo {
+  id_despachador: number
+  nombre: string
+}
 
 const route = useRoute()
 const router = useRouter()
 const slug = route.params.slug as string
 const conductorId = route.params.id
+const auth = useTenantAuthStore()
+const usaDespachadores = computed(() => auth.usuario?.usar_despachadores === 'Sí')
+
+const despachadoresActivos = ref<DespachadorActivo[]>([])
+// Con 0 o 1 despachador activo no se pide el campo: sin ninguno no hay nada que elegir, y con uno
+// solo se asigna automático en el backend (spec tenant/011).
+const requiereElegirDespachador = computed(() => despachadoresActivos.value.length >= 2)
 
 const form = reactive({
   numero_licencia: '',
@@ -18,6 +31,7 @@ const form = reactive({
   telefono_emergencia: '',
   estado: 'ACTIVO',
   disponibilidad: 'FUERA_DE_SERVICIO',
+  id_despachador: '',
 })
 
 const fieldErrors = reactive<Record<string, string>>({})
@@ -27,6 +41,15 @@ const loading = ref(false)
 const loadingConductor = ref(true)
 
 onMounted(async () => {
+  if (usaDespachadores.value) {
+    try {
+      const { data } = await http.get(`/t/${slug}/despachadores/activos`)
+      despachadoresActivos.value = data.data
+    } catch {
+      despachadoresActivos.value = []
+    }
+  }
+
   try {
     const { data } = await http.get(`/t/${slug}/conductores/${conductorId}`)
     const conductor = data.data ?? data
@@ -37,6 +60,7 @@ onMounted(async () => {
     form.telefono_emergencia = conductor.telefono_emergencia ?? ''
     form.estado = conductor.estado ?? 'ACTIVO'
     form.disponibilidad = conductor.disponibilidad ?? 'FUERA_DE_SERVICIO'
+    form.id_despachador = conductor.id_despachador ?? ''
   } catch {
     error.value = 'No se pudo cargar el conductor.'
   } finally {
@@ -143,6 +167,26 @@ async function onSubmit() {
           </select>
           <span v-if="fieldErrors.estado" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.estado }}
+          </span>
+        </label>
+
+        <label v-if="requiereElegirDespachador" class="block">
+          <span class="mb-1 block text-sm font-medium text-heading">Despachador responsable</span>
+          <select
+            v-model="form.id_despachador"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          >
+            <option value="">Sin asignar</option>
+            <option
+              v-for="despachador in despachadoresActivos"
+              :key="despachador.id_despachador"
+              :value="despachador.id_despachador"
+            >
+              {{ despachador.nombre }}
+            </option>
+          </select>
+          <span v-if="fieldErrors.id_despachador" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.id_despachador }}
           </span>
         </label>
 

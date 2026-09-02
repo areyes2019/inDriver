@@ -30,6 +30,12 @@ class ConductorResource extends JsonResource
             'telefono_emergencia' => $this->telefono_emergencia,
             'estado' => $this->estado,
             'disponibilidad' => $this->disponibilidad,
+            'id_despachador' => $this->id_despachador,
+            'despachador' => $this->whenLoaded('despachador', fn () => $this->despachador ? [
+                'id_despachador' => $this->despachador->id_despachador,
+                'nombre' => $this->despachador->usuario->nombre,
+                'apellido_paterno' => $this->despachador->usuario->apellido_paterno,
+            ] : null),
             'created_at' => $this->created_at,
         ];
     }

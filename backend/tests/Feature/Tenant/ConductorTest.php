@@ -3,6 +3,8 @@
 use App\Models\Tenant;
 use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\Conductor;
+use App\Models\Tenant\ConfiguracionTenant;
+use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Usuario;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -59,6 +61,32 @@ function conductorAdminUsuario(Tenant $tenant, array $overrides = []): Usuario
     tenancy()->end();
 
     return $usuario;
+}
+
+function conductorHabilitarDespachadores(Tenant $tenant): void
+{
+    tenancy()->initialize($tenant);
+    ConfiguracionTenant::establecer(ConfiguracionTenant::USAR_DESPACHADORES, 'Sí');
+    tenancy()->end();
+}
+
+function conductorCrearDespachador(Tenant $tenant, array $overrides = []): Despachador
+{
+    tenancy()->initialize($tenant);
+
+    $usuario = Usuario::create(array_merge([
+        'nombre' => 'Pedro',
+        'apellido_paterno' => 'Ruiz',
+        'email' => 'pedro'.uniqid().'@cafeluna.com',
+        'password' => bcrypt('Password123!'),
+        'rol' => 'Despachador',
+        'estado' => 'Activo',
+    ], $overrides));
+
+    $despachador = Despachador::create(['id_usuario' => $usuario->id_usuario, 'estado' => 'Activo']);
+    tenancy()->end();
+
+    return $despachador;
 }
 
 it('rejects listing conductores without a session', function () {
@@ -268,4 +296,121 @@ it('rejects updating a conductor with an estado outside the enum', function () {
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['estado']);
+});
+
+it('does not require id_despachador when the tenant does not use despachadores', function () {
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    tenancy()->end();
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/conductores', [
+            'id_usuario' => $usuarioPedro->id_usuario,
+            'numero_licencia' => 'ABC123',
+        ])
+        ->assertCreated();
+
+    expect($response->json('id_despachador'))->toBeNull();
+});
+
+it('auto-assigns a new conductor to the sole despachador Activo when the tenant uses despachadores', function () {
+    $tenant = conductorTenant();
+    conductorHabilitarDespachadores($tenant);
+    $admin = conductorAdminUsuario($tenant);
+    $despachador = conductorCrearDespachador($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Ana', 'apellido_paterno' => 'Gómez', 'email' => 'ana@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    tenancy()->end();
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/conductores', [
+            'id_usuario' => $usuarioPedro->id_usuario,
+            'numero_licencia' => 'ABC123',
+        ])
+        ->assertCreated();
+
+    expect($response->json('id_despachador'))->toBe($despachador->id_despachador);
+});
+
+it('requires id_despachador to create a conductor when there are 2+ despachadores Activo', function () {
+    $tenant = conductorTenant();
+    conductorHabilitarDespachadores($tenant);
+    $admin = conductorAdminUsuario($tenant);
+    conductorCrearDespachador($tenant, ['email' => 'd1@cafeluna.com']);
+    conductorCrearDespachador($tenant, ['email' => 'd2@cafeluna.com']);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Ana', 'apellido_paterno' => 'Gómez', 'email' => 'ana@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/conductores', [
+            'id_usuario' => $usuarioPedro->id_usuario,
+            'numero_licencia' => 'ABC123',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['id_despachador']);
+});
+
+it('creates a conductor with the chosen id_despachador when there are 2+ despachadores Activo', function () {
+    $tenant = conductorTenant();
+    conductorHabilitarDespachadores($tenant);
+    $admin = conductorAdminUsuario($tenant);
+    conductorCrearDespachador($tenant, ['email' => 'd1@cafeluna.com']);
+    $despachadorDos = conductorCrearDespachador($tenant, ['email' => 'd2@cafeluna.com']);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Ana', 'apellido_paterno' => 'Gómez', 'email' => 'ana@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    tenancy()->end();
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/conductores', [
+            'id_usuario' => $usuarioPedro->id_usuario,
+            'numero_licencia' => 'ABC123',
+            'id_despachador' => $despachadorDos->id_despachador,
+        ])
+        ->assertCreated();
+
+    expect($response->json('id_despachador'))->toBe($despachadorDos->id_despachador);
+});
+
+it('rejects a conductor without despachador when updated to ACTIVO with 2+ despachadores Activo', function () {
+    $tenant = conductorTenant();
+    conductorHabilitarDespachadores($tenant);
+    $admin = conductorAdminUsuario($tenant);
+    conductorCrearDespachador($tenant, ['email' => 'd1@cafeluna.com']);
+    conductorCrearDespachador($tenant, ['email' => 'd2@cafeluna.com']);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    $conductor = Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'INACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->putJson("/api/v1/t/cafe-luna/conductores/{$conductor->id_conductor}", [
+            'numero_licencia' => 'ABC123',
+            'estado' => 'ACTIVO',
+            'disponibilidad' => 'DISPONIBLE',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['id_despachador']);
 });

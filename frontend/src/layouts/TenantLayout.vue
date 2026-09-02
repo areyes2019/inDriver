@@ -24,7 +24,17 @@ const auth = useTenantAuthStore()
 const slug = computed(() => route.params.slug as string)
 const enPanel = computed(() => route.name === 'tenant-panel')
 const esDespachador = computed(() => auth.usuario?.rol === 'Despachador')
-const mostrarNuevaEntrega = computed(() => enPanel.value && esDespachador.value)
+const esAdminCliente = computed(() => auth.usuario?.rol === 'AdminCliente')
+const usaDespachadores = computed(() => auth.usuario?.usar_despachadores === 'Sí')
+// El rol "operativo" (el que crea pedidos y ve el Panel) depende de la configuración del tenant,
+// no solo del rol: Despachador cuando el tenant usa despachadores, AdminCliente cuando no
+// (spec tenant/011) — nunca ambos a la vez.
+const esOperativo = computed(
+  () =>
+    (esDespachador.value && usaDespachadores.value) ||
+    (esAdminCliente.value && !usaDespachadores.value),
+)
+const mostrarNuevaEntrega = computed(() => enPanel.value && esOperativo.value)
 
 const botonNuevaEntregaRef = ref<HTMLButtonElement>()
 
@@ -47,18 +57,31 @@ defineExpose({
 
 const items = computed(() => {
   if (esDespachador.value) {
-    return [{ label: 'Panel', to: `/t/${slug.value}/panel` }]
+    return esOperativo.value ? [{ label: 'Panel', to: `/t/${slug.value}/panel` }] : []
   }
 
-  return [
-    { label: 'Panel', to: `/t/${slug.value}/panel` },
+  const lista: Array<{ label: string; to: string }> = []
+
+  if (esOperativo.value) {
+    lista.push({ label: 'Panel', to: `/t/${slug.value}/panel` })
+  }
+
+  lista.push(
     { label: 'Clientes', to: `/t/${slug.value}/panel/clientes` },
     { label: 'Usuarios', to: `/t/${slug.value}/panel/usuarios` },
-    { label: 'Despachadores', to: `/t/${slug.value}/panel/despachadores` },
+  )
+
+  if (usaDespachadores.value) {
+    lista.push({ label: 'Despachadores', to: `/t/${slug.value}/panel/despachadores` })
+  }
+
+  lista.push(
     { label: 'Conductores', to: `/t/${slug.value}/panel/conductores` },
     { label: 'Vehículos', to: `/t/${slug.value}/panel/vehiculos` },
     { label: 'Asignaciones', to: `/t/${slug.value}/panel/asignaciones` },
-  ]
+  )
+
+  return lista
 })
 
 async function onLogout() {

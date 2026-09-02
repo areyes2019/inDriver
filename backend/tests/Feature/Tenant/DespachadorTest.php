@@ -2,6 +2,7 @@
 
 use App\Models\Tenant;
 use App\Models\Tenant\Auditoria;
+use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Usuario;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -61,6 +62,17 @@ function despachadorAdminUsuario(Tenant $tenant, array $overrides = []): Usuario
     return $usuario;
 }
 
+/**
+ * `GET /despachadores` y `PATCH .../estado` requieren `usar_despachadores = Sí`, además del rol
+ * `AdminCliente` (spec tenant/011).
+ */
+function despachadorHabilitar(Tenant $tenant): void
+{
+    tenancy()->initialize($tenant);
+    ConfiguracionTenant::establecer(ConfiguracionTenant::USAR_DESPACHADORES, 'Sí');
+    tenancy()->end();
+}
+
 it('rejects listing despachadores without a session', function () {
     despachadorTenant();
 
@@ -79,8 +91,18 @@ it('rejects despachadores access for a non-AdminCliente role', function () {
         ->assertForbidden();
 });
 
+it('rejects despachadores access for an AdminCliente when the tenant does not use despachadores', function () {
+    $tenant = despachadorTenant();
+    $admin = despachadorAdminUsuario($tenant);
+
+    $this->actingAs($admin, 'usuario')
+        ->getJson('/api/v1/t/cafe-luna/despachadores')
+        ->assertForbidden();
+});
+
 it('lists despachadores with their usuario data and filters by search', function () {
     $tenant = despachadorTenant();
+    despachadorHabilitar($tenant);
     $admin = despachadorAdminUsuario($tenant);
 
     tenancy()->initialize($tenant);
@@ -107,6 +129,7 @@ it('lists despachadores with their usuario data and filters by search', function
 
 it('changes despachador estado to a valid value and logs it', function () {
     $tenant = despachadorTenant();
+    despachadorHabilitar($tenant);
     $admin = despachadorAdminUsuario($tenant);
 
     tenancy()->initialize($tenant);
@@ -131,8 +154,35 @@ it('changes despachador estado to a valid value and logs it', function () {
     tenancy()->end();
 });
 
+it('lists only despachadores Activo on the activos endpoint', function () {
+    $tenant = despachadorTenant();
+    despachadorHabilitar($tenant);
+    $admin = despachadorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Despachador', 'estado' => 'Activo',
+    ]);
+    Despachador::create(['id_usuario' => $usuarioPedro->id_usuario, 'estado' => 'Activo']);
+
+    $usuarioAna = Usuario::create([
+        'nombre' => 'Ana', 'apellido_paterno' => 'Gómez', 'email' => 'ana@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Despachador', 'estado' => 'Activo',
+    ]);
+    Despachador::create(['id_usuario' => $usuarioAna->id_usuario, 'estado' => 'Inactivo']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->getJson('/api/v1/t/cafe-luna/despachadores/activos')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.nombre', 'Pedro Ruiz');
+});
+
 it('rejects changing despachador estado to a value outside the enum', function () {
     $tenant = despachadorTenant();
+    despachadorHabilitar($tenant);
     $admin = despachadorAdminUsuario($tenant);
 
     tenancy()->initialize($tenant);

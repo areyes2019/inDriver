@@ -50,9 +50,12 @@ const form = reactive({
   modalidad_conductores: 'Prepago' as 'Prepago' | 'Comision',
   costo_viaje_prepago: '0',
   comision_porcentaje: '0',
+  usar_despachadores: 'No' as 'Sí' | 'No',
 })
 
 const saldoTenant = ref(0)
+const valorOriginalUsarDespachadores = ref<'Sí' | 'No'>('No')
+const mostrarConfirmDesactivarDespachadores = ref(false)
 const fieldErrors = reactive<Record<string, string>>({})
 const errorConfig = ref('')
 const successConfig = ref('')
@@ -70,6 +73,8 @@ async function fetchConfiguracion() {
     form.modalidad_conductores = data.modalidad_conductores ?? 'Prepago'
     form.costo_viaje_prepago = data.costo_viaje_prepago ?? '0'
     form.comision_porcentaje = data.comision_porcentaje ?? '0'
+    form.usar_despachadores = data.usar_despachadores ?? 'No'
+    valorOriginalUsarDespachadores.value = form.usar_despachadores
     saldoTenant.value = data.saldo_viajes_tenant ?? 0
   } catch {
     errorConfig.value = 'No se pudo cargar la configuración.'
@@ -79,6 +84,25 @@ async function fetchConfiguracion() {
 }
 
 async function onSubmitConfiguracion() {
+  if (valorOriginalUsarDespachadores.value === 'Sí' && form.usar_despachadores === 'No') {
+    mostrarConfirmDesactivarDespachadores.value = true
+    return
+  }
+
+  await guardarConfiguracion()
+}
+
+async function confirmarDesactivarDespachadores() {
+  mostrarConfirmDesactivarDespachadores.value = false
+  await guardarConfiguracion()
+}
+
+function cancelarDesactivarDespachadores() {
+  mostrarConfirmDesactivarDespachadores.value = false
+  form.usar_despachadores = valorOriginalUsarDespachadores.value
+}
+
+async function guardarConfiguracion() {
   errorConfig.value = ''
   successConfig.value = ''
   Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key])
@@ -87,6 +111,7 @@ async function onSubmitConfiguracion() {
   try {
     const { data } = await http.put(`/t/${slug.value}/configuracion`, form)
     saldoTenant.value = data.saldo_viajes_tenant ?? saldoTenant.value
+    valorOriginalUsarDespachadores.value = data.usar_despachadores ?? form.usar_despachadores
     successConfig.value = 'Configuración guardada correctamente.'
   } catch (err) {
     if (axios.isAxiosError(err) && err.response?.status === 422) {
@@ -402,6 +427,20 @@ onBeforeUnmount(() => {
           class="max-w-lg space-y-5"
           @submit.prevent="onSubmitConfiguracion"
         >
+          <label class="block">
+            <span class="mb-1 block text-sm font-medium text-heading">¿Utilizar despachadores?</span>
+            <select
+              v-model="form.usar_despachadores"
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+            >
+              <option value="No">No — yo administro directamente conductores y pedidos</option>
+              <option value="Sí">Sí — mi flotilla trabaja con despachadores</option>
+            </select>
+            <span v-if="fieldErrors.usar_despachadores" class="mt-1 block text-sm text-red-600">
+              {{ fieldErrors.usar_despachadores }}
+            </span>
+          </label>
+
           <UiAlert variant="info">
             Saldo de viajes disponible del tenant: <strong>{{ saldoTenant }}</strong>
           </UiAlert>
@@ -668,6 +707,16 @@ onBeforeUnmount(() => {
       confirm-label="Eliminar"
       @confirm="confirmDeleteZona"
       @cancel="cancelDeleteZona"
+    />
+
+    <UiConfirmDialog
+      :open="mostrarConfirmDesactivarDespachadores"
+      title="Dejar de utilizar despachadores"
+      message="Al cambiar a 'No utilizar despachadores': todos los conductores pasarán a control directo tuyo; los despachadores existentes pasarán a estado Inactivo (no se eliminarán, sus usuarios conservan su acceso); el menú 'Despachadores' dejará de mostrarse y el Panel quedará disponible para ti. ¿Confirmas el cambio?"
+      confirm-label="Sí, dejar de utilizar despachadores"
+      cancel-label="Cancelar"
+      @confirm="confirmarDesactivarDespachadores"
+      @cancel="cancelarDesactivarDespachadores"
     />
   </TenantLayout>
 </template>

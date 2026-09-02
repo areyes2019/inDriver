@@ -68,6 +68,7 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::put('/usuarios/{id}', [UsuarioController::class, 'update']);
             Route::delete('/usuarios/{id}', [UsuarioController::class, 'destroy']);
 
+            Route::get('/despachadores/activos', [DespachadorController::class, 'activos']);
             Route::get('/despachadores', [DespachadorController::class, 'index']);
             Route::patch('/despachadores/{despachador}/estado', [DespachadorController::class, 'cambiarEstado']);
 
@@ -107,11 +108,8 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::delete('/zonas-cobertura/{zona}', [ZonaCoberturaController::class, 'destroy']);
         });
 
-        Route::middleware(['throttle:tenant-usuarios', 'rol.tenant:Despachador'])->group(function () {
-            Route::post('/pedidos', [PedidoController::class, 'store']);
-        });
-
         Route::middleware(['throttle:tenant-usuarios', 'rol.tenant:AdminCliente,Despachador'])->group(function () {
+            Route::post('/pedidos', [PedidoController::class, 'store']);
             Route::get('/pedidos', [PedidoController::class, 'index']);
             Route::get('/pedidos/{pedido}', [PedidoController::class, 'show']);
             Route::put('/pedidos/{pedido}', [PedidoController::class, 'update']);
