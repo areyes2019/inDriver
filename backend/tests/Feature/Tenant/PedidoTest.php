@@ -157,6 +157,16 @@ it('creates a pedido without fecha_servicio when lo_antes_posible is true, defau
     expect($response->json('fecha_servicio'))->toBe(now()->toDateString());
 });
 
+it('rejects creating a pedido without importe_envio', function () {
+    $tenant = pedidoTenant();
+    $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);
+
+    $this->actingAs($despachador, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos(['importe_envio' => null]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['importe_envio']);
+});
+
 it('forces importe_cobro to zero when modalidad_pago does not involve producto', function () {
     $tenant = pedidoTenant();
     $despachador = pedidoUsuario($tenant, ['email' => 'd@cafeluna.com', 'rol' => 'Despachador']);

@@ -203,7 +203,7 @@ class PedidoController extends Controller
                 'REMITENTE_PAGA_ENVIO',
                 'RECEPTOR_PAGA_ENVIO_PRODUCTOS',
             ])],
-            'importe_envio' => ['nullable', 'numeric', 'min:0'],
+            'importe_envio' => ['required', 'numeric', 'min:0'],
             'importe_cobro' => ['nullable', 'numeric', 'min:0'],
             'id_despachador' => ['nullable', 'integer', 'exists:despachadores,id_despachador'],
             'id_conductor' => ['nullable', 'integer', 'exists:conductores,id_conductor'],
@@ -234,7 +234,6 @@ class PedidoController extends Controller
 
         $data['lo_antes_posible'] = $loAntesPosible;
         $data['fecha_servicio'] = $data['fecha_servicio'] ?? now()->toDateString();
-        $data['importe_envio'] = $data['importe_envio'] ?? 0;
         $data['importe_cobro'] = $data['modalidad_pago'] === 'RECEPTOR_PAGA_ENVIO_PRODUCTOS'
             ? ($data['importe_cobro'] ?? 0)
             : 0;

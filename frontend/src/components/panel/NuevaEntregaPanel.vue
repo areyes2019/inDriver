@@ -22,7 +22,6 @@ interface NuevaEntregaForm {
   hora_desde: string
   hora_hasta: string
   modalidad_pago: ModalidadPago
-  importe_envio: string
   importe_cobro: string
 }
 
@@ -69,7 +68,6 @@ function formInicial(): NuevaEntregaForm {
     hora_desde: '',
     hora_hasta: '',
     modalidad_pago: 'RECEPTOR_PAGA_ENVIO',
-    importe_envio: '0',
     importe_cobro: '0',
   }
 }
@@ -223,9 +221,17 @@ async function onSubmit() {
     }
   }
 
+  if (totalViaje.value === null) {
+    error.value = 'Resuelve ambas direcciones para calcular el importe de envío.'
+    return
+  }
+
   loading.value = true
   try {
-    await http.post(`/t/${slug}/pedidos`, { ...form })
+    await http.post(`/t/${slug}/pedidos`, {
+      ...form,
+      importe_envio: totalViaje.value.toFixed(2),
+    })
     limpiarFormulario()
     emit('agendado')
   } catch (err) {
@@ -378,34 +384,19 @@ async function onSubmit() {
         </span>
       </label>
 
-      <div class="grid grid-cols-1 gap-4">
-        <label class="block">
-          <span class="mb-1 block text-sm font-medium text-heading">Importe de envío</span>
-          <input
-            v-model="form.importe_envio"
-            type="number"
-            step="0.01"
-            min="0"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-          />
-          <span v-if="fieldErrors.importe_envio" class="mt-1 block text-sm text-red-600">
-            {{ fieldErrors.importe_envio }}
-          </span>
-        </label>
-        <label v-if="form.modalidad_pago === 'RECEPTOR_PAGA_ENVIO_PRODUCTOS'" class="block">
-          <span class="mb-1 block text-sm font-medium text-heading">Importe de cobro</span>
-          <input
-            v-model="form.importe_cobro"
-            type="number"
-            step="0.01"
-            min="0"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-          />
-          <span v-if="fieldErrors.importe_cobro" class="mt-1 block text-sm text-red-600">
-            {{ fieldErrors.importe_cobro }}
-          </span>
-        </label>
-      </div>
+      <label v-if="form.modalidad_pago === 'RECEPTOR_PAGA_ENVIO_PRODUCTOS'" class="block">
+        <span class="mb-1 block text-sm font-medium text-heading">Importe de cobro</span>
+        <input
+          v-model="form.importe_cobro"
+          type="number"
+          step="0.01"
+          min="0"
+          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+        />
+        <span v-if="fieldErrors.importe_cobro" class="mt-1 block text-sm text-red-600">
+          {{ fieldErrors.importe_cobro }}
+        </span>
+      </label>
 
       <div
         v-if="totalViaje !== null"
@@ -413,14 +404,20 @@ async function onSubmit() {
       >
         <span class="block text-sm font-medium text-heading">Total del viaje</span>
         <span class="block text-lg font-semibold text-heading">$ {{ totalViaje.toFixed(2) }}</span>
+        <span v-if="fieldErrors.importe_envio" class="mt-1 block text-sm text-red-600">
+          {{ fieldErrors.importe_envio }}
+        </span>
       </div>
+      <p v-else class="text-sm text-body">
+        Resuelve ambas direcciones para calcular el importe de envío.
+      </p>
 
       <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
 
       <div class="flex flex-wrap gap-3 border-t border-gray-100 pt-4">
         <button
           type="submit"
-          :disabled="loading"
+          :disabled="loading || totalViaje === null"
           class="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
         >
           Agendar

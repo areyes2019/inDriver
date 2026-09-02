@@ -17,8 +17,9 @@
 > teléfono del solicitante pasan a una sola fila; ambos campos de dirección (recogida y entrega)
 > muestran un indicador de "ubicación encontrada"; la fecha de servicio deja de ser obligatoria
 > cuando "lo antes posible" está marcado; el campo de importe de cobro se oculta según la modalidad
-> de pago; y se agrega un "total del viaje" visible en el formulario, calculado con las tarifas ya
-> configurables (spec 015). Sigue sin haber listado ni edición de pedidos vía UI propia.
+> de pago; y desaparece el campo manual "Importe de envío" — se reemplaza por el "total del viaje",
+> calculado con las tarifas ya configurables (spec 015), que ahora sí viaja en el `POST /pedidos` y
+> se guarda como `importe_envio`. Sigue sin haber listado ni edición de pedidos vía UI propia.
 
 ## Historia de usuario
 
@@ -69,12 +70,14 @@ Deja funcionando:
      ambas horas (desde/hasta) son obligatorias, con "hasta" posterior a "desde" (misma validación
      ya existente).
   5. **Modalidad de pago** (selector de 3 botones, sin cambios en esta ronda).
-  6. **Importe de envío**, siempre visible; **importe de cobro**, visible solo cuando la modalidad
-     de pago es "Receptor paga envío + producto" (ver "Importe de cobro condicionado a la
-     modalidad").
-  7. **Total del viaje**: bloque informativo, visible cuando ambas direcciones están resueltas,
-     calculado a partir de la distancia entre recogida y entrega y las tarifas configuradas por el
-     tenant (ver "Cálculo del total del viaje").
+  6. **Importe de cobro**, visible solo cuando la modalidad de pago es "Receptor paga envío +
+     producto" (ver "Importe de cobro condicionado a la modalidad"). Ya no hay un campo manual de
+     "Importe de envío": ese monto lo aporta el bloque de "Total del viaje" (punto siguiente).
+  7. **Total del viaje / Importe de envío**: bloque calculado a partir de la distancia entre
+     recogida y entrega y las tarifas configuradas por el tenant (ver "Cálculo del total del
+     viaje"), visible solo cuando ambas direcciones están resueltas. Es el valor que viaja como
+     `importe_envio` en el `POST /pedidos` — mientras no haya una distancia calculada (alguna
+     dirección sin resolver), no hay `importe_envio` que enviar y "Agendar" queda deshabilitado.
   8. Botón "Agendar".
 - Las direcciones se capturan con `UiAddressAutocomplete` y se muestran en un mapa de vista previa
   (`UiVistaPreviaRuta`), pero **las coordenadas nunca se envían ni se guardan** — ver "Por qué se
@@ -91,8 +94,9 @@ Deja funcionando:
   cálculo del total del viaje usa la distancia solo en memoria, no las columnas eliminadas).
 - Buscador dentro del select de cliente frecuente: carga la lista completa de clientes activos, sin
   campo de búsqueda ni paginado en el frontend.
-- Guardar el total del viaje calculado como parte del pedido: es solo informativo en el formulario,
-  no viaja en el `POST /pedidos` ni se agrega una columna nueva a `pedidos`.
+- Agregar una columna nueva a `pedidos` para el total del viaje: se guarda usando la columna
+  `importe_envio` que ya existía (ver "Cálculo del total del viaje, y por qué reemplaza al campo
+  manual de importe de envío").
 - Tratamiento específico para pantallas angostas (mobile) en el layout general del panel deslizante
   — mismo límite conocido que el resto del Panel de Despachador (`ServiciosEnTurno` tampoco lo
   tiene). El selector de modalidad de pago y la fila de nombre/teléfono son las únicas piezas de
@@ -260,13 +264,15 @@ envío. Por eso:
   `RECEPTOR_PAGA_ENVIO_PRODUCTOS`, sin importar qué valor haya llegado en el payload — regla de
   negocio en el servidor, no solo una cuestión de qué campo se muestra en la UI.
 
-### Cálculo del total del viaje
+### Cálculo del total del viaje, y por qué reemplaza al campo manual de importe de envío
 
-El "total del viaje" se muestra como información visible en el formulario, para que el despachador
-lo comunique al solicitante antes de agendar. Fórmula:
+El "total del viaje" ya no es solo informativo: es el valor de `importe_envio` del pedido. Como el
+sistema puede calcularlo automáticamente a partir de la distancia real y las tarifas del tenant, ya
+no tiene sentido pedirle al despachador que lo teclee a mano — el campo "Importe de envío" (input
+libre) desaparece del formulario. Fórmula:
 
 ```
-total_viaje = tarifa_banderazo + (distancia_km × tarifa_km_adicional)
+importe_envio = tarifa_banderazo + (distancia_km × tarifa_km_adicional)
 ```
 
 - `tarifa_banderazo` y `tarifa_km_adicional` son las dos tarifas globales del tenant, ya
@@ -283,11 +289,15 @@ total_viaje = tarifa_banderazo + (distancia_km × tarifa_km_adicional)
 - Igual que `GET /clientes`, `GET /configuracion` hoy solo es accesible para `AdminCliente`: se le
   agrega el rol `Despachador` únicamente al `GET` (lectura), no al `PUT` de edición de tarifas, que
   sigue siendo exclusivo de `AdminCliente`.
-- El bloque de total solo aparece cuando hay una distancia numérica disponible (ambas direcciones
-  resueltas); mientras falte alguna, no se muestra ni bloquea el formulario — no es un campo
-  obligatorio, es información derivada.
-- El total **no se envía** en el `POST /pedidos` ni se persiste: es una vista, no una regla de
-  negocio guardada. Recalcularlo después (para reportes, por ejemplo) queda fuera de esta spec.
+- El bloque solo aparece cuando hay una distancia numérica disponible (ambas direcciones
+  resueltas). Mientras falte alguna, no hay `importe_envio` calculado que enviar: el botón "Agendar"
+  queda deshabilitado hasta que ambas direcciones estén resueltas. Ya no existe un valor manual de
+  respaldo para esos casos.
+- El total **sí viaja** en el `POST /pedidos` como `importe_envio` y se persiste en la columna que
+  ya existía en `pedidos` para ese campo (no se agrega columna nueva). El despachador ya no puede
+  sobrescribir manualmente ese monto — queda 100% determinado por la fórmula. El cálculo se hace en
+  el frontend; el backend lo recibe y guarda tal cual, sin recalcular la fórmula del lado del
+  servidor.
 
 ### Comunicación por props/emits, no por estado compartido en un módulo aparte
 
@@ -344,9 +354,11 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
 - `modalidad_pago` fija los tres casos de pago documentados
   (`RECEPTOR_PAGA_ENVIO`, `REMITENTE_PAGA_ENVIO`, `RECEPTOR_PAGA_ENVIO_PRODUCTOS`), capturados con
   el selector de botones descrito arriba.
-- `importe_envio` es numérico ≥ 0, con default `0` si no llega. `importe_cobro` también es numérico
-  ≥ 0 con default `0`, pero además el backend lo fuerza a `0` cuando `modalidad_pago` no es
-  `RECEPTOR_PAGA_ENVIO_PRODUCTOS` (ver "Importe de cobro condicionado a la modalidad").
+- `importe_envio` es numérico ≥ 0 y **obligatorio**: ya no tiene un default `0` de respaldo, porque
+  siempre llega calculado desde el frontend (ver "Cálculo del total del viaje, y por qué reemplaza
+  al campo manual de importe de envío"). `importe_cobro` sigue siendo numérico ≥ 0 con default `0`,
+  y el backend lo fuerza a `0` cuando `modalidad_pago` no es `RECEPTOR_PAGA_ENVIO_PRODUCTOS` (ver
+  "Importe de cobro condicionado a la modalidad").
 - `fecha_servicio` es obligatoria solo si `lo_antes_posible = false`; si es `true`, el backend la
   completa con la fecha del día si no llega ninguna.
 - `id_despachador`/`id_conductor`/`id_vehiculo` son opcionales en todo momento — no se capturan en
@@ -369,10 +381,12 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
   - `store(Request $request)` / `validarDatos()`: `fecha_servicio` pasa de `required` fijo a
     validación manual (mismo patrón que las horas): obligatoria solo si `lo_antes_posible` es
     `false`; si es `true` y no llega, se completa con `now()->toDateString()` antes de guardar.
-    `importe_cobro` se fuerza a `0` cuando `modalidad_pago` no es `RECEPTOR_PAGA_ENVIO_PRODUCTOS`,
-    sin importar qué llegue en el payload. `id_cliente` sigue validándose igual
-    (`nullable|integer|exists:clientes,id_cliente`). Sigue siendo el único método consumido por el
-    frontend de esta spec (`NuevaEntregaPanel.vue`).
+    `importe_envio` pasa de `numeric|min:0` con default `0` a `required|numeric|min:0`: ya no hay
+    campo manual en el frontend que pueda dejarlo vacío, así que si no llega se rechaza con `422` en
+    vez de asumir `0`. `importe_cobro` se fuerza a `0` cuando `modalidad_pago` no es
+    `RECEPTOR_PAGA_ENVIO_PRODUCTOS`, sin importar qué llegue en el payload. `id_cliente` sigue
+    validándose igual (`nullable|integer|exists:clientes,id_cliente`). Sigue siendo el único método
+    consumido por el frontend de esta spec (`NuevaEntregaPanel.vue`).
   - `index(Request $request)`, `show(Pedido $pedido)`, `update(Request $request, Pedido $pedido)`,
     `cambiarEstado(Request $request, Pedido $pedido)`: sin cambios, se conservan como capacidad de
     API sin consumidor propio en esta spec.
@@ -451,15 +465,22 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
     `grid grid-cols-1 sm:grid-cols-2 gap-4`.
   - `fecha_servicio`: el `<input type="date">` deja el atributo `required` fijo; se envuelve en
     `v-if="!form.lo_antes_posible"`, igual que ya pasa con las horas.
+  - Se elimina el `<input>` manual de "Importe de envío": ese campo deja de existir en el
+    formulario y en el objeto `form`.
   - `importe_cobro`: se envuelve en
     `v-if="form.modalidad_pago === 'RECEPTOR_PAGA_ENVIO_PRODUCTOS'"`; al ocultarse, su valor vuelve
     a `'0'`.
-  - Nuevo bloque "Total del viaje" después de importe de envío/cobro: se calcula en el propio
-    componente (sin store ni composable con estado compartido) a partir de `distanceKm` (obtenido de
-    `UiVistaPreviaRuta`/`drawRoute` cuando ambas direcciones están resueltas) y las tarifas leídas de
-    `GET /configuracion` al montar. Solo se muestra cuando hay `distanceKm` disponible.
-  - Sigue recibiendo `abierto` por prop, haciendo `POST /pedidos` al agendar (el payload sigue sin
-    incluir el total calculado ni coordenadas) y emitiendo `agendado`/`cerrar`.
+  - Nuevo bloque "Total del viaje" (reemplaza al antiguo input de importe de envío): se calcula en
+    el propio componente (sin store ni composable con estado compartido) a partir de `distanceKm`
+    (obtenido de `UiVistaPreviaRuta`/`drawRoute` cuando ambas direcciones están resueltas) y las
+    tarifas leídas de `GET /configuracion` al montar. Solo se muestra cuando hay `distanceKm`
+    disponible, y su valor alimenta directamente `form.importe_envio` (se recalcula cada vez que
+    cambia `distanceKm`).
+  - El botón "Agendar" se deshabilita (con mensaje explicativo) mientras `distanceKm` no esté
+    disponible, ya que sin él no hay `importe_envio` calculado que enviar.
+  - Sigue recibiendo `abierto` por prop, haciendo `POST /pedidos` al agendar (el payload ahora sí
+    incluye `importe_envio` con el total calculado; las coordenadas siguen sin viajar) y emitiendo
+    `agendado`/`cerrar`.
 - **No existen** `ListaPedidosView.vue`, `CrearPedidoView.vue` ni `EditarPedidoView.vue`, ni las
   rutas `/t/:slug/panel/pedidos`, `/t/:slug/panel/pedidos/crear`, `/t/:slug/panel/pedidos/:id/editar`,
   ni un ítem "Pedidos" en el menú lateral de `TenantLayout.vue`.
@@ -480,8 +501,9 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
   activos.
 - Elegir manualmente entre varias direcciones guardadas de un cliente cuando tiene más de una — solo
   se autocompleta cuando hay exactamente una.
-- Persistir el "total del viaje" calculado, o cualquier campo de distancia, en el pedido — es
-  información derivada, solo visible en el formulario.
+- Persistir cualquier campo de distancia (`distancia_km`) en el pedido — solo `importe_envio` (el
+  resultado del cálculo) se guarda; la distancia en sí sigue siendo solo un valor en memoria del
+  frontend.
 - Umbral de kilómetros incluidos en la tarifa de banderazo — la tarifa por kilómetro adicional se
   aplica sobre toda la distancia del trayecto.
 - Gestión de clientes o de sus direcciones desde el panel de Despachador — el nuevo acceso es de
@@ -545,15 +567,20 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
     + producto"; al cambiar a cualquiera de las otras dos modalidades, el campo se oculta.
 21. Cuando ambas direcciones están resueltas, se muestra un bloque "Total del viaje" con el importe
     calculado (`tarifa_banderazo + distancia_km × tarifa_km_adicional`, usando las tarifas
-    configuradas del tenant); mientras falte alguna dirección, el bloque no se muestra y el
-    formulario no se bloquea por eso.
-22. El formulario no muestra ni envía campos de latitud/longitud ni el total del viaje calculado;
-    `UiVistaPreviaRuta` sigue funcionando con coordenadas obtenidas solo del autocompletado o de una
-    dirección guardada del cliente, sin persistirlas.
-23. "Agendar" con horario fijo y sin ambas horas, o sin fecha, o con "hasta" antes de "desde",
-    muestra un error y no cierra el panel; con datos válidos, crea el pedido vía `POST /pedidos`,
-    limpia el formulario y cierra el panel.
-24. Pint y ESLint/Prettier corren sin errores; `php artisan test` pasa.
+    configuradas del tenant), y ese valor es el que viaja como `importe_envio` en el `POST
+    /pedidos`; mientras falte alguna dirección, el bloque no se muestra y el botón "Agendar" queda
+    deshabilitado, porque no hay `importe_envio` que enviar.
+22. El formulario no muestra ni envía campos de latitud/longitud; ya no existe un campo manual de
+    "Importe de envío" — `UiVistaPreviaRuta` sigue funcionando con coordenadas obtenidas solo del
+    autocompletado o de una dirección guardada del cliente, sin persistirlas.
+23. `POST` sin `importe_envio` en el payload responde `422`.
+24. `POST` con datos válidos guarda `importe_envio` con el mismo valor numérico que mostraba el
+    bloque "Total del viaje" al momento de agendar.
+25. "Agendar" con horario fijo y sin ambas horas, o sin fecha, o con "hasta" antes de "desde",
+    muestra un error y no cierra el panel; con alguna dirección sin resolver (sin `distanceKm`, y
+    por lo tanto sin `importe_envio` calculado), el botón "Agendar" está deshabilitado; con datos
+    válidos, crea el pedido vía `POST /pedidos`, limpia el formulario y cierra el panel.
+26. Pint y ESLint/Prettier corren sin errores; `php artisan test` pasa.
 
 ## Supuestos asumidos (registro completo)
 
@@ -618,6 +645,8 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
     sin umbral de kilómetros incluidos, usando las tarifas configurables de la spec 015 (que esa
     spec dejó explícitamente sin aplicar) y la distancia numérica entre recogida y entrega obtenida
     de Google Directions API (se extiende `RouteResult`/`GoogleProvider` para exponer `distanceKm`
-    además del texto ya existente). Es puramente informativo: no se envía en el `POST /pedidos` ni
-    se persiste, y no requiere ninguna migración nueva.
+    además del texto ya existente). Ya no es puramente informativo: es el valor que se envía como
+    `importe_envio` en el `POST /pedidos` y se persiste en la columna que ya existía para ese campo
+    (no requiere ninguna migración nueva). El campo manual de "Importe de envío" desaparece del
+    formulario, y "Agendar" queda deshabilitado mientras el cálculo no esté disponible.
 </content>
