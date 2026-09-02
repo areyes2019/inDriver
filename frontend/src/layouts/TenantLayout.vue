@@ -67,18 +67,15 @@ async function onLogout() {
 }
 
 function onClickConfiguracion() {
-  router.push({ name: 'tenant-configuracion', params: { slug: slug.value } })
+  const name =
+    auth.usuario?.rol === 'AdminCliente' ? 'tenant-configuracion' : 'tenant-cambiar-password'
+  router.push({ name, params: { slug: slug.value } })
 }
 </script>
 
 <template>
   <div class="min-h-screen bg-black/[0.03]">
-    <UiNavbar
-      logo-text="inDriver"
-      :items="items"
-      :mostrar-configuracion="auth.usuario?.rol === 'AdminCliente'"
-      @click-configuracion="onClickConfiguracion"
-    >
+    <UiNavbar logo-text="inDriver" :items="items" @click-configuracion="onClickConfiguracion">
       <template #actions>
         <button
           v-if="mostrarNuevaEntrega"

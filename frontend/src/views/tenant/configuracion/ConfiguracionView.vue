@@ -9,6 +9,7 @@ import UiCard from '@/components/ui/UiCard.vue'
 import UiAlert from '@/components/ui/UiAlert.vue'
 import UiBadge from '@/components/ui/UiBadge.vue'
 import UiConfirmDialog from '@/components/ui/UiConfirmDialog.vue'
+import CambiarPasswordForm from '@/components/tenant/CambiarPasswordForm.vue'
 import mapService from '@/services/maps/MapService'
 import type { LatLngLike } from '@/services/maps/types'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
@@ -32,12 +33,13 @@ function puntosCiudadesTenant() {
   }))
 }
 
-type Pestana = 'tarifas' | 'comision' | 'zonas'
+type Pestana = 'tarifas' | 'comision' | 'zonas' | 'cuenta'
 const pestanaActiva = ref<Pestana>('tarifas')
 const pestanas: Array<{ id: Pestana; label: string }> = [
   { id: 'tarifas', label: 'Tarifas' },
   { id: 'comision', label: 'Comisión / Prepago' },
   { id: 'zonas', label: 'Zonas de cobertura' },
+  { id: 'cuenta', label: 'Mi cuenta' },
 ]
 
 // --- Tarifas + Comisión/Prepago ---
@@ -463,7 +465,7 @@ onBeforeUnmount(() => {
           </div>
         </form>
 
-        <div v-else>
+        <div v-else-if="pestanaActiva === 'zonas'">
           <UiAlert v-if="!mapService.hasApiKey()" variant="warning" class="mb-4">
             Configura <code>VITE_GOOGLE_MAPS_API_KEY</code> para poder dibujar la geocerca de cada
             zona sobre un mapa. Mientras tanto puedes administrar nombre y estado.
@@ -651,6 +653,10 @@ onBeforeUnmount(() => {
               </tbody>
             </table>
           </div>
+        </div>
+
+        <div v-else>
+          <CambiarPasswordForm :slug="slug" />
         </div>
       </template>
     </UiCard>

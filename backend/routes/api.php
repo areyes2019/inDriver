@@ -59,6 +59,7 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
     Route::middleware('auth:usuario')->group(function () {
         Route::post('/logout', [TenantAuthController::class, 'logout']);
         Route::get('/me', [TenantAuthController::class, 'me']);
+        Route::middleware('throttle:tenant-usuarios')->post('/cambiar-password', [TenantAuthController::class, 'changePassword']);
 
         Route::middleware(['throttle:tenant-usuarios', 'rol.tenant:AdminCliente'])->group(function () {
             Route::get('/usuarios', [UsuarioController::class, 'index']);

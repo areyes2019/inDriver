@@ -33,6 +33,12 @@ interface ResetPasswordPayload {
   password_confirmation: string
 }
 
+interface ChangePasswordPayload {
+  password_actual: string
+  password: string
+  password_confirmation: string
+}
+
 export const useTenantAuthStore = defineStore('tenantAuth', () => {
   const usuario = ref<UsuarioTenant | null>(null)
   const checked = ref(false)
@@ -80,6 +86,13 @@ export const useTenantAuthStore = defineStore('tenantAuth', () => {
     await http.post(`/t/${currentSlug}/reset-password`, payload)
   }
 
+  async function changePassword(
+    currentSlug: string,
+    payload: ChangePasswordPayload,
+  ): Promise<void> {
+    await http.post(`/t/${currentSlug}/cambiar-password`, payload)
+  }
+
   return {
     usuario,
     checked,
@@ -90,5 +103,6 @@ export const useTenantAuthStore = defineStore('tenantAuth', () => {
     logout,
     forgotPassword,
     resetPassword,
+    changePassword,
   }
 })

@@ -199,3 +199,66 @@ it('resets the password with a valid token and allows login with the new one', f
         'password' => 'NuevaPassword123!',
     ])->assertOk();
 });
+
+it('rejects /cambiar-password without a session', function () {
+    makeTestTenant();
+
+    $this->postJson('/api/v1/t/cafe-luna/cambiar-password', [
+        'password_actual' => 'Password123!',
+        'password' => 'NuevaPassword123!',
+        'password_confirmation' => 'NuevaPassword123!',
+    ])->assertUnauthorized();
+});
+
+it('rejects changing the password with an incorrect current password', function () {
+    $tenant = makeTestTenant();
+    $usuario = makeTenantUsuario($tenant);
+
+    $this->actingAs($usuario, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/cambiar-password', [
+            'password_actual' => 'incorrecta',
+            'password' => 'NuevaPassword123!',
+            'password_confirmation' => 'NuevaPassword123!',
+        ])->assertUnprocessable()->assertJsonValidationErrors('password_actual');
+
+    $this->postJson('/api/v1/t/cafe-luna/login', [
+        'email' => $usuario->email,
+        'password' => 'Password123!',
+    ])->assertOk();
+});
+
+it('changes the own password, keeps the session, and allows login with the new password', function () {
+    $tenant = makeTestTenant();
+    $usuario = makeTenantUsuario($tenant);
+
+    $this->actingAs($usuario, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/cambiar-password', [
+            'password_actual' => 'Password123!',
+            'password' => 'NuevaPassword123!',
+            'password_confirmation' => 'NuevaPassword123!',
+        ])->assertOk();
+
+    $this->assertAuthenticated('usuario');
+
+    $this->postJson('/api/v1/t/cafe-luna/login', [
+        'email' => $usuario->email,
+        'password' => 'NuevaPassword123!',
+    ])->assertOk();
+});
+
+it('applies to a Despachador the same as an AdminCliente', function () {
+    $tenant = makeTestTenant();
+    $usuario = makeTenantUsuario($tenant, ['rol' => 'Despachador', 'email' => 'despachador@cafeluna.com']);
+
+    $this->actingAs($usuario, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/cambiar-password', [
+            'password_actual' => 'Password123!',
+            'password' => 'NuevaPassword123!',
+            'password_confirmation' => 'NuevaPassword123!',
+        ])->assertOk();
+
+    $this->postJson('/api/v1/t/cafe-luna/login', [
+        'email' => $usuario->email,
+        'password' => 'NuevaPassword123!',
+    ])->assertOk();
+});

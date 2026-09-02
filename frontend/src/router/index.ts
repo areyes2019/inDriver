@@ -228,6 +228,12 @@ const router = createRouter({
       component: () => import('../views/tenant/configuracion/ConfiguracionView.vue'),
       meta: { requiresTenantAuth: true },
     },
+    {
+      path: '/t/:slug/panel/cambiar-password',
+      name: 'tenant-cambiar-password',
+      component: () => import('../views/tenant/cuenta/CambiarPasswordView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
   ],
 })
 

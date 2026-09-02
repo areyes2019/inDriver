@@ -94,6 +94,26 @@ class AuthController extends Controller
         return response()->json(['message' => __($status)]);
     }
 
+    public function changePassword(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'password_actual' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $usuario = $request->user('usuario');
+
+        if (! Hash::check($data['password_actual'], $usuario->password)) {
+            throw ValidationException::withMessages([
+                'password_actual' => 'La contraseña actual no es correcta.',
+            ]);
+        }
+
+        $usuario->forceFill(['password' => Hash::make($data['password'])])->save();
+
+        return response()->json(['message' => 'Contraseña actualizada correctamente.']);
+    }
+
     /**
      * Además de los datos propios del usuario (incluida `ciudades`, lo que este usuario tiene
      * asignado si es AdminCliente), agrega `ciudades_tenant`: la unión de las ciudades asignadas a
