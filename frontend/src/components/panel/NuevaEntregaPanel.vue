@@ -137,15 +137,18 @@ async function onClienteChange() {
 
 const tarifaBanderazo = ref(0)
 const tarifaKmAdicional = ref(0)
+const tarifasConfiguradas = ref(false)
 
 async function cargarConfiguracion() {
   try {
     const { data } = await http.get(`/t/${slug}/configuracion`)
     tarifaBanderazo.value = Number(data.tarifa_banderazo) || 0
     tarifaKmAdicional.value = Number(data.tarifa_km_adicional) || 0
+    tarifasConfiguradas.value = Boolean(data.tarifas_configuradas)
   } catch {
     tarifaBanderazo.value = 0
     tarifaKmAdicional.value = 0
+    tarifasConfiguradas.value = false
   }
 }
 
@@ -156,7 +159,7 @@ function onDistancia(km: number | null) {
 }
 
 const totalViaje = computed(() => {
-  if (distanciaKm.value === null) return null
+  if (!tarifasConfiguradas.value || distanciaKm.value === null) return null
   return tarifaBanderazo.value + distanciaKm.value * tarifaKmAdicional.value
 })
 
@@ -222,7 +225,9 @@ async function onSubmit() {
   }
 
   if (totalViaje.value === null) {
-    error.value = 'Resuelve ambas direcciones para calcular el importe de envío.'
+    error.value = tarifasConfiguradas.value
+      ? 'Resuelve ambas direcciones para calcular el importe de envío.'
+      : 'El administrador del tenant debe configurar las tarifas antes de poder agendar pedidos.'
     return
   }
 
@@ -408,6 +413,9 @@ async function onSubmit() {
           {{ fieldErrors.importe_envio }}
         </span>
       </div>
+      <p v-else-if="!tarifasConfiguradas" class="text-sm text-body">
+        El administrador del tenant debe configurar las tarifas antes de poder agendar pedidos.
+      </p>
       <p v-else class="text-sm text-body">
         Resuelve ambas direcciones para calcular el importe de envío.
       </p>

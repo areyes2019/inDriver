@@ -65,9 +65,13 @@ class ConfiguracionController extends Controller
     {
         $saldoTenant = (int) CompraPaquete::sum('cantidad_viajes') - (int) VentaViajeConductor::sum('cantidad_viajes');
 
+        $tarifaBanderazo = ConfiguracionTenant::obtener(ConfiguracionTenant::BANDERAZO);
+        $tarifaKmAdicional = ConfiguracionTenant::obtener(ConfiguracionTenant::KM_ADICIONAL);
+
         return [
-            'tarifa_banderazo' => ConfiguracionTenant::obtener(ConfiguracionTenant::BANDERAZO, '0'),
-            'tarifa_km_adicional' => ConfiguracionTenant::obtener(ConfiguracionTenant::KM_ADICIONAL, '0'),
+            'tarifa_banderazo' => $tarifaBanderazo,
+            'tarifa_km_adicional' => $tarifaKmAdicional,
+            'tarifas_configuradas' => $tarifaBanderazo !== null && $tarifaKmAdicional !== null,
             'modalidad_conductores' => ConfiguracionTenant::obtener(ConfiguracionTenant::MODALIDAD, 'Prepago'),
             'costo_viaje_prepago' => ConfiguracionTenant::obtener(ConfiguracionTenant::COSTO_VIAJE_PREPAGO),
             'comision_porcentaje' => ConfiguracionTenant::obtener(ConfiguracionTenant::COMISION_PORCENTAJE),

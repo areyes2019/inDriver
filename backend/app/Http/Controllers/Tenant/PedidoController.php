@@ -69,6 +69,7 @@ class PedidoController extends Controller
     public function store(Request $request): JsonResponse
     {
         $this->validarPuedeCrearPedido($request);
+        $this->validarTarifasConfiguradas();
         $data = $this->validarDatos($request);
 
         $pedido = DB::transaction(function () use ($data) {
@@ -198,6 +199,22 @@ class PedidoController extends Controller
 
         if (! $puedeCrear) {
             abort(403, 'No puedes crear pedidos con la configuración actual de despachadores del tenant.');
+        }
+    }
+
+    /**
+     * El tenant debe tener configuradas ambas tarifas (spec 015) antes de poder crear pedidos: sin
+     * ellas no hay un `importe_envio` calculado que tenga sentido guardar.
+     */
+    private function validarTarifasConfiguradas(): void
+    {
+        $tarifaBanderazo = ConfiguracionTenant::obtener(ConfiguracionTenant::BANDERAZO);
+        $tarifaKmAdicional = ConfiguracionTenant::obtener(ConfiguracionTenant::KM_ADICIONAL);
+
+        if ($tarifaBanderazo === null || $tarifaKmAdicional === null) {
+            throw ValidationException::withMessages([
+                'importe_envio' => 'El administrador del tenant debe configurar las tarifas antes de poder agendar pedidos.',
+            ]);
         }
     }
 

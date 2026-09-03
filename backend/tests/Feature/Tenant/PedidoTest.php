@@ -44,7 +44,12 @@ function pedidoTenant(array $overrides = []): Tenant
     ], $overrides));
 }
 
-function pedidoUsuario(Tenant $tenant, array $overrides = []): Usuario
+/**
+ * Configura tarifa_banderazo/tarifa_km_adicional (spec 015) por defecto, porque casi todos los
+ * tests de este archivo esperan poder crear pedidos sin ocuparse de ese detalle. Los tests que
+ * ejercitan el bloqueo por falta de tarifas (esta ronda) pasan `configurarTarifas: false`.
+ */
+function pedidoUsuario(Tenant $tenant, array $overrides = [], bool $configurarTarifas = true): Usuario
 {
     tenancy()->initialize($tenant);
 
@@ -56,6 +61,11 @@ function pedidoUsuario(Tenant $tenant, array $overrides = []): Usuario
         'rol' => 'AdminCliente',
         'estado' => 'Activo',
     ], $overrides));
+
+    if ($configurarTarifas) {
+        ConfiguracionTenant::establecer(ConfiguracionTenant::BANDERAZO, '10');
+        ConfiguracionTenant::establecer(ConfiguracionTenant::KM_ADICIONAL, '5');
+    }
 
     tenancy()->end();
 
@@ -336,6 +346,44 @@ it('rejects an invalid estado transition', function () {
         ->patchJson("/api/v1/t/cafe-luna/pedidos/{$creado['id_pedido']}/estado", ['estado' => 'ENTREGADO'])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['estado']);
+});
+
+it('rejects creating a pedido when the tenant has no tarifas configured', function () {
+    $tenant = pedidoTenant();
+    $admin = pedidoUsuario($tenant, [], configurarTarifas: false);
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos())
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['importe_envio']);
+});
+
+it('rejects creating a pedido when only one tarifa is configured', function () {
+    $tenant = pedidoTenant();
+    $admin = pedidoUsuario($tenant, [], configurarTarifas: false);
+
+    tenancy()->initialize($tenant);
+    ConfiguracionTenant::establecer(ConfiguracionTenant::BANDERAZO, '10');
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos())
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['importe_envio']);
+});
+
+it('allows creating a pedido when both tarifas are explicitly set to zero', function () {
+    $tenant = pedidoTenant();
+    $admin = pedidoUsuario($tenant, [], configurarTarifas: false);
+
+    tenancy()->initialize($tenant);
+    ConfiguracionTenant::establecer(ConfiguracionTenant::BANDERAZO, '0');
+    ConfiguracionTenant::establecer(ConfiguracionTenant::KM_ADICIONAL, '0');
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos())
+        ->assertCreated();
 });
 
 it('cancels a pedido and stamps fecha_cancelacion', function () {

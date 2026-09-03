@@ -20,6 +20,14 @@
 > de pago; y desaparece el campo manual "Importe de envío" — se reemplaza por el "total del viaje",
 > calculado con las tarifas ya configurables (spec 015), que ahora sí viaja en el `POST /pedidos` y
 > se guarda como `importe_envio`. Sigue sin haber listado ni edición de pedidos vía UI propia.
+>
+> **Bloqueo por tarifas sin configurar (esta ronda)**: crear un pedido pasa a requerir que el tenant
+> tenga configuradas **ambas** tarifas (`tarifa_banderazo` y `tarifa_km_adicional`, spec 015) por el
+> `AdminCliente`. Si falta cualquiera de las dos, `POST /pedidos` responde `422` y, en el panel, el
+> bloque "Total del viaje" no se calcula, se muestra un mensaje explicativo y "Agendar" queda
+> deshabilitado — mismo tratamiento que ya recibía la falta de `distanceKm`, pero por una causa
+> distinta. Un valor de `0` guardado a propósito por el `AdminCliente` sí cuenta como "configurada";
+> solo la ausencia total bloquea.
 
 ## Historia de usuario
 
@@ -75,9 +83,11 @@ Deja funcionando:
      "Importe de envío": ese monto lo aporta el bloque de "Total del viaje" (punto siguiente).
   7. **Total del viaje / Importe de envío**: bloque calculado a partir de la distancia entre
      recogida y entrega y las tarifas configuradas por el tenant (ver "Cálculo del total del
-     viaje"), visible solo cuando ambas direcciones están resueltas. Es el valor que viaja como
-     `importe_envio` en el `POST /pedidos` — mientras no haya una distancia calculada (alguna
-     dirección sin resolver), no hay `importe_envio` que enviar y "Agendar" queda deshabilitado.
+     viaje"), visible solo cuando ambas direcciones están resueltas **y** el tenant tiene
+     configuradas ambas tarifas. Es el valor que viaja como `importe_envio` en el `POST /pedidos` —
+     mientras no haya una distancia calculada (alguna dirección sin resolver) o falte alguna tarifa
+     por configurar, no hay `importe_envio` que enviar y "Agendar" queda deshabilitado, con un
+     mensaje que distingue cuál de las dos causas aplica.
   8. Botón "Agendar".
 - Las direcciones se capturan con `UiAddressAutocomplete` y se muestran en un mapa de vista previa
   (`UiVistaPreviaRuta`), pero **las coordenadas nunca se envían ni se guardan** — ver "Por qué se
@@ -299,6 +309,36 @@ importe_envio = tarifa_banderazo + (distancia_km × tarifa_km_adicional)
   el frontend; el backend lo recibe y guarda tal cual, sin recalcular la fórmula del lado del
   servidor.
 
+### Por qué se bloquea la creación cuando falta configurar alguna tarifa
+
+Antes de esta ronda, `ConfiguracionController@estadoActual` (spec 015) devolvía `"0"` como valor por
+defecto de `tarifa_banderazo`/`tarifa_km_adicional` cuando el `AdminCliente` nunca las había
+guardado — indistinguible de haberlas configurado en `0` a propósito. Eso permitía crear pedidos con
+`importe_envio` calculado en `0` de forma silenciosa, sin que nadie hubiera decidido esa tarifa.
+
+Se elimina ese default: `ConfiguracionTenant::obtener()` ya devuelve `null` cuando la clave no
+existe (su firma ya lo soporta, `obtener(string $clave, ?string $default = null)`), así que basta con
+no pasarle `'0'` como segundo argumento para esas dos claves. `estadoActual()` gana además un campo
+`tarifas_configuradas: bool` (`true` solo si ambas claves existen), para que el frontend no tenga que
+inferirlo comparando contra `null` en cada consumidor.
+
+`PedidoController@store` valida, antes de crear, que ambas tarifas existan (mismo patrón que
+`validarPuedeCrearPedido`, un método privado que corre antes de `validarDatos()`): si falta
+cualquiera, responde `422` con un mensaje dirigido al `AdminCliente` ("El administrador del tenant
+debe configurar las tarifas antes de poder agendar pedidos"). La validación es solo de creación —
+`update()` no la aplica, porque un pedido ya creado con su `importe_envio` guardado no depende de que
+la configuración de tarifas se mantenga vigente después.
+
+En el frontend, `NuevaEntregaPanel.vue` deja de calcular `tarifaBanderazo`/`tarifaKmAdicional` con
+`Number(data.tarifa_banderazo) || 0` (ese patrón ya era incapaz de distinguir "no configurada" de
+"configurada en 0", porque ambas dan `0` con `||`). En su lugar, lee `tarifas_configuradas` de
+`GET /configuracion` y lo guarda en un `ref` aparte; `totalViaje` devuelve `null` (oculta el bloque,
+igual que ya hace cuando falta `distanceKm`) si `tarifasConfiguradas` es `false`, sin importar que
+ambas direcciones estén resueltas. El mensaje que reemplaza al bloque distingue las dos causas
+posibles ("faltan tarifas por configurar" vs. "resuelve ambas direcciones") para que el Despachador
+sepa qué hacer — en el primer caso, la solución no está en su mano: depende de que el `AdminCliente`
+configure las tarifas en `/t/{slug}/panel/configuracion` (spec 015).
+
 ### Comunicación por props/emits, no por estado compartido en un módulo aparte
 
 El botón vive en `TenantLayout.vue` (navbar) y el formulario vive en `NuevaEntregaPanel.vue`,
@@ -366,6 +406,10 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
   queda fuera de esta spec.
 - Crear un pedido (`POST /pedidos`) requiere sesión de `Despachador`; `AdminCliente` y `Conductor`
   reciben `403`.
+- Crear un pedido requiere que el tenant tenga configuradas **ambas** tarifas (`tarifa_banderazo` y
+  `tarifa_km_adicional`, spec 015); si falta cualquiera, `POST /pedidos` responde `422`. Un valor de
+  `0` guardado a propósito por el `AdminCliente` cuenta como "configurada" — solo la ausencia total
+  bloquea. Esta validación aplica solo a la creación, no a `update`.
 
 ## Backend (Laravel)
 
@@ -377,7 +421,17 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
   `belongsTo` a `Cliente`, `Despachador`, `Conductor`, `Vehiculo`).
 - **Resource** `App\Http\Resources\Tenant\PedidoResource`: sin cambios (expone las columnas más
   nombres derivados de las relaciones).
+- **Controlador** `App\Http\Controllers\Tenant\ConfiguracionController`(spec 015, tocado por esta
+  ronda): `estadoActual()` deja de usar `'0'` como default de `tarifa_banderazo`/
+  `tarifa_km_adicional` (responde `null` cuando el `AdminCliente` nunca las configuró) y agrega el
+  campo `tarifas_configuradas: bool` (`true` solo si ambas claves existen en
+  `configuraciones_tenant`).
 - **Controlador** `App\Http\Controllers\Tenant\PedidoController`:
+  - `store(Request $request)`: antes de `validarDatos()`, un nuevo método privado
+    `validarTarifasConfiguradas()` (mismo patrón que `validarPuedeCrearPedido()`) verifica que
+    `ConfiguracionTenant::obtener(BANDERAZO)` y `obtener(KM_ADICIONAL)` no sean `null`; si falta
+    cualquiera, lanza `ValidationException` (`422`) con un mensaje dirigido al `AdminCliente`. No se
+    aplica a `update()`.
   - `store(Request $request)` / `validarDatos()`: `fecha_servicio` pasa de `required` fijo a
     validación manual (mismo patrón que las horas): obligatoria solo si `lo_antes_posible` es
     `false`; si es `true` y no llega, se completa con `now()->toDateString()` antes de guardar.
@@ -474,10 +528,17 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
     el propio componente (sin store ni composable con estado compartido) a partir de `distanceKm`
     (obtenido de `UiVistaPreviaRuta`/`drawRoute` cuando ambas direcciones están resueltas) y las
     tarifas leídas de `GET /configuracion` al montar. Solo se muestra cuando hay `distanceKm`
-    disponible, y su valor alimenta directamente `form.importe_envio` (se recalcula cada vez que
-    cambia `distanceKm`).
-  - El botón "Agendar" se deshabilita (con mensaje explicativo) mientras `distanceKm` no esté
-    disponible, ya que sin él no hay `importe_envio` calculado que enviar.
+    disponible **y** `tarifas_configuradas` es `true`, y su valor alimenta directamente
+    `form.importe_envio` (se recalcula cada vez que cambia `distanceKm`).
+  - Al leer `GET /configuracion`, guarda `tarifas_configuradas` (booleano de la respuesta) en un
+    `ref` aparte de los valores numéricos de tarifa — ya no se infiere con
+    `Number(data.tarifa_banderazo) || 0` (ese patrón no distinguía "no configurada" de "configurada
+    en 0").
+  - El botón "Agendar" se deshabilita mientras `distanceKm` no esté disponible **o**
+    `tarifas_configuradas` sea `false`, ya que en ambos casos no hay `importe_envio` calculado que
+    enviar. El mensaje junto al bloque distingue las dos causas: "Resuelve ambas direcciones..." si
+    falta `distanceKm`, o un mensaje indicando que faltan tarifas por configurar (acción que le
+    corresponde al `AdminCliente`, no al Despachador) si `tarifas_configuradas` es `false`.
   - Sigue recibiendo `abierto` por prop, haciendo `POST /pedidos` al agendar (el payload ahora sí
     incluye `importe_envio` con el total calculado; las coordenadas siguen sin viajar) y emitiendo
     `agendado`/`cerrar`.
@@ -580,7 +641,16 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
     muestra un error y no cierra el panel; con alguna dirección sin resolver (sin `distanceKm`, y
     por lo tanto sin `importe_envio` calculado), el botón "Agendar" está deshabilitado; con datos
     válidos, crea el pedido vía `POST /pedidos`, limpia el formulario y cierra el panel.
-26. Pint y ESLint/Prettier corren sin errores; `php artisan test` pasa.
+26. Con el tenant sin `tarifa_banderazo` o sin `tarifa_km_adicional` configuradas, `POST /pedidos`
+    (con sesión de `Despachador` y el resto de los datos válidos) responde `422`; con ambas
+    configuradas (aunque alguna valga `0` a propósito), responde `201`.
+27. `GET /configuracion` responde `tarifa_banderazo`/`tarifa_km_adicional` en `null` (no `"0"`)
+    cuando el `AdminCliente` nunca las configuró, y `tarifas_configuradas: false`; al configurar
+    ambas, responde con los valores numéricos y `tarifas_configuradas: true`.
+28. En el panel, con el tenant sin tarifas configuradas, aunque ambas direcciones estén resueltas
+    (con `distanceKm` disponible), el bloque "Total del viaje" no se muestra, aparece un mensaje
+    indicando que faltan tarifas por configurar, y "Agendar" está deshabilitado.
+29. Pint y ESLint/Prettier corren sin errores; `php artisan test` pasa.
 
 ## Supuestos asumidos (registro completo)
 
@@ -649,4 +719,18 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
     `importe_envio` en el `POST /pedidos` y se persiste en la columna que ya existía para ese campo
     (no requiere ninguna migración nueva). El campo manual de "Importe de envío" desaparece del
     formulario, y "Agendar" queda deshabilitado mientras el cálculo no esté disponible.
+22. "No hay tarifa configurada" significa que el `AdminCliente` nunca guardó valor para esa clave en
+    `configuraciones_tenant` (fila inexistente) — no que la haya guardado en `0` a propósito; un `0`
+    explícito cuenta como "configurada". El bloqueo de creación de pedidos aplica si falta
+    **cualquiera** de las dos tarifas (`tarifa_banderazo` o `tarifa_km_adicional`).
+23. El bloqueo se implementa en ambas capas — `POST /pedidos` responde `422` en el backend, y el
+    botón "Agendar" queda deshabilitado con mensaje explicativo en el frontend — sin depender solo
+    de la UI para impedir la creación.
+24. El frontend detecta la falta de tarifas a partir del mismo `GET /configuracion` que
+    `NuevaEntregaPanel.vue` ya consume al montarse (nuevo campo `tarifas_configuradas`), sin agregar
+    ningún endpoint nuevo.
+25. No se agrega ninguna pantalla nueva para resolver el bloqueo: el `AdminCliente` ya cuenta con la
+    pestaña "Tarifas" de `/t/{slug}/panel/configuracion` (spec 015).
+26. El bloqueo no afecta pedidos ya creados previamente sin tarifas configuradas (sin migración de
+    datos retroactiva) ni al `update()` de un pedido existente — solo a la creación (`store()`).
 </content>
