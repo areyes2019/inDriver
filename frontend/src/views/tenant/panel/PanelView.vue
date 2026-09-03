@@ -6,6 +6,7 @@ import MapaConductores from '@/components/panel/MapaConductores.vue'
 import NuevaEntregaPanel from '@/components/panel/NuevaEntregaPanel.vue'
 
 const layoutRef = ref<InstanceType<typeof TenantLayout>>()
+const serviciosRef = ref<InstanceType<typeof ServiciosEnTurno>>()
 const nuevaEntregaAbierta = ref(false)
 
 function alternarNuevaEntrega() {
@@ -16,6 +17,11 @@ function cerrarNuevaEntrega() {
   nuevaEntregaAbierta.value = false
   layoutRef.value?.focusNuevaEntrega()
 }
+
+function onAgendado() {
+  serviciosRef.value?.recargar()
+  cerrarNuevaEntrega()
+}
 </script>
 
 <template>
@@ -24,8 +30,8 @@ function cerrarNuevaEntrega() {
     :nueva-entrega-abierta="nuevaEntregaAbierta"
     @toggle-nueva-entrega="alternarNuevaEntrega"
   >
-    <!-- Columna izquierda (viajes en turno), fija sobre el 30% izquierdo: tenant/008-servicios.md -->
-    <ServiciosEnTurno />
+    <!-- Columna izquierda (viajes en turno), fija sobre el 30% izquierdo: tenant/008-servicios.md, tenant/012-datos-reales-servicios-en-turno.md -->
+    <ServiciosEnTurno ref="serviciosRef" />
     <!-- Columna central (mapa de conductores), desplazada para no quedar bajo la izquierda: tenant/009-mapa.md -->
     <div class="ml-[30%] min-h-[calc(100vh-4.25rem-2rem)]">
       <MapaConductores />
@@ -34,7 +40,7 @@ function cerrarNuevaEntrega() {
     <NuevaEntregaPanel
       :abierto="nuevaEntregaAbierta"
       @cerrar="cerrarNuevaEntrega"
-      @agendado="cerrarNuevaEntrega"
+      @agendado="onAgendado"
     />
   </TenantLayout>
 </template>
