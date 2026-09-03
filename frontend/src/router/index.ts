@@ -229,6 +229,12 @@ const router = createRouter({
       meta: { requiresTenantAuth: true },
     },
     {
+      path: '/t/:slug/panel/reportes/pagos-conductores',
+      name: 'tenant-reporte-pagos-conductores',
+      component: () => import('../views/tenant/reportes/PagosConductoresView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
       path: '/t/:slug/panel/cambiar-password',
       name: 'tenant-cambiar-password',
       component: () => import('../views/tenant/cuenta/CambiarPasswordView.vue'),
@@ -282,7 +288,10 @@ router.beforeEach(async (to) => {
       return { name: 'tenant-clientes-lista', params: { slug } }
     }
 
-    if (to.name === 'tenant-configuracion' && auth.usuario?.rol !== 'AdminCliente') {
+    if (
+      (to.name === 'tenant-configuracion' || to.name === 'tenant-reporte-pagos-conductores') &&
+      auth.usuario?.rol !== 'AdminCliente'
+    ) {
       return { name: 'tenant-clientes-lista', params: { slug } }
     }
   }

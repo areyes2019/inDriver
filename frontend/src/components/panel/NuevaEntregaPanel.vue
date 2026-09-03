@@ -136,6 +136,7 @@ async function onClienteChange() {
 }
 
 const tarifaBanderazo = ref(0)
+const kmIncluidosBanderazo = ref(0)
 const tarifaKmAdicional = ref(0)
 const tarifasConfiguradas = ref(false)
 
@@ -143,10 +144,12 @@ async function cargarConfiguracion() {
   try {
     const { data } = await http.get(`/t/${slug}/configuracion`)
     tarifaBanderazo.value = Number(data.tarifa_banderazo) || 0
+    kmIncluidosBanderazo.value = Number(data.km_incluidos_banderazo) || 0
     tarifaKmAdicional.value = Number(data.tarifa_km_adicional) || 0
     tarifasConfiguradas.value = Boolean(data.tarifas_configuradas)
   } catch {
     tarifaBanderazo.value = 0
+    kmIncluidosBanderazo.value = 0
     tarifaKmAdicional.value = 0
     tarifasConfiguradas.value = false
   }
@@ -160,7 +163,8 @@ function onDistancia(km: number | null) {
 
 const totalViaje = computed(() => {
   if (!tarifasConfiguradas.value || distanciaKm.value === null) return null
-  return tarifaBanderazo.value + distanciaKm.value * tarifaKmAdicional.value
+  const kmCobrables = Math.max(0, distanciaKm.value - kmIncluidosBanderazo.value)
+  return tarifaBanderazo.value + kmCobrables * tarifaKmAdicional.value
 })
 
 watch(

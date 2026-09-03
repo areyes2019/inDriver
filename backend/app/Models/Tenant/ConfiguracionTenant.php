@@ -16,6 +16,8 @@ class ConfiguracionTenant extends Model
 
     public const BANDERAZO = 'tarifa_banderazo';
 
+    public const KM_INCLUIDOS = 'km_incluidos_banderazo';
+
     public const KM_ADICIONAL = 'tarifa_km_adicional';
 
     public const MODALIDAD = 'modalidad_conductores';

@@ -45,9 +45,9 @@ function pedidoTenant(array $overrides = []): Tenant
 }
 
 /**
- * Configura tarifa_banderazo/tarifa_km_adicional (spec 015) por defecto, porque casi todos los
- * tests de este archivo esperan poder crear pedidos sin ocuparse de ese detalle. Los tests que
- * ejercitan el bloqueo por falta de tarifas (esta ronda) pasan `configurarTarifas: false`.
+ * Configura las tres tarifas (spec 015) por defecto, porque casi todos los tests de este archivo
+ * esperan poder crear pedidos sin ocuparse de ese detalle. Los tests que ejercitan el bloqueo por
+ * falta de tarifas pasan `configurarTarifas: false`.
  */
 function pedidoUsuario(Tenant $tenant, array $overrides = [], bool $configurarTarifas = true): Usuario
 {
@@ -64,6 +64,7 @@ function pedidoUsuario(Tenant $tenant, array $overrides = [], bool $configurarTa
 
     if ($configurarTarifas) {
         ConfiguracionTenant::establecer(ConfiguracionTenant::BANDERAZO, '10');
+        ConfiguracionTenant::establecer(ConfiguracionTenant::KM_INCLUIDOS, '5');
         ConfiguracionTenant::establecer(ConfiguracionTenant::KM_ADICIONAL, '5');
     }
 
@@ -372,12 +373,28 @@ it('rejects creating a pedido when only one tarifa is configured', function () {
         ->assertJsonValidationErrors(['importe_envio']);
 });
 
-it('allows creating a pedido when both tarifas are explicitly set to zero', function () {
+it('rejects creating a pedido when km_incluidos_banderazo is not configured', function () {
+    $tenant = pedidoTenant();
+    $admin = pedidoUsuario($tenant, [], configurarTarifas: false);
+
+    tenancy()->initialize($tenant);
+    ConfiguracionTenant::establecer(ConfiguracionTenant::BANDERAZO, '10');
+    ConfiguracionTenant::establecer(ConfiguracionTenant::KM_ADICIONAL, '5');
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos())
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['importe_envio']);
+});
+
+it('allows creating a pedido when banderazo and km adicional are explicitly zero but km_incluidos_banderazo is set', function () {
     $tenant = pedidoTenant();
     $admin = pedidoUsuario($tenant, [], configurarTarifas: false);
 
     tenancy()->initialize($tenant);
     ConfiguracionTenant::establecer(ConfiguracionTenant::BANDERAZO, '0');
+    ConfiguracionTenant::establecer(ConfiguracionTenant::KM_INCLUIDOS, '5');
     ConfiguracionTenant::establecer(ConfiguracionTenant::KM_ADICIONAL, '0');
     tenancy()->end();
 

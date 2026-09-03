@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['id_conductor', 'cantidad_viajes', 'id_usuario', 'fecha_venta'])]
+#[Fillable(['id_conductor', 'cantidad_viajes', 'monto_pagado', 'id_usuario', 'fecha_venta'])]
 class VentaViajeConductor extends Model
 {
     protected $table = 'ventas_viajes_conductor';
@@ -19,6 +19,7 @@ class VentaViajeConductor extends Model
     {
         return [
             'fecha_venta' => 'datetime',
+            'monto_pagado' => 'decimal:2',
         ];
     }
 

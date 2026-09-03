@@ -26,6 +26,7 @@ class ConfiguracionController extends Controller
     {
         $data = $request->validate([
             'tarifa_banderazo' => ['required', 'numeric', 'min:0'],
+            'km_incluidos_banderazo' => ['required', 'numeric', 'gt:0'],
             'tarifa_km_adicional' => ['required', 'numeric', 'min:0'],
             'modalidad_conductores' => ['required', Rule::in(['Prepago', 'Comision'])],
             'costo_viaje_prepago' => ['required_if:modalidad_conductores,Prepago', 'nullable', 'numeric', 'min:0'],
@@ -37,6 +38,7 @@ class ConfiguracionController extends Controller
 
         DB::transaction(function () use ($data, $usabaDespachadoresAntes) {
             ConfiguracionTenant::establecer(ConfiguracionTenant::BANDERAZO, (string) $data['tarifa_banderazo']);
+            ConfiguracionTenant::establecer(ConfiguracionTenant::KM_INCLUIDOS, (string) $data['km_incluidos_banderazo']);
             ConfiguracionTenant::establecer(ConfiguracionTenant::KM_ADICIONAL, (string) $data['tarifa_km_adicional']);
             ConfiguracionTenant::establecer(ConfiguracionTenant::MODALIDAD, $data['modalidad_conductores']);
             ConfiguracionTenant::establecer(ConfiguracionTenant::COSTO_VIAJE_PREPAGO, isset($data['costo_viaje_prepago']) ? (string) $data['costo_viaje_prepago'] : null);
@@ -66,12 +68,14 @@ class ConfiguracionController extends Controller
         $saldoTenant = (int) CompraPaquete::sum('cantidad_viajes') - (int) VentaViajeConductor::sum('cantidad_viajes');
 
         $tarifaBanderazo = ConfiguracionTenant::obtener(ConfiguracionTenant::BANDERAZO);
+        $kmIncluidosBanderazo = ConfiguracionTenant::obtener(ConfiguracionTenant::KM_INCLUIDOS);
         $tarifaKmAdicional = ConfiguracionTenant::obtener(ConfiguracionTenant::KM_ADICIONAL);
 
         return [
             'tarifa_banderazo' => $tarifaBanderazo,
+            'km_incluidos_banderazo' => $kmIncluidosBanderazo,
             'tarifa_km_adicional' => $tarifaKmAdicional,
-            'tarifas_configuradas' => $tarifaBanderazo !== null && $tarifaKmAdicional !== null,
+            'tarifas_configuradas' => $tarifaBanderazo !== null && $kmIncluidosBanderazo !== null && $tarifaKmAdicional !== null,
             'modalidad_conductores' => ConfiguracionTenant::obtener(ConfiguracionTenant::MODALIDAD, 'Prepago'),
             'costo_viaje_prepago' => ConfiguracionTenant::obtener(ConfiguracionTenant::COSTO_VIAJE_PREPAGO),
             'comision_porcentaje' => ConfiguracionTenant::obtener(ConfiguracionTenant::COMISION_PORCENTAJE),

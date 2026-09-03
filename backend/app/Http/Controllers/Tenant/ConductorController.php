@@ -33,7 +33,11 @@ class ConductorController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        $query = Conductor::query()->with(['usuario', 'despachador.usuario'])->orderBy('id_conductor');
+        $query = Conductor::query()
+            ->with(['usuario', 'despachador.usuario'])
+            ->withSum('ventasViajes as viajes_vendidos', 'cantidad_viajes')
+            ->withCount(['pedidos as viajes_consumidos' => fn ($q) => $q->where('prepago_descontado', true)])
+            ->orderBy('id_conductor');
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {

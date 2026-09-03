@@ -37,4 +37,9 @@ class Conductor extends Model
     {
         return $this->hasMany(Pedido::class, 'id_conductor', 'id_conductor');
     }
+
+    public function ventasViajes(): HasMany
+    {
+        return $this->hasMany(VentaViajeConductor::class, 'id_conductor', 'id_conductor');
+    }
 }

@@ -46,6 +46,7 @@ const pestanas: Array<{ id: Pestana; label: string }> = [
 
 const form = reactive({
   tarifa_banderazo: '0',
+  km_incluidos_banderazo: '0',
   tarifa_km_adicional: '0',
   modalidad_conductores: 'Prepago' as 'Prepago' | 'Comision',
   costo_viaje_prepago: '0',
@@ -69,6 +70,7 @@ async function fetchConfiguracion() {
   try {
     const { data } = await http.get(`/t/${slug.value}/configuracion`)
     form.tarifa_banderazo = data.tarifa_banderazo ?? '0'
+    form.km_incluidos_banderazo = data.km_incluidos_banderazo ?? '0'
     form.tarifa_km_adicional = data.tarifa_km_adicional ?? '0'
     form.modalidad_conductores = data.modalidad_conductores ?? 'Prepago'
     form.costo_viaje_prepago = data.costo_viaje_prepago ?? '0'
@@ -394,6 +396,22 @@ onBeforeUnmount(() => {
 
           <label class="block">
             <span class="mb-1 block text-sm font-medium text-heading">
+              Kilómetros incluidos en el banderazo
+            </span>
+            <input
+              v-model="form.km_incluidos_banderazo"
+              type="number"
+              step="0.01"
+              min="0.01"
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+            />
+            <span v-if="fieldErrors.km_incluidos_banderazo" class="mt-1 block text-sm text-red-600">
+              {{ fieldErrors.km_incluidos_banderazo }}
+            </span>
+          </label>
+
+          <label class="block">
+            <span class="mb-1 block text-sm font-medium text-heading">
               Tarifa por kilómetro adicional
             </span>
             <input
@@ -428,7 +446,9 @@ onBeforeUnmount(() => {
           @submit.prevent="onSubmitConfiguracion"
         >
           <label class="block">
-            <span class="mb-1 block text-sm font-medium text-heading">¿Utilizar despachadores?</span>
+            <span class="mb-1 block text-sm font-medium text-heading"
+              >¿Utilizar despachadores?</span
+            >
             <select
               v-model="form.usar_despachadores"
               class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"

@@ -5,7 +5,9 @@ use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
+use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Usuario;
+use App\Models\Tenant\VentaViajeConductor;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -228,6 +230,46 @@ it('lists conductores with their usuario data and filters by search', function (
         ->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.nombre', 'Pedro');
+});
+
+it('includes saldo_viajes in the listing, computed without an extra query per conductor', function () {
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    $conductor = Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+
+    VentaViajeConductor::create([
+        'id_conductor' => $conductor->id_conductor,
+        'cantidad_viajes' => 5,
+        'monto_pagado' => 500,
+        'id_usuario' => $admin->id_usuario,
+        'fecha_venta' => now(),
+    ]);
+
+    Pedido::create([
+        'numero_pedido' => 'PED-000001',
+        'nombre_solicitante' => 'Mario Sánchez',
+        'telefono_solicitante' => '5511223344',
+        'direccion_recogida' => 'Av. Reforma 100',
+        'direccion_entrega' => 'Av. Insurgentes 200',
+        'fecha_servicio' => now()->addDay()->toDateString(),
+        'modalidad_pago' => 'RECEPTOR_PAGA_ENVIO',
+        'id_conductor' => $conductor->id_conductor,
+        'prepago_descontado' => true,
+        'estado' => 'ENTREGADO',
+    ]);
+    tenancy()->end();
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->getJson('/api/v1/t/cafe-luna/conductores')
+        ->assertOk();
+
+    expect($response->json('data.0.saldo_viajes'))->toBe(4);
 });
 
 it('shows a single conductor with its usuario data', function () {

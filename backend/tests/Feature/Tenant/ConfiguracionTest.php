@@ -64,6 +64,7 @@ function configuracionDatosValidos(array $overrides = []): array
 {
     return array_merge([
         'tarifa_banderazo' => 10,
+        'km_incluidos_banderazo' => 5,
         'tarifa_km_adicional' => 5,
         'modalidad_conductores' => 'Prepago',
         'costo_viaje_prepago' => 20,
@@ -90,10 +91,11 @@ it('reports tarifas_configuradas as false and null tarifas when never configured
         ->assertOk()
         ->assertJsonPath('tarifas_configuradas', false)
         ->assertJsonPath('tarifa_banderazo', null)
+        ->assertJsonPath('km_incluidos_banderazo', null)
         ->assertJsonPath('tarifa_km_adicional', null);
 });
 
-it('reports tarifas_configuradas as true once both tarifas are saved', function () {
+it('reports tarifas_configuradas as true once the three tarifas are saved', function () {
     $tenant = configuracionTenant();
     $admin = configuracionAdminUsuario($tenant);
 
@@ -102,7 +104,18 @@ it('reports tarifas_configuradas as true once both tarifas are saved', function 
         ->assertOk()
         ->assertJsonPath('tarifas_configuradas', true)
         ->assertJsonPath('tarifa_banderazo', '10')
+        ->assertJsonPath('km_incluidos_banderazo', '5')
         ->assertJsonPath('tarifa_km_adicional', '5');
+});
+
+it('rejects saving km_incluidos_banderazo as zero', function () {
+    $tenant = configuracionTenant();
+    $admin = configuracionAdminUsuario($tenant);
+
+    $this->actingAs($admin, 'usuario')
+        ->putJson('/api/v1/t/cafe-luna/configuracion', configuracionDatosValidos(['km_incluidos_banderazo' => 0]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['km_incluidos_banderazo']);
 });
 
 it('rejects saving configuracion without usar_despachadores', function () {

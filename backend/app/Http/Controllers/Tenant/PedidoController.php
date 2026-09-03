@@ -203,15 +203,16 @@ class PedidoController extends Controller
     }
 
     /**
-     * El tenant debe tener configuradas ambas tarifas (spec 015) antes de poder crear pedidos: sin
-     * ellas no hay un `importe_envio` calculado que tenga sentido guardar.
+     * El tenant debe tener configuradas las tres tarifas (spec 015) antes de poder crear pedidos:
+     * sin ellas no hay un `importe_envio` calculado que tenga sentido guardar.
      */
     private function validarTarifasConfiguradas(): void
     {
         $tarifaBanderazo = ConfiguracionTenant::obtener(ConfiguracionTenant::BANDERAZO);
+        $kmIncluidosBanderazo = ConfiguracionTenant::obtener(ConfiguracionTenant::KM_INCLUIDOS);
         $tarifaKmAdicional = ConfiguracionTenant::obtener(ConfiguracionTenant::KM_ADICIONAL);
 
-        if ($tarifaBanderazo === null || $tarifaKmAdicional === null) {
+        if ($tarifaBanderazo === null || $kmIncluidosBanderazo === null || $tarifaKmAdicional === null) {
             throw ValidationException::withMessages([
                 'importe_envio' => 'El administrador del tenant debe configurar las tarifas antes de poder agendar pedidos.',
             ]);

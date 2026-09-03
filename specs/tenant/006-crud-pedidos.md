@@ -21,13 +21,18 @@
 > calculado con las tarifas ya configurables (spec 015), que ahora sí viaja en el `POST /pedidos` y
 > se guarda como `importe_envio`. Sigue sin haber listado ni edición de pedidos vía UI propia.
 >
-> **Bloqueo por tarifas sin configurar (esta ronda)**: crear un pedido pasa a requerir que el tenant
-> tenga configuradas **ambas** tarifas (`tarifa_banderazo` y `tarifa_km_adicional`, spec 015) por el
-> `AdminCliente`. Si falta cualquiera de las dos, `POST /pedidos` responde `422` y, en el panel, el
-> bloque "Total del viaje" no se calcula, se muestra un mensaje explicativo y "Agendar" queda
-> deshabilitado — mismo tratamiento que ya recibía la falta de `distanceKm`, pero por una causa
-> distinta. Un valor de `0` guardado a propósito por el `AdminCliente` sí cuenta como "configurada";
-> solo la ausencia total bloquea.
+> **Bloqueo por tarifas sin configurar (ronda anterior) y kilómetros incluidos en el banderazo (esta
+> ronda)**: crear un pedido requiere que el tenant tenga configuradas **las tres** tarifas
+> (`tarifa_banderazo`, `km_incluidos_banderazo` y `tarifa_km_adicional`, spec 015) por el
+> `AdminCliente`. Si falta cualquiera, `POST /pedidos` responde `422` y, en el panel, el bloque
+> "Total del viaje" no se calcula, se muestra un mensaje explicativo y "Agendar" queda deshabilitado
+> — mismo tratamiento que ya recibía la falta de `distanceKm`, pero por una causa distinta. Para
+> `tarifa_banderazo` y `tarifa_km_adicional`, un valor de `0` guardado a propósito por el
+> `AdminCliente` sí cuenta como "configurada"; solo la ausencia total bloquea. `km_incluidos_banderazo`
+> es distinta: no se acepta guardarla en `0` (spec 015), así que basta con comprobar que no sea
+> `null` para considerarla configurada. Además, el banderazo deja de cubrir toda la distancia como
+> tarifa plana: ahora cubre solo los primeros `km_incluidos_banderazo` kilómetros, y el kilómetro
+> adicional se cobra únicamente sobre el exceso (ver "Cálculo del total del viaje").
 
 ## Historia de usuario
 
@@ -84,7 +89,7 @@ Deja funcionando:
   7. **Total del viaje / Importe de envío**: bloque calculado a partir de la distancia entre
      recogida y entrega y las tarifas configuradas por el tenant (ver "Cálculo del total del
      viaje"), visible solo cuando ambas direcciones están resueltas **y** el tenant tiene
-     configuradas ambas tarifas. Es el valor que viaja como `importe_envio` en el `POST /pedidos` —
+     configuradas las tres tarifas. Es el valor que viaja como `importe_envio` en el `POST /pedidos` —
      mientras no haya una distancia calculada (alguna dirección sin resolver) o falte alguna tarifa
      por configurar, no hay `importe_envio` que enviar y "Agendar" queda deshabilitado, con un
      mensaje que distingue cuál de las dos causas aplica.
@@ -282,14 +287,16 @@ no tiene sentido pedirle al despachador que lo teclee a mano — el campo "Impor
 libre) desaparece del formulario. Fórmula:
 
 ```
-importe_envio = tarifa_banderazo + (distancia_km × tarifa_km_adicional)
+importe_envio = tarifa_banderazo + max(0, distancia_km − km_incluidos_banderazo) × tarifa_km_adicional
 ```
 
-- `tarifa_banderazo` y `tarifa_km_adicional` son las dos tarifas globales del tenant, ya
-  configurables desde la spec 015 (`GET /configuracion`, campos `tarifa_banderazo` y
-  `tarifa_km_adicional`) pero que esa spec explícitamente dejó sin aplicar a ningún cálculo — esta
-  es la primera spec que las usa. No existe un umbral de "kilómetros incluidos": la tarifa por
-  kilómetro adicional se aplica sobre la distancia completa del trayecto.
+- `tarifa_banderazo`, `km_incluidos_banderazo` y `tarifa_km_adicional` son las tres tarifas globales
+  del tenant, ya configurables desde la spec 015 (`GET /configuracion`, campos `tarifa_banderazo`,
+  `km_incluidos_banderazo` y `tarifa_km_adicional`) pero que esa spec explícitamente dejó sin
+  aplicar a ningún cálculo — esta es la primera spec que las usa. El banderazo cubre los primeros
+  `km_incluidos_banderazo` kilómetros del trayecto; el kilómetro adicional solo se cobra sobre el
+  exceso (`distancia_km − km_incluidos_banderazo`), nunca sobre un valor negativo — si la distancia
+  del viaje es menor o igual a los kilómetros incluidos, el cliente paga únicamente el banderazo.
 - `distancia_km` es la distancia entre la dirección de recogida y la de entrega, calculada por
   Google Maps (Directions API) cuando ambas direcciones están resueltas (tienen coordenadas). Hoy
   `GoogleProvider.drawRoute()` solo devuelve la distancia como texto formateado por Google
@@ -311,33 +318,43 @@ importe_envio = tarifa_banderazo + (distancia_km × tarifa_km_adicional)
 
 ### Por qué se bloquea la creación cuando falta configurar alguna tarifa
 
-Antes de esta ronda, `ConfiguracionController@estadoActual` (spec 015) devolvía `"0"` como valor por
-defecto de `tarifa_banderazo`/`tarifa_km_adicional` cuando el `AdminCliente` nunca las había
+En una ronda anterior, `ConfiguracionController@estadoActual` (spec 015) devolvía `"0"` como valor
+por defecto de `tarifa_banderazo`/`tarifa_km_adicional` cuando el `AdminCliente` nunca las había
 guardado — indistinguible de haberlas configurado en `0` a propósito. Eso permitía crear pedidos con
 `importe_envio` calculado en `0` de forma silenciosa, sin que nadie hubiera decidido esa tarifa.
 
-Se elimina ese default: `ConfiguracionTenant::obtener()` ya devuelve `null` cuando la clave no
+Se eliminó ese default: `ConfiguracionTenant::obtener()` ya devuelve `null` cuando la clave no
 existe (su firma ya lo soporta, `obtener(string $clave, ?string $default = null)`), así que basta con
-no pasarle `'0'` como segundo argumento para esas dos claves. `estadoActual()` gana además un campo
-`tarifas_configuradas: bool` (`true` solo si ambas claves existen), para que el frontend no tenga que
-inferirlo comparando contra `null` en cada consumidor.
+no pasarle `'0'` como segundo argumento para `tarifa_banderazo`/`tarifa_km_adicional`.
+`km_incluidos_banderazo` (esta ronda) no necesita ese cuidado especial: como su validación en el
+`PUT` ya rechaza `0` (spec 015), cualquier valor guardado es siempre mayor a cero — basta con
+comprobar que no sea `null`. `estadoActual()` tiene un campo `tarifas_configuradas: bool` (`true`
+solo si **las tres** claves existen), para que el frontend no tenga que inferirlo comparando contra
+`null` en cada consumidor.
 
-`PedidoController@store` valida, antes de crear, que ambas tarifas existan (mismo patrón que
+`PedidoController@store` valida, antes de crear, que las tres tarifas existan (mismo patrón que
 `validarPuedeCrearPedido`, un método privado que corre antes de `validarDatos()`): si falta
 cualquiera, responde `422` con un mensaje dirigido al `AdminCliente` ("El administrador del tenant
 debe configurar las tarifas antes de poder agendar pedidos"). La validación es solo de creación —
 `update()` no la aplica, porque un pedido ya creado con su `importe_envio` guardado no depende de que
 la configuración de tarifas se mantenga vigente después.
 
+Como el sistema está en fase beta y todavía no tiene tenants operando, este bloqueo aplica de
+inmediato para todos, sin backfill ni período de transición: cualquier tenant que llegue a
+configurarse deberá guardar las tres tarifas desde el principio.
+
 En el frontend, `NuevaEntregaPanel.vue` deja de calcular `tarifaBanderazo`/`tarifaKmAdicional` con
 `Number(data.tarifa_banderazo) || 0` (ese patrón ya era incapaz de distinguir "no configurada" de
 "configurada en 0", porque ambas dan `0` con `||`). En su lugar, lee `tarifas_configuradas` de
-`GET /configuracion` y lo guarda en un `ref` aparte; `totalViaje` devuelve `null` (oculta el bloque,
-igual que ya hace cuando falta `distanceKm`) si `tarifasConfiguradas` es `false`, sin importar que
-ambas direcciones estén resueltas. El mensaje que reemplaza al bloque distingue las dos causas
-posibles ("faltan tarifas por configurar" vs. "resuelve ambas direcciones") para que el Despachador
-sepa qué hacer — en el primer caso, la solución no está en su mano: depende de que el `AdminCliente`
-configure las tarifas en `/t/{slug}/panel/configuracion` (spec 015).
+`GET /configuracion` y lo guarda en un `ref` aparte, junto con `kmIncluidosBanderazo` (numérico,
+leído igual que las otras dos tarifas). `totalViaje` devuelve `null` (oculta el bloque, igual que ya
+hace cuando falta `distanceKm`) si `tarifasConfiguradas` es `false`, sin importar que ambas
+direcciones estén resueltas; cuando sí están configuradas, calcula
+`tarifaBanderazo + Math.max(0, distanceKm - kmIncluidosBanderazo) * tarifaKmAdicional`. El mensaje
+que reemplaza al bloque distingue las dos causas posibles ("faltan tarifas por configurar" vs.
+"resuelve ambas direcciones") para que el Despachador sepa qué hacer — en el primer caso, la
+solución no está en su mano: depende de que el `AdminCliente` configure las tarifas en
+`/t/{slug}/panel/configuracion` (spec 015).
 
 ### Comunicación por props/emits, no por estado compartido en un módulo aparte
 
@@ -406,10 +423,12 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
   queda fuera de esta spec.
 - Crear un pedido (`POST /pedidos`) requiere sesión de `Despachador`; `AdminCliente` y `Conductor`
   reciben `403`.
-- Crear un pedido requiere que el tenant tenga configuradas **ambas** tarifas (`tarifa_banderazo` y
-  `tarifa_km_adicional`, spec 015); si falta cualquiera, `POST /pedidos` responde `422`. Un valor de
-  `0` guardado a propósito por el `AdminCliente` cuenta como "configurada" — solo la ausencia total
-  bloquea. Esta validación aplica solo a la creación, no a `update`.
+- Crear un pedido requiere que el tenant tenga configuradas **las tres** tarifas
+  (`tarifa_banderazo`, `km_incluidos_banderazo` y `tarifa_km_adicional`, spec 015); si falta
+  cualquiera, `POST /pedidos` responde `422`. Para `tarifa_banderazo`/`tarifa_km_adicional`, un
+  valor de `0` guardado a propósito por el `AdminCliente` cuenta como "configurada" — solo la
+  ausencia total bloquea; `km_incluidos_banderazo` no acepta `0` (spec 015), así que cualquier valor
+  guardado cuenta como "configurada". Esta validación aplica solo a la creación, no a `update`.
 
 ## Backend (Laravel)
 
@@ -421,17 +440,18 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
   `belongsTo` a `Cliente`, `Despachador`, `Conductor`, `Vehiculo`).
 - **Resource** `App\Http\Resources\Tenant\PedidoResource`: sin cambios (expone las columnas más
   nombres derivados de las relaciones).
-- **Controlador** `App\Http\Controllers\Tenant\ConfiguracionController`(spec 015, tocado por esta
-  ronda): `estadoActual()` deja de usar `'0'` como default de `tarifa_banderazo`/
-  `tarifa_km_adicional` (responde `null` cuando el `AdminCliente` nunca las configuró) y agrega el
-  campo `tarifas_configuradas: bool` (`true` solo si ambas claves existen en
-  `configuraciones_tenant`).
+- **Controlador** `App\Http\Controllers\Tenant\ConfiguracionController` (spec 015): `estadoActual()`
+  no usa `'0'` como default de ninguna de las tres tarifas (responde `null` cuando el `AdminCliente`
+  nunca las configuró) y expone el campo `tarifas_configuradas: bool` (`true` solo si
+  `tarifa_banderazo`, `km_incluidos_banderazo` y `tarifa_km_adicional` existen las tres en
+  `configuraciones_tenant`); `update()` valida `km_incluidos_banderazo` con `gt:0` (rechaza `0`),
+  a diferencia de las otras dos tarifas, que siguen aceptando `min:0`.
 - **Controlador** `App\Http\Controllers\Tenant\PedidoController`:
   - `store(Request $request)`: antes de `validarDatos()`, un nuevo método privado
     `validarTarifasConfiguradas()` (mismo patrón que `validarPuedeCrearPedido()`) verifica que
-    `ConfiguracionTenant::obtener(BANDERAZO)` y `obtener(KM_ADICIONAL)` no sean `null`; si falta
-    cualquiera, lanza `ValidationException` (`422`) con un mensaje dirigido al `AdminCliente`. No se
-    aplica a `update()`.
+    `ConfiguracionTenant::obtener(BANDERAZO)`, `obtener(KM_INCLUIDOS)` y `obtener(KM_ADICIONAL)` no
+    sean `null`; si falta cualquiera, lanza `ValidationException` (`422`) con un mensaje dirigido al
+    `AdminCliente`. No se aplica a `update()`.
   - `store(Request $request)` / `validarDatos()`: `fecha_servicio` pasa de `required` fijo a
     validación manual (mismo patrón que las horas): obligatoria solo si `lo_antes_posible` es
     `false`; si es `true` y no llega, se completa con `now()->toDateString()` antes de guardar.
@@ -527,13 +547,14 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
   - Nuevo bloque "Total del viaje" (reemplaza al antiguo input de importe de envío): se calcula en
     el propio componente (sin store ni composable con estado compartido) a partir de `distanceKm`
     (obtenido de `UiVistaPreviaRuta`/`drawRoute` cuando ambas direcciones están resueltas) y las
-    tarifas leídas de `GET /configuracion` al montar. Solo se muestra cuando hay `distanceKm`
-    disponible **y** `tarifas_configuradas` es `true`, y su valor alimenta directamente
-    `form.importe_envio` (se recalcula cada vez que cambia `distanceKm`).
+    tres tarifas leídas de `GET /configuracion` al montar
+    (`tarifaBanderazo + Math.max(0, distanceKm - kmIncluidosBanderazo) * tarifaKmAdicional`). Solo
+    se muestra cuando hay `distanceKm` disponible **y** `tarifas_configuradas` es `true`, y su valor
+    alimenta directamente `form.importe_envio` (se recalcula cada vez que cambia `distanceKm`).
   - Al leer `GET /configuracion`, guarda `tarifas_configuradas` (booleano de la respuesta) en un
-    `ref` aparte de los valores numéricos de tarifa — ya no se infiere con
-    `Number(data.tarifa_banderazo) || 0` (ese patrón no distinguía "no configurada" de "configurada
-    en 0").
+    `ref` aparte de los valores numéricos de tarifa (`tarifaBanderazo`, `kmIncluidosBanderazo`,
+    `tarifaKmAdicional`) — ya no se infiere con `Number(data.tarifa_banderazo) || 0` (ese patrón no
+    distinguía "no configurada" de "configurada en 0").
   - El botón "Agendar" se deshabilita mientras `distanceKm` no esté disponible **o**
     `tarifas_configuradas` sea `false`, ya que en ambos casos no hay `importe_envio` calculado que
     enviar. El mensaje junto al bloque distingue las dos causas: "Resuelve ambas direcciones..." si
@@ -565,8 +586,6 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
 - Persistir cualquier campo de distancia (`distancia_km`) en el pedido — solo `importe_envio` (el
   resultado del cálculo) se guarda; la distancia en sí sigue siendo solo un valor en memoria del
   frontend.
-- Umbral de kilómetros incluidos en la tarifa de banderazo — la tarifa por kilómetro adicional se
-  aplica sobre toda la distancia del trayecto.
 - Gestión de clientes o de sus direcciones desde el panel de Despachador — el nuevo acceso es de
   solo lectura (`GET`), para poblar el select; crear/editar clientes o direcciones sigue siendo
   exclusivo de `AdminCliente` en su propia pantalla.
@@ -627,10 +646,10 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
 20. El campo "Importe de cobro" solo se muestra cuando la modalidad de pago es "Receptor paga envío
     + producto"; al cambiar a cualquiera de las otras dos modalidades, el campo se oculta.
 21. Cuando ambas direcciones están resueltas, se muestra un bloque "Total del viaje" con el importe
-    calculado (`tarifa_banderazo + distancia_km × tarifa_km_adicional`, usando las tarifas
-    configuradas del tenant), y ese valor es el que viaja como `importe_envio` en el `POST
-    /pedidos`; mientras falte alguna dirección, el bloque no se muestra y el botón "Agendar" queda
-    deshabilitado, porque no hay `importe_envio` que enviar.
+    calculado (`tarifa_banderazo + max(0, distancia_km − km_incluidos_banderazo) ×
+    tarifa_km_adicional`, usando las tarifas configuradas del tenant), y ese valor es el que viaja
+    como `importe_envio` en el `POST /pedidos`; mientras falte alguna dirección, el bloque no se
+    muestra y el botón "Agendar" queda deshabilitado, porque no hay `importe_envio` que enviar.
 22. El formulario no muestra ni envía campos de latitud/longitud; ya no existe un campo manual de
     "Importe de envío" — `UiVistaPreviaRuta` sigue funcionando con coordenadas obtenidas solo del
     autocompletado o de una dirección guardada del cliente, sin persistirlas.
@@ -641,16 +660,21 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
     muestra un error y no cierra el panel; con alguna dirección sin resolver (sin `distanceKm`, y
     por lo tanto sin `importe_envio` calculado), el botón "Agendar" está deshabilitado; con datos
     válidos, crea el pedido vía `POST /pedidos`, limpia el formulario y cierra el panel.
-26. Con el tenant sin `tarifa_banderazo` o sin `tarifa_km_adicional` configuradas, `POST /pedidos`
-    (con sesión de `Despachador` y el resto de los datos válidos) responde `422`; con ambas
-    configuradas (aunque alguna valga `0` a propósito), responde `201`.
-27. `GET /configuracion` responde `tarifa_banderazo`/`tarifa_km_adicional` en `null` (no `"0"`)
-    cuando el `AdminCliente` nunca las configuró, y `tarifas_configuradas: false`; al configurar
-    ambas, responde con los valores numéricos y `tarifas_configuradas: true`.
-28. En el panel, con el tenant sin tarifas configuradas, aunque ambas direcciones estén resueltas
+26. Con el tenant sin `tarifa_banderazo`, sin `km_incluidos_banderazo` o sin `tarifa_km_adicional`
+    configuradas, `POST /pedidos` (con sesión de `Despachador` y el resto de los datos válidos)
+    responde `422`; con las tres configuradas (aunque `tarifa_banderazo`/`tarifa_km_adicional` valgan
+    `0` a propósito), responde `201`.
+27. `GET /configuracion` responde `tarifa_banderazo`/`km_incluidos_banderazo`/`tarifa_km_adicional`
+    en `null` cuando el `AdminCliente` nunca las configuró, y `tarifas_configuradas: false`; al
+    configurar las tres, responde con los valores numéricos y `tarifas_configuradas: true`.
+28. `PUT /configuracion` (spec 015) con `km_incluidos_banderazo: 0` responde `422`; con un valor
+    mayor a cero, responde `200` y persiste el valor.
+29. En el panel, con el tenant sin tarifas configuradas, aunque ambas direcciones estén resueltas
     (con `distanceKm` disponible), el bloque "Total del viaje" no se muestra, aparece un mensaje
     indicando que faltan tarifas por configurar, y "Agendar" está deshabilitado.
-29. Pint y ESLint/Prettier corren sin errores; `php artisan test` pasa.
+30. Con `distancia_km` menor o igual a `km_incluidos_banderazo`, el "Total del viaje" es igual a
+    `tarifa_banderazo` (no se cobra kilómetro adicional).
+31. Pint y ESLint/Prettier corren sin errores; `php artisan test` pasa.
 
 ## Supuestos asumidos (registro completo)
 
@@ -711,26 +735,38 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
 20. `importe_cobro` solo se captura (frontend) y se respeta (backend) cuando `modalidad_pago` es
     `RECEPTOR_PAGA_ENVIO_PRODUCTOS`; en cualquier otro caso queda forzado a `0` tanto en la UI como
     en el servidor, sin importar qué llegue en el payload.
-21. El "total del viaje" se calcula como `tarifa_banderazo + distancia_km × tarifa_km_adicional`,
-    sin umbral de kilómetros incluidos, usando las tarifas configurables de la spec 015 (que esa
-    spec dejó explícitamente sin aplicar) y la distancia numérica entre recogida y entrega obtenida
-    de Google Directions API (se extiende `RouteResult`/`GoogleProvider` para exponer `distanceKm`
-    además del texto ya existente). Ya no es puramente informativo: es el valor que se envía como
-    `importe_envio` en el `POST /pedidos` y se persiste en la columna que ya existía para ese campo
-    (no requiere ninguna migración nueva). El campo manual de "Importe de envío" desaparece del
-    formulario, y "Agendar" queda deshabilitado mientras el cálculo no esté disponible.
-22. "No hay tarifa configurada" significa que el `AdminCliente` nunca guardó valor para esa clave en
-    `configuraciones_tenant` (fila inexistente) — no que la haya guardado en `0` a propósito; un `0`
-    explícito cuenta como "configurada". El bloqueo de creación de pedidos aplica si falta
-    **cualquiera** de las dos tarifas (`tarifa_banderazo` o `tarifa_km_adicional`).
-23. El bloqueo se implementa en ambas capas — `POST /pedidos` responde `422` en el backend, y el
+21. El "total del viaje" se calcula como
+    `tarifa_banderazo + max(0, distancia_km − km_incluidos_banderazo) × tarifa_km_adicional`,
+    usando las tres tarifas configurables de la spec 015 (que esa spec dejó explícitamente sin
+    aplicar) y la distancia numérica entre recogida y entrega obtenida de Google Directions API (se
+    extiende `RouteResult`/`GoogleProvider` para exponer `distanceKm` además del texto ya existente).
+    Ya no es puramente informativo: es el valor que se envía como `importe_envio` en el
+    `POST /pedidos` y se persiste en la columna que ya existía para ese campo (no requiere ninguna
+    migración nueva). El campo manual de "Importe de envío" desaparece del formulario, y "Agendar"
+    queda deshabilitado mientras el cálculo no esté disponible.
+22. `km_incluidos_banderazo` es el mínimo de kilómetros que ya cubre el banderazo: si la distancia
+    del viaje es menor o igual a ese valor, el cliente paga únicamente el banderazo — el kilómetro
+    adicional solo se cobra sobre el exceso, nunca sobre un valor negativo.
+23. "No hay tarifa configurada" significa que el `AdminCliente` nunca guardó valor para esa clave en
+    `configuraciones_tenant` (fila inexistente). Para `tarifa_banderazo`/`tarifa_km_adicional`, un
+    `0` explícito cuenta como "configurada" (no se distingue de la ausencia por su valor, sino por la
+    existencia de la fila). `km_incluidos_banderazo` no acepta guardarse en `0` (spec 015): cualquier
+    valor guardado es mayor a cero, así que ahí basta con comprobar que la fila exista. El bloqueo de
+    creación de pedidos aplica si falta **cualquiera** de las tres tarifas.
+24. El bloqueo se implementa en ambas capas — `POST /pedidos` responde `422` en el backend, y el
     botón "Agendar" queda deshabilitado con mensaje explicativo en el frontend — sin depender solo
     de la UI para impedir la creación.
-24. El frontend detecta la falta de tarifas a partir del mismo `GET /configuracion` que
-    `NuevaEntregaPanel.vue` ya consume al montarse (nuevo campo `tarifas_configuradas`), sin agregar
-    ningún endpoint nuevo.
-25. No se agrega ninguna pantalla nueva para resolver el bloqueo: el `AdminCliente` ya cuenta con la
+25. El frontend detecta la falta de tarifas a partir del mismo `GET /configuracion` que
+    `NuevaEntregaPanel.vue` ya consume al montarse (campo `tarifas_configuradas`, que ahora exige las
+    tres claves), sin agregar ningún endpoint nuevo.
+26. No se agrega ninguna pantalla nueva para resolver el bloqueo: el `AdminCliente` ya cuenta con la
     pestaña "Tarifas" de `/t/{slug}/panel/configuracion` (spec 015).
-26. El bloqueo no afecta pedidos ya creados previamente sin tarifas configuradas (sin migración de
+27. El bloqueo no afecta pedidos ya creados previamente sin tarifas configuradas (sin migración de
     datos retroactiva) ni al `update()` de un pedido existente — solo a la creación (`store()`).
+28. El mensaje de error que ve el `AdminCliente`/`Despachador` cuando falta configurar alguna tarifa
+    sigue siendo genérico ("el administrador del tenant debe configurar las tarifas antes de poder
+    agendar pedidos"), sin nombrar cuál de las tres falta específicamente.
+29. Como el sistema está en fase beta y no tiene tenants reales operando todavía, el bloqueo por
+    `km_incluidos_banderazo` faltante aplica de inmediato para todos, sin backfill ni período de
+    transición.
 </content>

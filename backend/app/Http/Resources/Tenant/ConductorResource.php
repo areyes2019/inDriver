@@ -36,6 +36,10 @@ class ConductorResource extends JsonResource
                 'nombre' => $this->despachador->usuario->nombre,
                 'apellido_paterno' => $this->despachador->usuario->apellido_paterno,
             ] : null),
+            'saldo_viajes' => $this->when(
+                array_key_exists('viajes_vendidos', $this->resource->getAttributes()),
+                fn () => (int) $this->viajes_vendidos - (int) $this->viajes_consumidos,
+            ),
             'created_at' => $this->created_at,
         ];
     }
