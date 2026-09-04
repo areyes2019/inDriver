@@ -10,8 +10,8 @@
 #   2. Pone el sitio en mantenimiento
 #   3. Sube el código con tar sobre SSH (sin .env, storage/, vendor/ ni public/)
 #   4. composer install --no-scripts + package:discover
-#   5. Respalda la base de datos
-#   6. php artisan migrate --force
+#   5. Respalda la base de datos (central y la de cada tenant)
+#   6. php artisan migrate --force && php artisan tenants:migrate --force
 #   7. Recachea configuración, rutas y eventos
 #   8. Levanta el sitio
 #
@@ -171,6 +171,56 @@ FIN_RESPALDO
     say "Aplicando migraciones"
     remote "cd '$REMOTE_APP' && $REMOTE_PHP artisan migrate --force"
     ok "migraciones aplicadas"
+
+    # --- Bases de tenants ------------------------------------------------
+    # Cada tenant vive en su propia base física (delivery_tenant_<id>, spec
+    # 005) y las migraciones de database/migrations/tenant/ no las toca el
+    # `artisan migrate` de arriba — hace falta tenants:migrate aparte. Si no
+    # hay tenants todavía (primer despliegue), ambos pasos no hacen nada.
+    say "Respaldando las bases de tenants"
+    remote "APP_DIR='$REMOTE_APP' bash -s" <<'FIN_RESPALDO_TENANTS'
+set -euo pipefail
+cd "$APP_DIR"
+
+leer_env() {
+    sed -n "s/^$1=//p" .env | head -1 \
+        | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
+}
+
+DB_USERNAME="$(leer_env DB_USERNAME)"
+DB_PASSWORD="$(leer_env DB_PASSWORD)"
+
+[ -n "$DB_USERNAME" ] || { echo "no pude leer DB_USERNAME de .env" >&2; exit 1; }
+
+mkdir -p ~/backups
+
+# El prefijo delivery_tenant_ es el que usa config/tenancy.php (spec 005). Se
+# consulta information_schema en vez de `artisan tenants:list` para no
+# depender de que artisan ya tenga la caché de config reconstruida en este
+# punto del despliegue.
+BASES_TENANT="$(MYSQL_PWD="$DB_PASSWORD" mysql -N -u"$DB_USERNAME" -e \
+    "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME LIKE 'delivery_tenant_%'")"
+
+if [ -z "$BASES_TENANT" ]; then
+    echo "sin tenants todavía, nada que respaldar"
+fi
+
+for BASE in $BASES_TENANT; do
+    DESTINO=~/backups/indriver-${BASE}-$(date +%Y%m%d-%H%M%S).sql.gz
+    MYSQL_PWD="$DB_PASSWORD" mysqldump \
+        --single-transaction --quick --no-tablespaces \
+        -u"$DB_USERNAME" "$BASE" | gzip > "$DESTINO"
+    echo "respaldo: $DESTINO ($(du -h "$DESTINO" | cut -f1))"
+
+    # Conserva los 10 más recientes de este tenant.
+    ls -1t ~/backups/indriver-${BASE}-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm --
+done
+FIN_RESPALDO_TENANTS
+    ok "respaldo de tenants hecho"
+
+    say "Aplicando migraciones de tenants"
+    remote "cd '$REMOTE_APP' && $REMOTE_PHP artisan tenants:migrate --force"
+    ok "migraciones de tenants aplicadas"
 else
     warn "--sin-migrar: no se tocó la base de datos"
 fi
