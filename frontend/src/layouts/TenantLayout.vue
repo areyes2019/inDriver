@@ -75,11 +75,7 @@ const items = computed(() => {
     lista.push({ label: 'Despachadores', to: `/t/${slug.value}/panel/despachadores` })
   }
 
-  lista.push(
-    { label: 'Conductores', to: `/t/${slug.value}/panel/conductores` },
-    { label: 'Vehículos', to: `/t/${slug.value}/panel/vehiculos` },
-    { label: 'Asignaciones', to: `/t/${slug.value}/panel/asignaciones` },
-  )
+  lista.push({ label: 'Conductores', to: `/t/${slug.value}/panel/conductores` })
 
   return lista
 })

@@ -7,7 +7,6 @@ use App\Models\Tenant;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConductorPosicion;
-use App\Models\Tenant\ConductorVehiculo;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Usuario;
@@ -202,12 +201,13 @@ it('accepts an available pedido, assigns the vehicle, and broadcasts pedido.toma
     $pedido = conductorAppPedidoPublicado($tenant);
 
     tenancy()->initialize($tenant);
-    $vehiculo = Vehiculo::create(['placa' => 'ABC-123', 'marca' => 'Nissan', 'modelo' => 'NP300', 'anio' => 2020, 'estado' => 'ACTIVO']);
-    ConductorVehiculo::create([
+    $vehiculo = Vehiculo::create([
         'id_conductor' => $datos['conductor']->id_conductor,
-        'id_vehiculo' => $vehiculo->id_vehiculo,
-        'fecha_inicio' => now()->toDateString(),
-        'activo' => true,
+        'placa' => 'ABC-123',
+        'marca' => 'Nissan',
+        'modelo' => 'NP300',
+        'anio' => 2020,
+        'estado' => 'ACTIVO',
     ]);
     tenancy()->end();
 

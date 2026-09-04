@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['id_usuario', 'id_despachador', 'numero_licencia', 'tipo_licencia', 'fecha_vencimiento_licencia', 'telefono_emergencia', 'estado', 'disponibilidad'])]
 class Conductor extends Model
@@ -41,5 +42,10 @@ class Conductor extends Model
     public function ventasViajes(): HasMany
     {
         return $this->hasMany(VentaViajeConductor::class, 'id_conductor', 'id_conductor');
+    }
+
+    public function vehiculo(): HasOne
+    {
+        return $this->hasOne(Vehiculo::class, 'id_conductor', 'id_conductor');
     }
 }

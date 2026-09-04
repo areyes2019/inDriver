@@ -65,9 +65,10 @@ updated_at
 - DESCANSO
 - FUERA_DE_SERVICIO
 
-## 04 Tabla vehiculos - Vehículos pertenecientes a la flotilla.
+## 04 Tabla vehiculos - Vehículo propio de cada conductor (relación 1 a 1, no de flotilla).
 
 id_vehiculo
+id_conductor
 placa
 marca
 modelo
@@ -84,24 +85,18 @@ updated_at
 - INACTIVO
 - MANTENIMIENTO
 
-## 05 Tabla conductor_vehiculo - Relaciona conductores y vehículos.
+El tenant no es dueño de una flotilla que asigna vehículos: cada conductor llega con su propio
+vehículo. `id_conductor` es única — un vehículo nunca pertenece a más de un conductor, y un conductor
+nunca tiene más de un vehículo a la vez. Si el conductor cambia de vehículo, se sobreescriben estos
+mismos campos; no se conserva el vehículo anterior (ver `tenant/004-vehiculo-del-conductor.md`).
 
-id
-id_conductor
-id_vehiculo
-fecha_inicio
-fecha_fin
-activo
-created_at
-updated_at
+## 05 Tabla conductor_vehiculo — ELIMINADA
 
-Esto permite conservar historial.
-Ejemplo:
-
-Conductor 01
-   │
-   ├── Moto 01 → enero-junio
-   └── Moto 03 → julio-actual
+Existió como historial de asignaciones conductor↔vehículo bajo un modelo donde el tenant era dueño de
+una flotilla y asignaba (y reasignaba) vehículos entre conductores. Ese modelo no aplica: cada
+conductor llega con su propio vehículo, en relación 1 a 1 y sin historial de cambios. La relación vive
+ahora directamente en `vehiculos.id_conductor` (inciso 04). Ver
+`tenant/004-vehiculo-del-conductor.md`.
 
 
 ## 06 Tabla clientes - Clientes finales que solicitan servicios.
@@ -578,10 +573,7 @@ usuarios.id_usuario
 conductores.id_usuario
 conductores.id_conductor
         ↓
-conductor_vehiculo.id_conductor
-vehiculos.id_vehiculo
-        ↓
-conductor_vehiculo.id_vehiculo
+vehiculos.id_conductor
 clientes.id_cliente
         ↓
 direcciones_clientes.id_cliente
@@ -643,7 +635,6 @@ ARQUITECTURA FINAL
                          │ despachadores          │
                          │ conductores            │
                          │ vehiculos              │
-                         │ conductor_vehiculo     │
                          │                        │
                          │ clientes               │
                          │ direcciones_clientes   │
@@ -688,7 +679,7 @@ Cada BD Tenant tendrá exactamente el mismo esquema.
 - `pagos` registra el cobro real de cada pedido (método, monto, fecha, referencia de transacción) — no existe liquidación ni comisión al conductor, porque el sistema no gestiona pagos a conductores.
 - Los conductores son partners independientes: cubren sus propios gastos operativos (combustible, mantenimiento, peajes). El sistema no lleva registro de gastos de conductor.
 - No se exige evidencia fotográfica ni firma para marcar un pedido como ENTREGADO.
-- Un conductor solo puede tener una fila con `activo = true` en `conductor_vehiculo` a la vez — no puede estar asignado a dos vehículos simultáneamente.
+- Un conductor tiene como máximo un vehículo y un vehículo pertenece como máximo a un conductor (`vehiculos.id_conductor`, relación 1 a 1) — no existe historial de vehículos anteriores.
 - Un despachador ve y puede operar sobre todos los pedidos y conductores del tenant por igual — no hay segmentación de despachadores por zona ni por sub-flotilla.
 - `compras_paquetes` no lleva `id_tenant`: como cada tenant ya vive en su propia base de datos, esa columna sería redundante. `codigo_paquete` es un identificador libre (no hay tabla `paquetes` formal todavía — los paquetes se definen en configuración/código).
 

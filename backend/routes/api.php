@@ -13,13 +13,11 @@ use App\Http\Controllers\Tenant\Conductor\PedidoController as ConductorPedidoCon
 use App\Http\Controllers\Tenant\Conductor\SaldoController as ConductorSaldoController;
 use App\Http\Controllers\Tenant\Conductor\UbicacionController as ConductorUbicacionController;
 use App\Http\Controllers\Tenant\ConductorController;
-use App\Http\Controllers\Tenant\ConductorVehiculoController;
 use App\Http\Controllers\Tenant\ConfiguracionController;
 use App\Http\Controllers\Tenant\DespachadorController;
 use App\Http\Controllers\Tenant\DireccionClienteController;
 use App\Http\Controllers\Tenant\PedidoController;
 use App\Http\Controllers\Tenant\UsuarioController;
-use App\Http\Controllers\Tenant\VehiculoController;
 use App\Http\Controllers\Tenant\VentaViajeConductorController;
 use App\Http\Controllers\Tenant\ZonaCoberturaController;
 use Illuminate\Broadcasting\BroadcastController;
@@ -92,16 +90,6 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::post('/conductores/{conductor}/vender-viajes', [VentaViajeConductorController::class, 'store']);
             Route::get('/conductores/{conductor}/historial-pagos', [VentaViajeConductorController::class, 'historialConductor']);
             Route::get('/reportes/pagos-conductores', [VentaViajeConductorController::class, 'reportePagos']);
-
-            Route::get('/vehiculos', [VehiculoController::class, 'index']);
-            Route::post('/vehiculos', [VehiculoController::class, 'store']);
-            Route::get('/vehiculos/{vehiculo}', [VehiculoController::class, 'show']);
-            Route::put('/vehiculos/{vehiculo}', [VehiculoController::class, 'update']);
-
-            Route::get('/conductor-vehiculo/disponibles', [ConductorVehiculoController::class, 'disponibles']);
-            Route::get('/conductor-vehiculo', [ConductorVehiculoController::class, 'index']);
-            Route::post('/conductor-vehiculo', [ConductorVehiculoController::class, 'store']);
-            Route::patch('/conductor-vehiculo/{conductorVehiculo}/finalizar', [ConductorVehiculoController::class, 'finalizar']);
 
             Route::post('/clientes', [ClienteController::class, 'store']);
             Route::put('/clientes/{cliente}', [ClienteController::class, 'update']);

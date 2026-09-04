@@ -14,6 +14,18 @@ interface DespachadorInfo {
   apellido_paterno: string
 }
 
+interface VehiculoInfo {
+  id_vehiculo: number
+  placa: string
+  marca: string | null
+  modelo: string | null
+  anio: number | null
+  color: string | null
+  tipo: string | null
+  numero_economico: string | null
+  estado: string
+}
+
 interface Conductor {
   id_conductor: number
   id_usuario: number
@@ -28,6 +40,7 @@ interface Conductor {
   disponibilidad: string
   id_despachador: number | null
   despachador: DespachadorInfo | null
+  vehiculo: VehiculoInfo | null
   saldo_viajes: number | null
   created_at: string
 }
@@ -199,7 +212,7 @@ function cerrarHistorialPagos() {
 
 const usaDespachadores = computed(() => auth.usuario?.usar_despachadores === 'Sí')
 const columnasTabla = computed(
-  () => 6 + (usaDespachadores.value ? 1 : 0) + (modalidadPrepago.value ? 1 : 0),
+  () => 7 + (usaDespachadores.value ? 1 : 0) + (modalidadPrepago.value ? 1 : 0),
 )
 const despachadoresActivos = ref<{ id_despachador: number; nombre: string }[]>([])
 // Con 0 o 1 despachador activo no se pide el selector: sin ninguno no hay nada que elegir, y con
@@ -293,6 +306,7 @@ onMounted(() => {
               <th class="py-2 pr-4">Nombre</th>
               <th class="py-2 pr-4">Email</th>
               <th class="py-2 pr-4">Licencia</th>
+              <th class="py-2 pr-4">Placa</th>
               <th class="py-2 pr-4">Estado</th>
               <th class="py-2 pr-4">Disponibilidad</th>
               <th v-if="usaDespachadores" class="py-2 pr-4">Despachador</th>
@@ -318,6 +332,7 @@ onMounted(() => {
               </td>
               <td class="py-2 pr-4">{{ conductor.email }}</td>
               <td class="py-2 pr-4">{{ conductor.numero_licencia }}</td>
+              <td class="py-2 pr-4">{{ conductor.vehiculo?.placa ?? '—' }}</td>
               <td class="py-2 pr-4">
                 <UiBadge
                   :text="conductor.estado"

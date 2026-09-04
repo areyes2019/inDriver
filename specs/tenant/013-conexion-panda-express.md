@@ -149,9 +149,9 @@ existen en el esquema, ninguna se modifica.
    su propio tenant.
 3. Un conductor no puede aceptar un segundo pedido si ya tiene uno activo (`id_conductor` propio en
    un pedido cuyo estado no sea final: `ENTREGADO`, `RECHAZADO`, `CANCELADO`).
-4. Al aceptar (`PUBLICADO→TOMADO`), el pedido toma automáticamente el vehículo de la asignación
-   activa del conductor en `conductor_vehiculo` (si no tiene ninguna activa, `id_vehiculo` queda
-   `null` y el pedido se acepta igual).
+4. Al aceptar (`PUBLICADO→TOMADO`), el pedido toma automáticamente el vehículo propio del conductor
+   (`vehiculos.id_conductor`, relación 1 a 1 — ver `tenant/004-vehiculo-del-conductor.md`); como todo
+   conductor activo tiene su propio vehículo desde el alta, `id_vehiculo` nunca queda `null`.
 5. Desde la app, el conductor solo puede mover su propio pedido activo por:
    `TOMADO→ARRIBADO→EN_CAMINO→ARRIBADO_A_ENTREGA→ENTREGADO`, o cancelarlo (`→CANCELADO`) en
    cualquier punto antes de `ENTREGADO`.
@@ -341,8 +341,9 @@ alcance.
    (`ONLINE`/`OFFLINE` únicamente); los demás valores del enum quedan fuera de alcance de la app.
 7. Cada envío de ubicación actualiza la posición "actual" en `conductor_estado` y además deja
    registro histórico en `conductor_posiciones` (no se descarta el histórico).
-8. El vehículo del pedido se toma automático de la asignación activa del conductor en
-   `conductor_vehiculo`; el conductor no lo elige manualmente al aceptar.
+8. El vehículo del pedido se toma automático del vehículo propio del conductor
+   (`vehiculos.id_conductor`, no una tabla de asignaciones); el conductor no lo elige manualmente al
+   aceptar.
 9. "Ganancias"/saldo en la app equivale al saldo de viajes prepagados restante
    (`ventas_viajes_conductor` menos pedidos consumidos), no a dinero adeudado al conductor; con
    modalidad `Comision` no aplica y se oculta.

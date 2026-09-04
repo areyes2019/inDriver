@@ -155,36 +155,6 @@ const router = createRouter({
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/vehiculos',
-      name: 'tenant-vehiculos-lista',
-      component: () => import('../views/tenant/vehiculos/ListaVehiculosView.vue'),
-      meta: { requiresTenantAuth: true },
-    },
-    {
-      path: '/t/:slug/panel/vehiculos/crear',
-      name: 'tenant-vehiculos-crear',
-      component: () => import('../views/tenant/vehiculos/CrearVehiculoView.vue'),
-      meta: { requiresTenantAuth: true },
-    },
-    {
-      path: '/t/:slug/panel/vehiculos/:id/editar',
-      name: 'tenant-vehiculos-editar',
-      component: () => import('../views/tenant/vehiculos/EditarVehiculoView.vue'),
-      meta: { requiresTenantAuth: true },
-    },
-    {
-      path: '/t/:slug/panel/asignaciones',
-      name: 'tenant-asignaciones-lista',
-      component: () => import('../views/tenant/asignaciones/ListaAsignacionesView.vue'),
-      meta: { requiresTenantAuth: true },
-    },
-    {
-      path: '/t/:slug/panel/asignaciones/asignar',
-      name: 'tenant-asignaciones-asignar',
-      component: () => import('../views/tenant/asignaciones/AsignarVehiculoView.vue'),
-      meta: { requiresTenantAuth: true },
-    },
-    {
       path: '/t/:slug/panel/clientes',
       name: 'tenant-clientes-lista',
       component: () => import('../views/tenant/clientes/ListaClientesView.vue'),

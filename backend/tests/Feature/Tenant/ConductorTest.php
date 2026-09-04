@@ -7,6 +7,7 @@ use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Usuario;
+use App\Models\Tenant\Vehiculo;
 use App\Models\Tenant\VentaViajeConductor;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -70,6 +71,19 @@ function conductorHabilitarDespachadores(Tenant $tenant): void
     tenancy()->initialize($tenant);
     ConfiguracionTenant::establecer(ConfiguracionTenant::USAR_DESPACHADORES, 'Sí');
     tenancy()->end();
+}
+
+function conductorDatosVehiculo(array $overrides = []): array
+{
+    return array_merge([
+        'placa' => 'ABC-123',
+        'marca' => 'Nissan',
+        'modelo' => 'NP300',
+        'anio' => 2020,
+        'color' => 'Blanco',
+        'tipo' => 'Camioneta',
+        'numero_economico' => 'ECO-01',
+    ], $overrides);
 }
 
 function conductorCrearDespachador(Tenant $tenant, array $overrides = []): Despachador
@@ -153,17 +167,67 @@ it('creates a conductor profile for an eligible usuario', function () {
             'id_usuario' => $usuarioPedro->id_usuario,
             'numero_licencia' => 'ABC123',
             'tipo_licencia' => 'A',
+            ...conductorDatosVehiculo(),
         ])
         ->assertCreated()
         ->assertJsonPath('estado', 'ACTIVO')
         ->assertJsonPath('disponibilidad', 'FUERA_DE_SERVICIO')
-        ->assertJsonPath('numero_licencia', 'ABC123');
+        ->assertJsonPath('numero_licencia', 'ABC123')
+        ->assertJsonPath('vehiculo.placa', 'ABC-123')
+        ->assertJsonPath('vehiculo.estado', 'ACTIVO');
 
     tenancy()->initialize($tenant);
     expect(Auditoria::where('tabla_afectada', 'conductores')->where('accion', 'ALTA')->exists())->toBeTrue();
     tenancy()->end();
 
     expect($response->json('id_conductor'))->not->toBeNull();
+});
+
+it('rejects creating a conductor profile without the vehicle fields', function () {
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/conductores', [
+            'id_usuario' => $usuarioPedro->id_usuario,
+            'numero_licencia' => 'ABC123',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['placa', 'marca', 'modelo', 'anio', 'color', 'tipo', 'numero_economico']);
+});
+
+it('rejects creating a conductor profile with a placa already used by another vehicle', function () {
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    $usuarioAna = Usuario::create([
+        'nombre' => 'Ana', 'apellido_paterno' => 'Gómez', 'email' => 'ana@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    $conductorPedro = Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    Vehiculo::create([...conductorDatosVehiculo(), 'id_conductor' => $conductorPedro->id_conductor]);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/conductores', [
+            'id_usuario' => $usuarioAna->id_usuario,
+            'numero_licencia' => 'XYZ789',
+            ...conductorDatosVehiculo(),
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['placa']);
 });
 
 it('rejects creating a conductor profile for a usuario without rol Conductor', function () {
@@ -181,6 +245,7 @@ it('rejects creating a conductor profile for a usuario without rol Conductor', f
         ->postJson('/api/v1/t/cafe-luna/conductores', [
             'id_usuario' => $usuarioPedro->id_usuario,
             'numero_licencia' => 'ABC123',
+            ...conductorDatosVehiculo(),
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['id_usuario']);
@@ -202,6 +267,7 @@ it('rejects creating a conductor profile for a usuario that already has one', fu
         ->postJson('/api/v1/t/cafe-luna/conductores', [
             'id_usuario' => $usuarioPedro->id_usuario,
             'numero_licencia' => 'XYZ789',
+            ...conductorDatosVehiculo(),
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['id_usuario']);
@@ -216,7 +282,8 @@ it('lists conductores with their usuario data and filters by search', function (
         'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
         'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
     ]);
-    Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    $conductorPedro = Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    Vehiculo::create([...conductorDatosVehiculo(), 'id_conductor' => $conductorPedro->id_conductor]);
 
     $usuarioAna = Usuario::create([
         'nombre' => 'Ana', 'apellido_paterno' => 'Gómez', 'email' => 'ana@cafeluna.com',
@@ -229,7 +296,8 @@ it('lists conductores with their usuario data and filters by search', function (
         ->getJson('/api/v1/t/cafe-luna/conductores?search=ABC123')
         ->assertOk()
         ->assertJsonCount(1, 'data')
-        ->assertJsonPath('data.0.nombre', 'Pedro');
+        ->assertJsonPath('data.0.nombre', 'Pedro')
+        ->assertJsonPath('data.0.vehiculo.placa', 'ABC-123');
 });
 
 it('includes saldo_viajes in the listing, computed without an extra query per conductor', function () {
@@ -282,13 +350,15 @@ it('shows a single conductor with its usuario data', function () {
         'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
     ]);
     $conductor = Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    Vehiculo::create([...conductorDatosVehiculo(), 'id_conductor' => $conductor->id_conductor]);
     tenancy()->end();
 
     $this->actingAs($admin, 'usuario')
         ->getJson("/api/v1/t/cafe-luna/conductores/{$conductor->id_conductor}")
         ->assertOk()
         ->assertJsonPath('numero_licencia', 'ABC123')
-        ->assertJsonPath('email', 'pedro@cafeluna.com');
+        ->assertJsonPath('email', 'pedro@cafeluna.com')
+        ->assertJsonPath('vehiculo.placa', 'ABC-123');
 });
 
 it('updates a conductor profile including estado and disponibilidad, and logs it', function () {
@@ -308,13 +378,46 @@ it('updates a conductor profile including estado and disponibilidad, and logs it
             'numero_licencia' => 'ABC123',
             'estado' => 'BLOQUEADO',
             'disponibilidad' => 'DISPONIBLE',
+            ...conductorDatosVehiculo(),
+            'estado_vehiculo' => 'ACTIVO',
         ])
         ->assertOk()
         ->assertJsonPath('estado', 'BLOQUEADO')
-        ->assertJsonPath('disponibilidad', 'DISPONIBLE');
+        ->assertJsonPath('disponibilidad', 'DISPONIBLE')
+        ->assertJsonPath('vehiculo.placa', 'ABC-123');
 
     tenancy()->initialize($tenant);
     expect(Auditoria::where('tabla_afectada', 'conductores')->where('accion', 'EDICION')->exists())->toBeTrue();
+    expect(Vehiculo::where('id_conductor', $conductor->id_conductor)->where('placa', 'ABC-123')->exists())->toBeTrue();
+    tenancy()->end();
+});
+
+it('changes the vehicle of a conductor that did not have one yet', function () {
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    $conductor = Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->putJson("/api/v1/t/cafe-luna/conductores/{$conductor->id_conductor}", [
+            'numero_licencia' => 'ABC123',
+            'estado' => 'ACTIVO',
+            'disponibilidad' => 'FUERA_DE_SERVICIO',
+            ...conductorDatosVehiculo(['placa' => 'NEW-001']),
+            'estado_vehiculo' => 'MANTENIMIENTO',
+        ])
+        ->assertOk()
+        ->assertJsonPath('vehiculo.placa', 'NEW-001')
+        ->assertJsonPath('vehiculo.estado', 'MANTENIMIENTO');
+
+    tenancy()->initialize($tenant);
+    expect(Vehiculo::where('id_conductor', $conductor->id_conductor)->count())->toBe(1);
     tenancy()->end();
 });
 
@@ -335,6 +438,8 @@ it('rejects updating a conductor with an estado outside the enum', function () {
             'numero_licencia' => 'ABC123',
             'estado' => 'NoExiste',
             'disponibilidad' => 'DISPONIBLE',
+            ...conductorDatosVehiculo(),
+            'estado_vehiculo' => 'ACTIVO',
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['estado']);
@@ -355,6 +460,7 @@ it('does not require id_despachador when the tenant does not use despachadores',
         ->postJson('/api/v1/t/cafe-luna/conductores', [
             'id_usuario' => $usuarioPedro->id_usuario,
             'numero_licencia' => 'ABC123',
+            ...conductorDatosVehiculo(),
         ])
         ->assertCreated();
 
@@ -378,6 +484,7 @@ it('auto-assigns a new conductor to the sole despachador Activo when the tenant 
         ->postJson('/api/v1/t/cafe-luna/conductores', [
             'id_usuario' => $usuarioPedro->id_usuario,
             'numero_licencia' => 'ABC123',
+            ...conductorDatosVehiculo(),
         ])
         ->assertCreated();
 
@@ -402,6 +509,7 @@ it('requires id_despachador to create a conductor when there are 2+ despachadore
         ->postJson('/api/v1/t/cafe-luna/conductores', [
             'id_usuario' => $usuarioPedro->id_usuario,
             'numero_licencia' => 'ABC123',
+            ...conductorDatosVehiculo(),
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['id_despachador']);
@@ -426,6 +534,7 @@ it('creates a conductor with the chosen id_despachador when there are 2+ despach
             'id_usuario' => $usuarioPedro->id_usuario,
             'numero_licencia' => 'ABC123',
             'id_despachador' => $despachadorDos->id_despachador,
+            ...conductorDatosVehiculo(),
         ])
         ->assertCreated();
 
@@ -452,6 +561,8 @@ it('rejects a conductor without despachador when updated to ACTIVO with 2+ despa
             'numero_licencia' => 'ABC123',
             'estado' => 'ACTIVO',
             'disponibilidad' => 'DISPONIBLE',
+            ...conductorDatosVehiculo(),
+            'estado_vehiculo' => 'ACTIVO',
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['id_despachador']);

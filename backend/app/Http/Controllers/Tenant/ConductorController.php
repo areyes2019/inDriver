@@ -11,9 +11,11 @@ use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Usuario;
+use App\Models\Tenant\Vehiculo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -34,7 +36,7 @@ class ConductorController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         $query = Conductor::query()
-            ->with(['usuario', 'despachador.usuario'])
+            ->with(['usuario', 'despachador.usuario', 'vehiculo'])
             ->withSum('ventasViajes as viajes_vendidos', 'cantidad_viajes')
             ->withCount(['pedidos as viajes_consumidos' => fn ($q) => $q->where('prepago_descontado', true)])
             ->orderBy('id_conductor');
@@ -55,7 +57,7 @@ class ConductorController extends Controller
 
     public function show(Conductor $conductor): JsonResponse
     {
-        $conductor->load(['usuario', 'despachador.usuario']);
+        $conductor->load(['usuario', 'despachador.usuario', 'vehiculo']);
 
         return response()->json(new ConductorResource($conductor));
     }
@@ -77,6 +79,7 @@ class ConductorController extends Controller
             'fecha_vencimiento_licencia' => ['nullable', 'date'],
             'telefono_emergencia' => ['nullable', 'string', 'max:255'],
             'id_despachador' => ['nullable', 'integer', 'exists:despachadores,id_despachador'],
+            ...$this->reglasVehiculo(),
         ]);
 
         $usuario = Usuario::find($data['id_usuario']);
@@ -94,13 +97,25 @@ class ConductorController extends Controller
         }
 
         $data['id_despachador'] = $this->resolverDespachador($this->normalizarIdDespachador($data), 'ACTIVO');
+        $datosVehiculo = $this->extraerDatosVehiculo($data);
+        $data = array_diff_key($data, $datosVehiculo);
 
-        $conductor = Conductor::create([
-            ...$data,
-            'estado' => 'ACTIVO',
-            'disponibilidad' => 'FUERA_DE_SERVICIO',
-        ]);
-        $conductor->load(['usuario', 'despachador.usuario']);
+        $conductor = DB::transaction(function () use ($data, $datosVehiculo) {
+            $conductor = Conductor::create([
+                ...$data,
+                'estado' => 'ACTIVO',
+                'disponibilidad' => 'FUERA_DE_SERVICIO',
+            ]);
+
+            Vehiculo::create([
+                ...$datosVehiculo,
+                'id_conductor' => $conductor->id_conductor,
+                'estado' => 'ACTIVO',
+            ]);
+
+            return $conductor;
+        });
+        $conductor->load(['usuario', 'despachador.usuario', 'vehiculo']);
 
         Auditoria::create([
             'id_usuario' => $request->user('usuario')->id_usuario,
@@ -122,12 +137,20 @@ class ConductorController extends Controller
             'estado' => ['required', Rule::in(['ACTIVO', 'INACTIVO', 'BLOQUEADO'])],
             'disponibilidad' => ['required', Rule::in(['DISPONIBLE', 'OCUPADO', 'DESCANSO', 'FUERA_DE_SERVICIO'])],
             'id_despachador' => ['nullable', 'integer', 'exists:despachadores,id_despachador'],
+            ...$this->reglasVehiculo($conductor->vehiculo?->id_vehiculo),
+            'estado_vehiculo' => ['required', Rule::in(['ACTIVO', 'INACTIVO', 'MANTENIMIENTO'])],
         ]);
 
         $data['id_despachador'] = $this->resolverDespachador($this->normalizarIdDespachador($data), $data['estado']);
+        $datosVehiculo = $this->extraerDatosVehiculo($data);
+        $datosVehiculo['estado'] = $data['estado_vehiculo'];
+        unset($data['placa'], $data['marca'], $data['modelo'], $data['anio'], $data['color'], $data['tipo'], $data['numero_economico'], $data['estado_vehiculo']);
 
-        $conductor->update($data);
-        $conductor->load(['usuario', 'despachador.usuario']);
+        DB::transaction(function () use ($conductor, $data, $datosVehiculo) {
+            $conductor->update($data);
+            $conductor->vehiculo()->updateOrCreate([], $datosVehiculo);
+        });
+        $conductor->load(['usuario', 'despachador.usuario', 'vehiculo']);
 
         Auditoria::create([
             'id_usuario' => $request->user('usuario')->id_usuario,
@@ -137,6 +160,42 @@ class ConductorController extends Controller
         ]);
 
         return response()->json(new ConductorResource($conductor));
+    }
+
+    /**
+     * Reglas del vehículo propio del conductor (spec tenant/004): siempre 1 a 1 y obligatorio, se
+     * captura en el mismo formulario de alta/edición del conductor, nunca en una pantalla propia.
+     *
+     * @return array<string, mixed>
+     */
+    private function reglasVehiculo(?int $ignorarVehiculoId = null): array
+    {
+        return [
+            'placa' => ['required', 'string', 'max:255', Rule::unique('vehiculos', 'placa')->ignore($ignorarVehiculoId, 'id_vehiculo')],
+            'marca' => ['required', 'string', 'max:255'],
+            'modelo' => ['required', 'string', 'max:255'],
+            'anio' => ['required', 'integer', 'min:1900', 'max:2100'],
+            'color' => ['required', 'string', 'max:255'],
+            'tipo' => ['required', 'string', 'max:255'],
+            'numero_economico' => ['required', 'string', 'max:255'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function extraerDatosVehiculo(array $data): array
+    {
+        return [
+            'placa' => $data['placa'],
+            'marca' => $data['marca'],
+            'modelo' => $data['modelo'],
+            'anio' => $data['anio'],
+            'color' => $data['color'],
+            'tipo' => $data['tipo'],
+            'numero_economico' => $data['numero_economico'],
+        ];
     }
 
     /**

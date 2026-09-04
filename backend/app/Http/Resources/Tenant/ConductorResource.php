@@ -36,6 +36,17 @@ class ConductorResource extends JsonResource
                 'nombre' => $this->despachador->usuario->nombre,
                 'apellido_paterno' => $this->despachador->usuario->apellido_paterno,
             ] : null),
+            'vehiculo' => $this->whenLoaded('vehiculo', fn () => $this->vehiculo ? [
+                'id_vehiculo' => $this->vehiculo->id_vehiculo,
+                'placa' => $this->vehiculo->placa,
+                'marca' => $this->vehiculo->marca,
+                'modelo' => $this->vehiculo->modelo,
+                'anio' => $this->vehiculo->anio,
+                'color' => $this->vehiculo->color,
+                'tipo' => $this->vehiculo->tipo,
+                'numero_economico' => $this->vehiculo->numero_economico,
+                'estado' => $this->vehiculo->estado,
+            ] : null),
             'saldo_viajes' => $this->when(
                 array_key_exists('viajes_vendidos', $this->resource->getAttributes()),
                 fn () => (int) $this->viajes_vendidos - (int) $this->viajes_consumidos,

@@ -32,6 +32,14 @@ const form = reactive({
   estado: 'ACTIVO',
   disponibilidad: 'FUERA_DE_SERVICIO',
   id_despachador: '',
+  placa: '',
+  marca: '',
+  modelo: '',
+  anio: '',
+  color: '',
+  tipo: '',
+  numero_economico: '',
+  estado_vehiculo: 'ACTIVO',
 })
 
 const fieldErrors = reactive<Record<string, string>>({})
@@ -61,6 +69,14 @@ onMounted(async () => {
     form.estado = conductor.estado ?? 'ACTIVO'
     form.disponibilidad = conductor.disponibilidad ?? 'FUERA_DE_SERVICIO'
     form.id_despachador = conductor.id_despachador ?? ''
+    form.placa = conductor.vehiculo?.placa ?? ''
+    form.marca = conductor.vehiculo?.marca ?? ''
+    form.modelo = conductor.vehiculo?.modelo ?? ''
+    form.anio = conductor.vehiculo?.anio ?? ''
+    form.color = conductor.vehiculo?.color ?? ''
+    form.tipo = conductor.vehiculo?.tipo ?? ''
+    form.numero_economico = conductor.vehiculo?.numero_economico ?? ''
+    form.estado_vehiculo = conductor.vehiculo?.estado ?? 'ACTIVO'
   } catch {
     error.value = 'No se pudo cargar el conductor.'
   } finally {
@@ -205,6 +221,118 @@ async function onSubmit() {
             {{ fieldErrors.disponibilidad }}
           </span>
         </label>
+
+        <div class="border-t border-gray-100 pt-4">
+          <h3 class="mb-3 text-sm font-semibold text-heading">Datos del vehículo</h3>
+
+          <div class="space-y-5">
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-heading">Placa</span>
+              <input
+                v-model="form.placa"
+                type="text"
+                required
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              />
+              <span v-if="fieldErrors.placa" class="mt-1 block text-sm text-red-600">
+                {{ fieldErrors.placa }}
+              </span>
+            </label>
+
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-heading">Marca</span>
+              <input
+                v-model="form.marca"
+                type="text"
+                required
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              />
+              <span v-if="fieldErrors.marca" class="mt-1 block text-sm text-red-600">
+                {{ fieldErrors.marca }}
+              </span>
+            </label>
+
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-heading">Modelo</span>
+              <input
+                v-model="form.modelo"
+                type="text"
+                required
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              />
+              <span v-if="fieldErrors.modelo" class="mt-1 block text-sm text-red-600">
+                {{ fieldErrors.modelo }}
+              </span>
+            </label>
+
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-heading">Año</span>
+              <input
+                v-model="form.anio"
+                type="number"
+                required
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              />
+              <span v-if="fieldErrors.anio" class="mt-1 block text-sm text-red-600">
+                {{ fieldErrors.anio }}
+              </span>
+            </label>
+
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-heading">Color</span>
+              <input
+                v-model="form.color"
+                type="text"
+                required
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              />
+              <span v-if="fieldErrors.color" class="mt-1 block text-sm text-red-600">
+                {{ fieldErrors.color }}
+              </span>
+            </label>
+
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-heading">Tipo</span>
+              <input
+                v-model="form.tipo"
+                type="text"
+                required
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              />
+              <span v-if="fieldErrors.tipo" class="mt-1 block text-sm text-red-600">
+                {{ fieldErrors.tipo }}
+              </span>
+            </label>
+
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-heading">Número económico</span>
+              <input
+                v-model="form.numero_economico"
+                type="text"
+                required
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              />
+              <span v-if="fieldErrors.numero_economico" class="mt-1 block text-sm text-red-600">
+                {{ fieldErrors.numero_economico }}
+              </span>
+            </label>
+
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-heading">Estado del vehículo</span>
+              <select
+                v-model="form.estado_vehiculo"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              >
+                <option value="ACTIVO">ACTIVO</option>
+                <option value="INACTIVO">INACTIVO</option>
+                <option value="MANTENIMIENTO">MANTENIMIENTO</option>
+              </select>
+              <span v-if="fieldErrors.estado_vehiculo" class="mt-1 block text-sm text-red-600">
+                {{ fieldErrors.estado_vehiculo }}
+              </span>
+            </label>
+          </div>
+        </div>
 
         <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
         <p v-if="success" class="text-sm text-green-600">{{ success }}</p>

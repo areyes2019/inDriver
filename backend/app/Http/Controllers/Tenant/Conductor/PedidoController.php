@@ -8,7 +8,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Tenant\Conductor\PedidoResource;
 use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\Conductor;
-use App\Models\Tenant\ConductorVehiculo;
 use App\Models\Tenant\Pedido;
 use App\Services\PedidoEstadoService;
 use Illuminate\Http\JsonResponse;
@@ -72,9 +71,7 @@ class PedidoController extends Controller
 
         DB::transaction(function () use ($pedido, $conductor) {
             $pedido->id_conductor = $conductor->id_conductor;
-            $pedido->id_vehiculo = ConductorVehiculo::where('id_conductor', $conductor->id_conductor)
-                ->where('activo', true)
-                ->value('id_vehiculo');
+            $pedido->id_vehiculo = $conductor->vehiculo?->id_vehiculo;
 
             $this->estados->transicionar($pedido, 'TOMADO');
             $pedido->save();
