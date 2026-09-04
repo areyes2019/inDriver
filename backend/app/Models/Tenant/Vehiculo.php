@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['id_conductor', 'placa', 'marca', 'modelo', 'anio', 'color', 'tipo', 'numero_economico', 'estado'])]
+#[Fillable(['id_conductor', 'placa', 'marca'])]
 class Vehiculo extends Model
 {
     protected $table = 'vehiculos';

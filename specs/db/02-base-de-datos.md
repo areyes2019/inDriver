@@ -46,9 +46,7 @@ usuarios
 id_conductor
 id_usuario
 numero_licencia
-tipo_licencia
 fecha_vencimiento_licencia
-telefono_emergencia
 estado
 disponibilidad
 created_at
@@ -71,19 +69,8 @@ id_vehiculo
 id_conductor
 placa
 marca
-modelo
-anio
-color
-tipo
-numero_economico
-estado
 created_at
 updated_at
-
-* Estados
-- ACTIVO
-- INACTIVO
-- MANTENIMIENTO
 
 El tenant no es dueño de una flotilla que asigna vehículos: cada conductor llega con su propio
 vehículo. `id_conductor` es única — un vehículo nunca pertenece a más de un conductor, y un conductor

@@ -78,11 +78,6 @@ function conductorDatosVehiculo(array $overrides = []): array
     return array_merge([
         'placa' => 'ABC-123',
         'marca' => 'Nissan',
-        'modelo' => 'NP300',
-        'anio' => 2020,
-        'color' => 'Blanco',
-        'tipo' => 'Camioneta',
-        'numero_economico' => 'ECO-01',
     ], $overrides);
 }
 
@@ -166,15 +161,13 @@ it('creates a conductor profile for an eligible usuario', function () {
         ->postJson('/api/v1/t/cafe-luna/conductores', [
             'id_usuario' => $usuarioPedro->id_usuario,
             'numero_licencia' => 'ABC123',
-            'tipo_licencia' => 'A',
             ...conductorDatosVehiculo(),
         ])
         ->assertCreated()
         ->assertJsonPath('estado', 'ACTIVO')
         ->assertJsonPath('disponibilidad', 'FUERA_DE_SERVICIO')
         ->assertJsonPath('numero_licencia', 'ABC123')
-        ->assertJsonPath('vehiculo.placa', 'ABC-123')
-        ->assertJsonPath('vehiculo.estado', 'ACTIVO');
+        ->assertJsonPath('vehiculo.placa', 'ABC-123');
 
     tenancy()->initialize($tenant);
     expect(Auditoria::where('tabla_afectada', 'conductores')->where('accion', 'ALTA')->exists())->toBeTrue();
@@ -200,7 +193,7 @@ it('rejects creating a conductor profile without the vehicle fields', function (
             'numero_licencia' => 'ABC123',
         ])
         ->assertUnprocessable()
-        ->assertJsonValidationErrors(['placa', 'marca', 'modelo', 'anio', 'color', 'tipo', 'numero_economico']);
+        ->assertJsonValidationErrors(['placa', 'marca']);
 });
 
 it('rejects creating a conductor profile with a placa already used by another vehicle', function () {
@@ -379,7 +372,6 @@ it('updates a conductor profile including estado and disponibilidad, and logs it
             'estado' => 'BLOQUEADO',
             'disponibilidad' => 'DISPONIBLE',
             ...conductorDatosVehiculo(),
-            'estado_vehiculo' => 'ACTIVO',
         ])
         ->assertOk()
         ->assertJsonPath('estado', 'BLOQUEADO')
@@ -410,11 +402,9 @@ it('changes the vehicle of a conductor that did not have one yet', function () {
             'estado' => 'ACTIVO',
             'disponibilidad' => 'FUERA_DE_SERVICIO',
             ...conductorDatosVehiculo(['placa' => 'NEW-001']),
-            'estado_vehiculo' => 'MANTENIMIENTO',
         ])
         ->assertOk()
-        ->assertJsonPath('vehiculo.placa', 'NEW-001')
-        ->assertJsonPath('vehiculo.estado', 'MANTENIMIENTO');
+        ->assertJsonPath('vehiculo.placa', 'NEW-001');
 
     tenancy()->initialize($tenant);
     expect(Vehiculo::where('id_conductor', $conductor->id_conductor)->count())->toBe(1);
@@ -439,7 +429,6 @@ it('rejects updating a conductor with an estado outside the enum', function () {
             'estado' => 'NoExiste',
             'disponibilidad' => 'DISPONIBLE',
             ...conductorDatosVehiculo(),
-            'estado_vehiculo' => 'ACTIVO',
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['estado']);
@@ -562,7 +551,6 @@ it('rejects a conductor without despachador when updated to ACTIVO with 2+ despa
             'estado' => 'ACTIVO',
             'disponibilidad' => 'DISPONIBLE',
             ...conductorDatosVehiculo(),
-            'estado_vehiculo' => 'ACTIVO',
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['id_despachador']);

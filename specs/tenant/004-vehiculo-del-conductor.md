@@ -1,10 +1,5 @@
 # Spec: Vehículo propio del conductor (relación 1 a 1)
 
-> Reemplaza por completo a la spec anterior de este mismo número
-> (`tenant/004-crud-vehiculos-y-asignaciones.md`), que documentaba un CRUD de "vehículos de la
-> flotilla" más una tabla de historial de asignaciones conductor↔vehículo. Ese modelo no aplica al
-> negocio: el tenant nunca es dueño de vehículos.
-
 ## Historia de usuario
 
 Como AdminCliente, no asigno vehículos a mis conductores porque no tengo vehículos propios: cada
@@ -83,9 +78,8 @@ conductor nuevo nunca se crea sin uno.
 - Un conductor siempre tiene un vehículo desde su alta — el formulario de "Nuevo conductor" exige
   también los datos del vehículo.
 - "Cambiar de vehículo" es editar los campos de la fila de `vehiculos` del conductor (`placa`,
-  `marca`, `modelo`, `anio`, `color`, `tipo`, `numero_economico`, `estado`) — nunca se crea una fila
-  nueva ni se conserva la anterior.
-- `placa` sigue siendo única entre vehículos (ya lo era en la spec anterior).
+  `marca`) — nunca se crea una fila nueva ni se conserva la anterior.
+- `placa` sigue siendo única entre vehículos.
 - Borrar el conductor borra en cascada su vehículo (`cascadeOnDelete`, mismo mecanismo que ya usa
   `conductores.id_usuario` hacia `usuarios`).
 - Solo `AdminCliente` accede a estos datos, dentro del mismo flujo de alta/edición de conductores
@@ -106,15 +100,13 @@ conductor nuevo nunca se crea sin uno.
   'id_conductor')`.
 - **Modifica** `App\Http\Controllers\Tenant\ConductorController`:
   - `store`: valida, junto a los campos de licencia ya existentes, los del vehículo (`placa` única,
-    `marca`, `modelo`, `anio`, `color`, `tipo`, `numero_economico` — todos requeridos); en una
-    transacción, crea la fila de `conductores` y luego la de `vehiculos` con su `id_conductor`.
+    `marca` — todos requeridos); en una transacción, crea la fila de
+    `conductores` y luego la de `vehiculos` con su `id_conductor`.
   - `update`: valida y actualiza también los campos del vehículo del conductor
-    (`$conductor->vehiculo()->update(...)`), incluido su `estado`, en la misma transacción que el
-    resto de los campos.
+    (`$conductor->vehiculo()->update(...)`), en la misma transacción que el resto de los campos.
   - `index`/`show`: agrega `with('vehiculo')`.
 - **Modifica** `App\Http\Resources\Tenant\ConductorResource`: agrega los campos del vehículo
-  relacionado (`placa`, `marca`, `modelo`, `anio`, `color`, `tipo`, `numero_economico`,
-  `estado_vehiculo`) vía `whenLoaded('vehiculo')`.
+  relacionado (`placa`, `marca`) vía `whenLoaded('vehiculo')`.
 - **Auditoría**: el cambio de datos del vehículo queda dentro del mismo registro `ALTA`/`EDICION` de
   `conductores` — no hay un registro de auditoría separado para `vehiculos`.
 
@@ -126,8 +118,7 @@ conductor nuevo nunca se crea sin uno.
 - **Elimina** del router las rutas `/panel/vehiculos*` y `/panel/asignaciones*`.
 - **Elimina** de `layouts/TenantLayout.vue` las entradas de menú "Vehículos" y "Asignaciones".
 - **Modifica** `views/tenant/conductores/CrearConductorView.vue` y `EditarConductorView.vue`: agrega
-  una sección "Datos del vehículo" con los campos `placa`, `marca`, `modelo`, `anio`, `color`, `tipo`,
-  `numero_economico` (y `estado` del vehículo, solo en edición) dentro del mismo formulario.
+  una sección "Datos del vehículo" con los campos `placa`, `marca` dentro del mismo formulario.
 - **Modifica** `views/tenant/conductores/ListaConductoresView.vue`: agrega la columna `placa` a la
   tabla, para ver de un vistazo qué vehículo trae cada conductor sin abrir una pantalla aparte.
 
@@ -173,14 +164,11 @@ conductor nuevo nunca se crea sin uno.
    capturan junto con los del conductor, en el mismo formulario de alta y edición.
 4. Un conductor siempre tiene un vehículo — es obligatorio desde el alta, garantizado en la
    aplicación (`ConductorController@store`), no con una restricción `NOT NULL` en base de datos.
-5. El `estado` del vehículo (ACTIVO/INACTIVO/MANTENIMIENTO) se conserva como campo informativo
-   editable en el mismo formulario, pero ya no se usa para filtrar "vehículos disponibles para
-   asignar", porque ya no existe ninguna asignación.
+5. El vehículo no tiene campo `estado` propio ni campos `tipo`/`numero_economico`/`modelo`/`anio`/
+   `color`: solo se registran `placa`, `marca` — datos de identificación del vehículo, sin
+   clasificación operativa.
 6. Se eliminan del panel las secciones "Vehículos" y "Asignaciones" (rutas, controladores, vistas,
-   menú) descritas en la spec anterior de este número.
+   menú).
 7. La migración de datos existentes toma la fila activa de `conductor_vehiculo` de cada conductor
    para poblar `vehiculos.id_conductor`, y borra las filas de `vehiculos` que queden sin conductor
    (vehículos históricos ya reemplazados) — no se migran a ningún otro lugar.
-8. Esta spec reemplaza el contenido anterior del número 004 (se renombra el archivo de
-   `004-crud-vehiculos-y-asignaciones.md` a `004-vehiculo-del-conductor.md`) en vez de crear un
-   número nuevo, porque describe la versión correcta del mismo pendiente (tablas 04/05).

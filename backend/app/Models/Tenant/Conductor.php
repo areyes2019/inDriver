@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['id_usuario', 'id_despachador', 'numero_licencia', 'tipo_licencia', 'fecha_vencimiento_licencia', 'telefono_emergencia', 'estado', 'disponibilidad'])]
+#[Fillable(['id_usuario', 'id_despachador', 'numero_licencia', 'fecha_vencimiento_licencia', 'estado', 'disponibilidad'])]
 class Conductor extends Model
 {
     protected $table = 'conductores';

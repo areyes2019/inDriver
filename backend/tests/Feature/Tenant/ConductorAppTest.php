@@ -205,9 +205,6 @@ it('accepts an available pedido, assigns the vehicle, and broadcasts pedido.toma
         'id_conductor' => $datos['conductor']->id_conductor,
         'placa' => 'ABC-123',
         'marca' => 'Nissan',
-        'modelo' => 'NP300',
-        'anio' => 2020,
-        'estado' => 'ACTIVO',
     ]);
     tenancy()->end();
 

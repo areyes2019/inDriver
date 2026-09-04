@@ -18,12 +18,6 @@ interface VehiculoInfo {
   id_vehiculo: number
   placa: string
   marca: string | null
-  modelo: string | null
-  anio: number | null
-  color: string | null
-  tipo: string | null
-  numero_economico: string | null
-  estado: string
 }
 
 interface Conductor {
@@ -33,9 +27,7 @@ interface Conductor {
   apellido_paterno: string
   email: string
   numero_licencia: string
-  tipo_licencia: string | null
   fecha_vencimiento_licencia: string | null
-  telefono_emergencia: string | null
   estado: string
   disponibilidad: string
   id_despachador: number | null
@@ -241,9 +233,7 @@ async function onCambiarDespachador(conductor: Conductor, idDespachador: string)
   try {
     const { data } = await http.put(`/t/${slug.value}/conductores/${conductor.id_conductor}`, {
       numero_licencia: conductor.numero_licencia,
-      tipo_licencia: conductor.tipo_licencia,
       fecha_vencimiento_licencia: conductor.fecha_vencimiento_licencia,
-      telefono_emergencia: conductor.telefono_emergencia,
       estado: conductor.estado,
       disponibilidad: conductor.disponibilidad,
       id_despachador: idDespachador,
@@ -319,7 +309,9 @@ onMounted(() => {
               <td :colspan="columnasTabla" class="py-6 text-center text-black/50">Cargando...</td>
             </tr>
             <tr v-else-if="conductores.length === 0">
-              <td :colspan="columnasTabla" class="py-6 text-center text-black/50">No hay conductores.</td>
+              <td :colspan="columnasTabla" class="py-6 text-center text-black/50">
+                No hay conductores.
+              </td>
             </tr>
             <tr
               v-for="conductor in conductores"
@@ -346,7 +338,9 @@ onMounted(() => {
                   :value="conductor.id_despachador ?? ''"
                   :disabled="reasignandoId === conductor.id_conductor"
                   class="rounded-lg border border-gray-300 px-2 py-1 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-                  @change="onCambiarDespachador(conductor, ($event.target as HTMLSelectElement).value)"
+                  @change="
+                    onCambiarDespachador(conductor, ($event.target as HTMLSelectElement).value)
+                  "
                 >
                   <option value="" disabled>Sin asignar</option>
                   <option
@@ -509,7 +503,9 @@ onMounted(() => {
                     :key="pago.id_venta"
                     class="border-t border-gray-100 text-heading"
                   >
-                    <td class="py-1.5 pr-3">{{ new Date(pago.fecha_venta).toLocaleDateString() }}</td>
+                    <td class="py-1.5 pr-3">
+                      {{ new Date(pago.fecha_venta).toLocaleDateString() }}
+                    </td>
                     <td class="py-1.5 pr-3">${{ pago.monto_pagado }}</td>
                     <td class="py-1.5">{{ pago.cantidad_viajes }}</td>
                   </tr>

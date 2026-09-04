@@ -75,9 +75,7 @@ class ConductorController extends Controller
         $data = $request->validate([
             'id_usuario' => ['required', 'integer'],
             'numero_licencia' => ['required', 'string', 'max:255'],
-            'tipo_licencia' => ['nullable', 'string', 'max:255'],
             'fecha_vencimiento_licencia' => ['nullable', 'date'],
-            'telefono_emergencia' => ['nullable', 'string', 'max:255'],
             'id_despachador' => ['nullable', 'integer', 'exists:despachadores,id_despachador'],
             ...$this->reglasVehiculo(),
         ]);
@@ -110,7 +108,6 @@ class ConductorController extends Controller
             Vehiculo::create([
                 ...$datosVehiculo,
                 'id_conductor' => $conductor->id_conductor,
-                'estado' => 'ACTIVO',
             ]);
 
             return $conductor;
@@ -131,20 +128,16 @@ class ConductorController extends Controller
     {
         $data = $request->validate([
             'numero_licencia' => ['required', 'string', 'max:255'],
-            'tipo_licencia' => ['nullable', 'string', 'max:255'],
             'fecha_vencimiento_licencia' => ['nullable', 'date'],
-            'telefono_emergencia' => ['nullable', 'string', 'max:255'],
             'estado' => ['required', Rule::in(['ACTIVO', 'INACTIVO', 'BLOQUEADO'])],
             'disponibilidad' => ['required', Rule::in(['DISPONIBLE', 'OCUPADO', 'DESCANSO', 'FUERA_DE_SERVICIO'])],
             'id_despachador' => ['nullable', 'integer', 'exists:despachadores,id_despachador'],
             ...$this->reglasVehiculo($conductor->vehiculo?->id_vehiculo),
-            'estado_vehiculo' => ['required', Rule::in(['ACTIVO', 'INACTIVO', 'MANTENIMIENTO'])],
         ]);
 
         $data['id_despachador'] = $this->resolverDespachador($this->normalizarIdDespachador($data), $data['estado']);
         $datosVehiculo = $this->extraerDatosVehiculo($data);
-        $datosVehiculo['estado'] = $data['estado_vehiculo'];
-        unset($data['placa'], $data['marca'], $data['modelo'], $data['anio'], $data['color'], $data['tipo'], $data['numero_economico'], $data['estado_vehiculo']);
+        unset($data['placa'], $data['marca']);
 
         DB::transaction(function () use ($conductor, $data, $datosVehiculo) {
             $conductor->update($data);
@@ -173,11 +166,6 @@ class ConductorController extends Controller
         return [
             'placa' => ['required', 'string', 'max:255', Rule::unique('vehiculos', 'placa')->ignore($ignorarVehiculoId, 'id_vehiculo')],
             'marca' => ['required', 'string', 'max:255'],
-            'modelo' => ['required', 'string', 'max:255'],
-            'anio' => ['required', 'integer', 'min:1900', 'max:2100'],
-            'color' => ['required', 'string', 'max:255'],
-            'tipo' => ['required', 'string', 'max:255'],
-            'numero_economico' => ['required', 'string', 'max:255'],
         ];
     }
 
@@ -190,11 +178,6 @@ class ConductorController extends Controller
         return [
             'placa' => $data['placa'],
             'marca' => $data['marca'],
-            'modelo' => $data['modelo'],
-            'anio' => $data['anio'],
-            'color' => $data['color'],
-            'tipo' => $data['tipo'],
-            'numero_economico' => $data['numero_economico'],
         ];
     }
 

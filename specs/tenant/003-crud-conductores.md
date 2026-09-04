@@ -17,8 +17,8 @@ Deja funcionando:
 - Alta manual del perfil de conductor (el AdminCliente elige un usuario existente con
   `rol = Conductor` y captura sus datos de licencia).
 - Listado de conductores (con el nombre/email del usuario asociado) con búsqueda y paginación.
-- Edición de los datos propios del conductor: `numero_licencia`, `tipo_licencia`,
-  `fecha_vencimiento_licencia`, `telefono_emergencia`, `estado`, `disponibilidad`.
+- Edición de los datos propios del conductor: `numero_licencia`, `fecha_vencimiento_licencia`,
+  `estado`, `disponibilidad`.
 - Borrado automático del perfil cuando el usuario deja de tener `rol = Conductor`.
 
 **No** incluye:
@@ -96,8 +96,7 @@ sentido editar juntos en un solo formulario, incluyendo `estado` y `disponibilid
   `belongsTo(Usuario::class, 'id_usuario', 'id_usuario')`.
 - **Resource nuevo** `App\Http\Resources\Tenant\ConductorResource`: expone `id_conductor`,
   `id_usuario`, `nombre`/`apellido_paterno`/`email` (del usuario relacionado), `numero_licencia`,
-  `tipo_licencia`, `fecha_vencimiento_licencia`, `telefono_emergencia`, `estado`, `disponibilidad`,
-  `created_at`.
+  `fecha_vencimiento_licencia`, `estado`, `disponibilidad`, `created_at`.
 - **Controlador nuevo** `App\Http\Controllers\Tenant\ConductorController`:
   - `usuariosDisponibles`: usuarios `rol = Conductor`, `estado = Activo`, sin fila en `conductores`.
   - `index`: lista con `with('usuario')`, búsqueda por `numero_licencia` o nombre/apellido/email del
