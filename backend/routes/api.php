@@ -7,6 +7,11 @@ use App\Http\Controllers\Admin\PaqueteViajeController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Tenant\AuthController as TenantAuthController;
 use App\Http\Controllers\Tenant\ClienteController;
+use App\Http\Controllers\Tenant\Conductor\AuthController as ConductorAuthController;
+use App\Http\Controllers\Tenant\Conductor\EstadoController as ConductorEstadoController;
+use App\Http\Controllers\Tenant\Conductor\PedidoController as ConductorPedidoController;
+use App\Http\Controllers\Tenant\Conductor\SaldoController as ConductorSaldoController;
+use App\Http\Controllers\Tenant\Conductor\UbicacionController as ConductorUbicacionController;
 use App\Http\Controllers\Tenant\ConductorController;
 use App\Http\Controllers\Tenant\ConductorVehiculoController;
 use App\Http\Controllers\Tenant\ConfiguracionController;
@@ -17,6 +22,7 @@ use App\Http\Controllers\Tenant\UsuarioController;
 use App\Http\Controllers\Tenant\VehiculoController;
 use App\Http\Controllers\Tenant\VentaViajeConductorController;
 use App\Http\Controllers\Tenant\ZonaCoberturaController;
+use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')->group(function () {
@@ -55,6 +61,11 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
     Route::post('/login', [TenantAuthController::class, 'login'])->middleware('throttle:tenant-login');
     Route::post('/forgot-password', [TenantAuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [TenantAuthController::class, 'resetPassword']);
+
+    // App de conductor (panda_express, spec tenant/013): token de Sanctum, guard propio
+    // "conductor-token", separado del guard de sesión "usuario" que usa el resto del panel.
+    Route::post('/conductor/login', [ConductorAuthController::class, 'login'])
+        ->middleware('throttle:tenant-login');
 
     Route::middleware('auth:usuario')->group(function () {
         Route::post('/logout', [TenantAuthController::class, 'logout']);
@@ -124,5 +135,25 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
 
             Route::get('/configuracion', [ConfiguracionController::class, 'show']);
         });
+    });
+
+    Route::prefix('conductor')->middleware('auth:conductor-token')->group(function () {
+        Route::post('/logout', [ConductorAuthController::class, 'logout']);
+        Route::get('/me', [ConductorAuthController::class, 'me']);
+
+        Route::post('/estado', [ConductorEstadoController::class, 'actualizar']);
+        Route::post('/ubicacion', [ConductorUbicacionController::class, 'actualizar']);
+
+        Route::get('/pedidos/disponibles', [ConductorPedidoController::class, 'disponibles']);
+        Route::get('/pedidos/activo', [ConductorPedidoController::class, 'activo']);
+        Route::post('/pedidos/{pedido}/aceptar', [ConductorPedidoController::class, 'aceptar']);
+        Route::post('/pedidos/{pedido}/estado', [ConductorPedidoController::class, 'cambiarEstado']);
+        Route::post('/pedidos/{pedido}/cancelar', [ConductorPedidoController::class, 'cancelar']);
+
+        Route::get('/saldo-viajes', [ConductorSaldoController::class, 'show']);
+
+        // Autenticación del canal privado de tiempo real (Reverb, spec tenant/013), scoped al
+        // tenant y al guard del conductor — el /broadcasting/auth global (guard "web") no aplica.
+        Route::post('/broadcasting/auth', [BroadcastController::class, 'authenticate']);
     });
 });

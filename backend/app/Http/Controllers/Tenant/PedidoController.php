@@ -9,7 +9,7 @@ use App\Http\Resources\Tenant\PedidoResource;
 use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
-use App\Models\Tenant\VentaViajeConductor;
+use App\Services\PedidoEstadoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -19,24 +19,7 @@ use Illuminate\Validation\ValidationException;
 
 class PedidoController extends Controller
 {
-    private const ESTADOS_FINALES = ['ENTREGADO', 'CANCELADO', 'RECHAZADO'];
-
-    /**
-     * Mapa de transiciones válidas: desde cada estado, a qué estados se puede pasar.
-     *
-     * @var array<string, array<int, string>>
-     */
-    private const TRANSICIONES = [
-        'PENDIENTE' => ['PUBLICADO', 'CANCELADO'],
-        'PUBLICADO' => ['TOMADO', 'RECHAZADO', 'CANCELADO'],
-        'TOMADO' => ['ARRIBADO', 'CANCELADO'],
-        'ARRIBADO' => ['EN_CAMINO', 'CANCELADO'],
-        'EN_CAMINO' => ['ARRIBADO_A_ENTREGA', 'CANCELADO'],
-        'ARRIBADO_A_ENTREGA' => ['ENTREGADO', 'CANCELADO'],
-        'ENTREGADO' => [],
-        'RECHAZADO' => [],
-        'CANCELADO' => [],
-    ];
+    public function __construct(private readonly PedidoEstadoService $estados) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -97,7 +80,7 @@ class PedidoController extends Controller
 
     public function update(Request $request, Pedido $pedido): JsonResponse
     {
-        if (in_array($pedido->estado, self::ESTADOS_FINALES, true)) {
+        if (in_array($pedido->estado, PedidoEstadoService::ESTADOS_FINALES, true)) {
             throw ValidationException::withMessages([
                 'estado' => "El pedido {$pedido->numero_pedido} ya está en un estado final ({$pedido->estado}) y no se puede editar.",
             ]);
@@ -121,31 +104,11 @@ class PedidoController extends Controller
     public function cambiarEstado(Request $request, Pedido $pedido): JsonResponse
     {
         $data = $request->validate([
-            'estado' => ['required', Rule::in(array_keys(self::TRANSICIONES))],
+            'estado' => ['required', Rule::in(array_keys(PedidoEstadoService::TRANSICIONES))],
         ]);
 
         $nuevoEstado = $data['estado'];
-        $permitidos = self::TRANSICIONES[$pedido->estado];
-
-        if (! in_array($nuevoEstado, $permitidos, true)) {
-            throw ValidationException::withMessages([
-                'estado' => "No se puede pasar el pedido de {$pedido->estado} a {$nuevoEstado}.",
-            ]);
-        }
-
-        $pedido->estado = $nuevoEstado;
-
-        match ($nuevoEstado) {
-            'PUBLICADO' => $pedido->fecha_publicacion = now(),
-            'TOMADO' => $pedido->fecha_asignacion = now(),
-            'ENTREGADO' => $pedido->fecha_entrega = now(),
-            'CANCELADO' => $pedido->fecha_cancelacion = now(),
-            default => null,
-        };
-
-        if ($nuevoEstado === 'ENTREGADO' && $pedido->id_conductor) {
-            $this->liquidarConductor($pedido);
-        }
+        $this->estados->transicionar($pedido, $nuevoEstado);
 
         $pedido->save();
         $pedido->load(['cliente', 'despachador.usuario', 'conductor.usuario', 'vehiculo']);
@@ -158,31 +121,6 @@ class PedidoController extends Controller
         ]);
 
         return response()->json(new PedidoResource($pedido));
-    }
-
-    /**
-     * Descuenta 1 viaje del saldo prepagado del conductor, o calcula la comisión del pedido,
-     * según la modalidad de cobro configurada para el tenant (ver spec 015).
-     */
-    private function liquidarConductor(Pedido $pedido): void
-    {
-        $modalidad = ConfiguracionTenant::obtener(ConfiguracionTenant::MODALIDAD, 'Prepago');
-
-        if ($modalidad === 'Comision') {
-            $porcentaje = (float) ConfiguracionTenant::obtener(ConfiguracionTenant::COMISION_PORCENTAJE, '0');
-            $pedido->comision_calculada = round((float) $pedido->importe_cobro * $porcentaje / 100, 2);
-
-            return;
-        }
-
-        $vendidos = VentaViajeConductor::where('id_conductor', $pedido->id_conductor)->sum('cantidad_viajes');
-        $consumidos = Pedido::where('id_conductor', $pedido->id_conductor)
-            ->where('prepago_descontado', true)
-            ->count();
-
-        if (($vendidos - $consumidos) > 0) {
-            $pedido->prepago_descontado = true;
-        }
     }
 
     /**
@@ -229,7 +167,11 @@ class PedidoController extends Controller
             'nombre_solicitante' => ['required', 'string', 'max:255'],
             'telefono_solicitante' => ['required', 'string', 'max:255'],
             'direccion_recogida' => ['required', 'string', 'max:255'],
+            'latitud_recogida' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitud_recogida' => ['nullable', 'numeric', 'between:-180,180'],
             'direccion_entrega' => ['required', 'string', 'max:255'],
+            'latitud_entrega' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitud_entrega' => ['nullable', 'numeric', 'between:-180,180'],
             'fecha_servicio' => ['nullable', 'date'],
             'lo_antes_posible' => ['sometimes', 'boolean'],
             'hora_desde' => ['nullable', 'date_format:H:i'],

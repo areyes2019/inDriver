@@ -54,6 +54,15 @@ return [
             'driver' => 'session',
             'provider' => 'usuarios',
         ],
+
+        // Guard de la app de conductor (panda_express, spec tenant/013): token de Sanctum en vez
+        // de sesión/cookie, porque una WebView de Capacitor no comparte cookies con el backend de
+        // forma confiable. Deliberadamente separado del guard "usuario" de sesión que sigue usando
+        // el panel web sin cambios.
+        'conductor-token' => [
+            'driver' => 'sanctum',
+            'provider' => 'usuarios',
+        ],
     ],
 
     /*

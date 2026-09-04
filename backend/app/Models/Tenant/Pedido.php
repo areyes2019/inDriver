@@ -14,7 +14,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'nombre_solicitante',
     'telefono_solicitante',
     'direccion_recogida',
+    'latitud_recogida',
+    'longitud_recogida',
     'direccion_entrega',
+    'latitud_entrega',
+    'longitud_entrega',
     'fecha_servicio',
     'hora_desde',
     'hora_hasta',
@@ -43,6 +47,10 @@ class Pedido extends Model
     {
         return [
             'fecha_servicio' => 'date',
+            'latitud_recogida' => 'decimal:7',
+            'longitud_recogida' => 'decimal:7',
+            'latitud_entrega' => 'decimal:7',
+            'longitud_entrega' => 'decimal:7',
             'lo_antes_posible' => 'boolean',
             'importe_envio' => 'decimal:2',
             'importe_cobro' => 'decimal:2',

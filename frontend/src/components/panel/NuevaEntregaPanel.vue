@@ -240,6 +240,10 @@ async function onSubmit() {
     await http.post(`/t/${slug}/pedidos`, {
       ...form,
       importe_envio: totalViaje.value.toFixed(2),
+      latitud_recogida: recogidaCoord.value?.lat ?? null,
+      longitud_recogida: recogidaCoord.value?.lng ?? null,
+      latitud_entrega: entregaCoord.value?.lat ?? null,
+      longitud_entrega: entregaCoord.value?.lng ?? null,
     })
     limpiarFormulario()
     emit('agendado')
