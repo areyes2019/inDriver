@@ -107,7 +107,7 @@ class PedidoEstadoService
         match (true) {
             $nuevoEstado === 'PUBLICADO' => PedidoDisponible::dispatch($pedido, $slug),
             $nuevoEstado === 'TOMADO' => PedidoYaTomado::dispatch($pedido->id_pedido, $slug),
-            $nuevoEstado === 'CANCELADO' && $pedido->id_conductor !== null => PedidoCanceladoParaConductor::dispatch($pedido->id_pedido, $slug),
+            $nuevoEstado === 'CANCELADO' && $pedido->id_conductor !== null => PedidoCanceladoParaConductor::dispatch($pedido->id_pedido, $slug, $pedido->id_conductor),
             default => null,
         };
     }

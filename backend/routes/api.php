@@ -8,9 +8,11 @@ use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Tenant\AuthController as TenantAuthController;
 use App\Http\Controllers\Tenant\ClienteController;
 use App\Http\Controllers\Tenant\Conductor\AuthController as ConductorAuthController;
+use App\Http\Controllers\Tenant\Conductor\DispositivoController as ConductorDispositivoController;
 use App\Http\Controllers\Tenant\Conductor\EstadoController as ConductorEstadoController;
 use App\Http\Controllers\Tenant\Conductor\PedidoController as ConductorPedidoController;
 use App\Http\Controllers\Tenant\Conductor\SaldoController as ConductorSaldoController;
+use App\Http\Controllers\Tenant\Conductor\SyncController as ConductorSyncController;
 use App\Http\Controllers\Tenant\Conductor\UbicacionController as ConductorUbicacionController;
 use App\Http\Controllers\Tenant\ConductorController;
 use App\Http\Controllers\Tenant\ConfiguracionController;
@@ -69,6 +71,18 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
         Route::post('/logout', [TenantAuthController::class, 'logout']);
         Route::get('/me', [TenantAuthController::class, 'me']);
         Route::middleware('throttle:tenant-usuarios')->post('/cambiar-password', [TenantAuthController::class, 'changePassword']);
+
+        // Autenticación del canal privado de tiempo real (Reverb, spec tenant/018) para el Panel
+        // (AdminCliente/Despachador) — separada de la ruta homónima del conductor porque cada una
+        // corre bajo un guard distinto ("usuario" por sesión aquí, "conductor-token" allá).
+        Route::post('/broadcasting/auth', [BroadcastController::class, 'authenticate']);
+
+        // Registrada antes que GET /conductores/{conductor} (ambas empiezan con /conductores/...)
+        // para que "activos" no se interprete como un id de conductor. Va en el grupo de
+        // AdminCliente+Despachador (mismo que /pedidos), no en el de AdminCliente exclusivo donde
+        // vive el resto de ConductorController.
+        Route::middleware(['throttle:tenant-usuarios', 'rol.tenant:AdminCliente,Despachador'])
+            ->get('/conductores/activos', [ConductorController::class, 'activos']);
 
         Route::middleware(['throttle:tenant-usuarios', 'rol.tenant:AdminCliente'])->group(function () {
             Route::get('/usuarios', [UsuarioController::class, 'index']);
@@ -139,6 +153,11 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
         Route::post('/pedidos/{pedido}/cancelar', [ConductorPedidoController::class, 'cancelar']);
 
         Route::get('/saldo-viajes', [ConductorSaldoController::class, 'show']);
+
+        // Registro del token de push (FCM, spec tenant/018) y endpoint de sincronización al
+        // reconectar (RN-02/RN-07): junta pedido activo + pool + saldo en una sola respuesta.
+        Route::post('/dispositivo', [ConductorDispositivoController::class, 'registrar']);
+        Route::get('/sync', [ConductorSyncController::class, 'show']);
 
         // Autenticación del canal privado de tiempo real (Reverb, spec tenant/013), scoped al
         // tenant y al guard del conductor — el /broadcasting/auth global (guard "web") no aplica.

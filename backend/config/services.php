@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    // Respaldo de push nativo cuando el socket de Reverb está caído (spec tenant/018). Solo se usa
+    // como servicio de envío de mensajes — no implica ninguna base de datos de Firebase, MySQL
+    // sigue siendo la única fuente de datos del sistema.
+    'fcm' => [
+        'project_id' => env('FIREBASE_PROJECT_ID'),
+        'credentials_path' => env('FIREBASE_CREDENTIALS_PATH'),
+    ],
+
 ];

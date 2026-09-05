@@ -48,4 +48,18 @@ class Conductor extends Model
     {
         return $this->hasOne(Vehiculo::class, 'id_conductor', 'id_conductor');
     }
+
+    public function estadoActual(): HasOne
+    {
+        return $this->hasOne(ConductorEstado::class, 'id_conductor', 'id_conductor');
+    }
+
+    /**
+     * Dispositivo (token FCM) para mandarle push cuando el socket de Reverb está caído
+     * (spec tenant/018). Un solo registro por conductor.
+     */
+    public function dispositivo(): HasOne
+    {
+        return $this->hasOne(ConductorDispositivo::class, 'id_conductor', 'id_conductor');
+    }
 }

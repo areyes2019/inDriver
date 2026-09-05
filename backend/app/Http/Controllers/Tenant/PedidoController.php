@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Tenant;
 
+use App\Events\Tenant\PedidoReprogramado;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Tenant\PedidoResource;
 use App\Models\Tenant\Auditoria;
@@ -88,6 +89,20 @@ class PedidoController extends Controller
 
         $data = $this->validarDatos($request);
 
+        // Capturado antes de update() (spec tenant/018): si cambia la agenda de un pedido ya
+        // asignado, se avisa al conductor por tiempo real (RN-04, evento "crítico" con push).
+        // `fecha_servicio` se normaliza a string (cast a Carbon en el modelo, string en $data) para
+        // no comparar tipos distintos y detectar un cambio falso siempre.
+        $agendaAntes = [
+            'fecha_servicio' => $pedido->fecha_servicio?->toDateString(),
+            'hora_desde' => $pedido->hora_desde,
+            'hora_hasta' => $pedido->hora_hasta,
+            'lo_antes_posible' => $pedido->lo_antes_posible,
+        ];
+        $cambioAgenda = collect($agendaAntes)->contains(
+            fn ($valorAnterior, string $campo) => array_key_exists($campo, $data) && $data[$campo] != $valorAnterior
+        );
+
         $pedido->update($data);
         $pedido->load(['cliente', 'despachador.usuario', 'conductor.usuario', 'vehiculo']);
 
@@ -97,6 +112,10 @@ class PedidoController extends Controller
             'accion' => 'EDICION',
             'descripcion' => "Edición del pedido {$pedido->numero_pedido}",
         ]);
+
+        if ($cambioAgenda && $pedido->id_conductor !== null && $slug = tenant()?->slug) {
+            PedidoReprogramado::dispatch($pedido->id_pedido, $slug, $pedido->id_conductor);
+        }
 
         return response()->json(new PedidoResource($pedido));
     }

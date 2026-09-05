@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Tenant\Conductor;
 
+use App\Events\Tenant\UbicacionActualizada;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConductorPosicion;
@@ -48,6 +49,12 @@ class UbicacionController extends Controller
             'bateria' => $data['bateria'] ?? null,
             'fecha_posicion' => now(),
         ]);
+
+        // Tiempo real (spec tenant/018): el Panel ve el punto moverse en el mapa sin recargar. Es
+        // de alta frecuencia (RN-05) — solo socket, sin respaldo de push.
+        if ($slug = tenant()?->slug) {
+            UbicacionActualizada::dispatch($conductor->id_conductor, $data['latitud'], $data['longitud'], $slug);
+        }
 
         return response()->json(status: 204);
     }

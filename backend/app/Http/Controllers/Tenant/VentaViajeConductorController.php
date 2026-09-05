@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Tenant;
 
+use App\Events\Tenant\SaldoAcreditado;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\CompraPaquete;
@@ -60,6 +61,12 @@ class VentaViajeConductorController extends Controller
             'accion' => 'ALTA',
             'descripcion' => "Pago de {$venta->monto_pagado} acreditado como {$venta->cantidad_viajes} viaje(s) prepagado(s) al conductor {$conductor->id_conductor}",
         ]);
+
+        // Tiempo real (spec tenant/018): avisa al conductor al instante, con respaldo de push si
+        // su socket está caído (evento "crítico", RN-04).
+        if ($slug = tenant()?->slug) {
+            SaldoAcreditado::dispatch($conductor->id_conductor, $venta->cantidad_viajes, $slug);
+        }
 
         return response()->json([
             'id_venta' => $venta->id_venta,

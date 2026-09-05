@@ -13,19 +13,21 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
 
 /**
- * Un pedido pasó a TOMADO: avisa a los demás conductores conectados del tenant (spec tenant/013)
- * para que lo quiten de su pool sin esperar el sondeo. No es un evento "crítico" (spec tenant/018,
- * RN-05): va solo por socket, sin respaldo de push — si no hay conexión, el pool se corrige solo en
- * el siguiente sondeo o `/conductor/sync`.
+ * Cambió la fecha/hora agendada de un pedido que ya tiene conductor asignado (spec tenant/018,
+ * DELIVERY_SCHEDULE_UPDATED). Es un evento "crítico" (RN-04): además del socket, se manda por push
+ * al conductor asignado vía `EnviarPushSiEsCritico`.
  */
-class PedidoYaTomado implements ShouldBroadcast
+class PedidoReprogramado implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public readonly string $eventId;
 
-    public function __construct(public readonly int $idPedido, public readonly string $tenantSlug)
-    {
+    public function __construct(
+        public readonly int $idPedido,
+        public readonly string $tenantSlug,
+        public readonly int $idConductor,
+    ) {
         $this->eventId = (string) Str::uuid();
     }
 
@@ -39,7 +41,7 @@ class PedidoYaTomado implements ShouldBroadcast
 
     public function broadcastAs(): string
     {
-        return 'pedido.tomado';
+        return 'pedido.reprogramado';
     }
 
     /**

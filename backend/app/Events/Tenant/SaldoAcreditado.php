@@ -13,19 +13,21 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
 
 /**
- * Un pedido pasó a TOMADO: avisa a los demás conductores conectados del tenant (spec tenant/013)
- * para que lo quiten de su pool sin esperar el sondeo. No es un evento "crítico" (spec tenant/018,
- * RN-05): va solo por socket, sin respaldo de push — si no hay conexión, el pool se corrige solo en
- * el siguiente sondeo o `/conductor/sync`.
+ * Se acreditaron viajes prepagados a un conductor (spec tenant/018, BALANCE_CREDITED). Es un evento
+ * "crítico" (RN-04): además del socket, se manda por push al conductor vía
+ * `EnviarPushSiEsCritico`.
  */
-class PedidoYaTomado implements ShouldBroadcast
+class SaldoAcreditado implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public readonly string $eventId;
 
-    public function __construct(public readonly int $idPedido, public readonly string $tenantSlug)
-    {
+    public function __construct(
+        public readonly int $idConductor,
+        public readonly int $viajesAcreditados,
+        public readonly string $tenantSlug,
+    ) {
         $this->eventId = (string) Str::uuid();
     }
 
@@ -39,7 +41,7 @@ class PedidoYaTomado implements ShouldBroadcast
 
     public function broadcastAs(): string
     {
-        return 'pedido.tomado';
+        return 'saldo.acreditado';
     }
 
     /**
@@ -47,6 +49,10 @@ class PedidoYaTomado implements ShouldBroadcast
      */
     public function broadcastWith(): array
     {
-        return ['id_pedido' => $this->idPedido, 'event_id' => $this->eventId];
+        return [
+            'id_conductor' => $this->idConductor,
+            'viajes_acreditados' => $this->viajesAcreditados,
+            'event_id' => $this->eventId,
+        ];
     }
 }
