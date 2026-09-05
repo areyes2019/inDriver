@@ -28,7 +28,6 @@ const form = reactive({
   numero_licencia: '',
   fecha_vencimiento_licencia: '',
   estado: 'ACTIVO',
-  disponibilidad: 'FUERA_DE_SERVICIO',
   id_despachador: '',
   placa: '',
   marca: '',
@@ -57,7 +56,6 @@ onMounted(async () => {
     form.numero_licencia = conductor.numero_licencia ?? ''
     form.fecha_vencimiento_licencia = conductor.fecha_vencimiento_licencia ?? ''
     form.estado = conductor.estado ?? 'ACTIVO'
-    form.disponibilidad = conductor.disponibilidad ?? 'FUERA_DE_SERVICIO'
     form.id_despachador = conductor.id_despachador ?? ''
     form.placa = conductor.vehiculo?.placa ?? ''
     form.marca = conductor.vehiculo?.marca ?? ''
@@ -161,22 +159,6 @@ async function onSubmit() {
           </select>
           <span v-if="fieldErrors.id_despachador" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.id_despachador }}
-          </span>
-        </label>
-
-        <label class="block">
-          <span class="mb-1 block text-sm font-medium text-heading">Disponibilidad</span>
-          <select
-            v-model="form.disponibilidad"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-          >
-            <option value="DISPONIBLE">DISPONIBLE</option>
-            <option value="OCUPADO">OCUPADO</option>
-            <option value="DESCANSO">DESCANSO</option>
-            <option value="FUERA_DE_SERVICIO">FUERA_DE_SERVICIO</option>
-          </select>
-          <span v-if="fieldErrors.disponibilidad" class="mt-1 block text-sm text-red-600">
-            {{ fieldErrors.disponibilidad }}
           </span>
         </label>
 
