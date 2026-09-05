@@ -25,7 +25,12 @@ withDefaults(
     </div>
 
     <div class="flex items-center gap-2">
-      <UiBadge v-for="(badge, index) in badges" :key="index" :text="badge.text" :color="badge.color" />
+      <UiBadge
+        v-for="(badge, index) in badges"
+        :key="index"
+        :text="badge.text"
+        :color="badge.color"
+      />
       <slot name="extra" />
     </div>
   </div>

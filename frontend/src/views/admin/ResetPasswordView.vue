@@ -57,7 +57,13 @@ async function onSubmit() {
         <p class="mt-1 text-sm text-gray-500">Elige una contraseña nueva para tu cuenta.</p>
 
         <form class="mt-8 space-y-5" @submit.prevent="onSubmit">
-          <UiInput v-model="email" label="Correo electrónico" type="email" required autocomplete="email" />
+          <UiInput
+            v-model="email"
+            label="Correo electrónico"
+            type="email"
+            required
+            autocomplete="email"
+          />
 
           <UiInput
             v-model="password"

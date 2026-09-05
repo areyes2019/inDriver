@@ -157,7 +157,10 @@ onMounted(fetchUsuarios)
               <td class="py-2 pr-4">
                 <div class="flex flex-wrap gap-2">
                   <RouterLink
-                    :to="{ name: 'tenant-usuarios-editar', params: { slug, id: usuario.id_usuario } }"
+                    :to="{
+                      name: 'tenant-usuarios-editar',
+                      params: { slug, id: usuario.id_usuario },
+                    }"
                     class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
                   >
                     Editar

@@ -229,7 +229,9 @@ onMounted(fetchPaquetes)
           ? `¿Seguro que quieres ${paqueteToToggle.estado === 'Activo' ? 'desactivar' : 'activar'} el paquete ${paqueteToToggle.nombre}?`
           : ''
       "
-      :confirm-label="paqueteToToggle && paqueteToToggle.estado === 'Activo' ? 'Desactivar' : 'Activar'"
+      :confirm-label="
+        paqueteToToggle && paqueteToToggle.estado === 'Activo' ? 'Desactivar' : 'Activar'
+      "
       @confirm="confirmToggleEstado"
       @cancel="cancelToggleEstado"
     />

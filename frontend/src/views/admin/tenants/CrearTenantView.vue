@@ -118,9 +118,7 @@ async function onSubmit() {
         </label>
 
         <div class="border-t border-gray-100 pt-5">
-          <p class="mb-4 text-sm font-semibold text-heading">
-            Datos del administrador del negocio
-          </p>
+          <p class="mb-4 text-sm font-semibold text-heading">Datos del administrador del negocio</p>
 
           <div class="space-y-5">
             <label class="block">

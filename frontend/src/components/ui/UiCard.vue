@@ -37,7 +37,10 @@ withDefaults(
     </header>
 
     <div class="p-5">
-      <header v-if="variant === 'default' && (title || $slots.header)" class="mb-4 flex items-center justify-between gap-2">
+      <header
+        v-if="variant === 'default' && (title || $slots.header)"
+        class="mb-4 flex items-center justify-between gap-2"
+      >
         <slot name="header">
           <h2 class="text-base font-semibold text-heading">{{ title }}</h2>
         </slot>

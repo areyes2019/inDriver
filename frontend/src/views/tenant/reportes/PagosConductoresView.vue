@@ -29,7 +29,9 @@ const error = ref('')
 
 function nombreConductor(pago: PagoConductor) {
   const usuario = pago.conductor?.usuario
-  return usuario ? `${usuario.nombre} ${usuario.apellido_paterno}` : `Conductor #${pago.id_conductor}`
+  return usuario
+    ? `${usuario.nombre} ${usuario.apellido_paterno}`
+    : `Conductor #${pago.id_conductor}`
 }
 
 async function fetchReporte() {
@@ -89,7 +91,9 @@ onMounted(fetchReporte)
         </table>
       </div>
 
-      <p class="mt-4 text-sm font-semibold text-heading">Total general pagado: ${{ totalGeneral }}</p>
+      <p class="mt-4 text-sm font-semibold text-heading">
+        Total general pagado: ${{ totalGeneral }}
+      </p>
     </UiCard>
   </TenantLayout>
 </template>
