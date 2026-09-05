@@ -73,7 +73,7 @@ function conductorAppConfigurar(Tenant $tenant): void
  *
  * @return array{usuario: Usuario, conductor: Conductor, password: string}
  */
-function conductorAppCrear(Tenant $tenant, array $usuarioOverrides = []): array
+function conductorAppCrear(Tenant $tenant, array $usuarioOverrides = [], array $conductorOverrides = []): array
 {
     tenancy()->initialize($tenant);
 
@@ -87,12 +87,12 @@ function conductorAppCrear(Tenant $tenant, array $usuarioOverrides = []): array
         'estado' => 'Activo',
     ], $usuarioOverrides));
 
-    $conductor = Conductor::create([
+    $conductor = Conductor::create(array_merge([
         'id_usuario' => $usuario->id_usuario,
         'numero_licencia' => 'LIC-'.$usuario->id_usuario,
         'estado' => 'ACTIVO',
         'disponibilidad' => 'DISPONIBLE',
-    ]);
+    ], $conductorOverrides));
 
     tenancy()->end();
 
@@ -384,6 +384,29 @@ it('connects and disconnects the conductor', function () {
     $estado = ConductorEstado::where('id_conductor', $datos['conductor']->id_conductor)->first();
     expect($estado->estado)->toBe('ONLINE');
     expect($estado->ultima_conexion)->not->toBeNull();
+    tenancy()->end();
+});
+
+it('syncs conductores.disponibilidad from the ONLINE/OFFLINE toggle, not the admin panel', function () {
+    $tenant = conductorAppTenant();
+    conductorAppConfigurar($tenant);
+    $datos = conductorAppCrear($tenant, [], ['disponibilidad' => 'FUERA_DE_SERVICIO']);
+    $token = conductorAppToken('beto@cafeluna.com', 'Password123!');
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->postJson('/api/v1/t/cafe-luna/conductor/estado', ['estado' => 'ONLINE'])
+        ->assertOk();
+
+    tenancy()->initialize($tenant);
+    expect($datos['conductor']->fresh()->disponibilidad)->toBe('DISPONIBLE');
+    tenancy()->end();
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->postJson('/api/v1/t/cafe-luna/conductor/estado', ['estado' => 'OFFLINE'])
+        ->assertOk();
+
+    tenancy()->initialize($tenant);
+    expect($datos['conductor']->fresh()->disponibilidad)->toBe('FUERA_DE_SERVICIO');
     tenancy()->end();
 });
 

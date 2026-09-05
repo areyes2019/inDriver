@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Tenant\ConductorActivoResource;
 use App\Http\Resources\Tenant\ConductorResource;
 use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\Conductor;
@@ -53,6 +54,19 @@ class ConductorController extends Controller
         }
 
         return ConductorResource::collection($query->paginate(15));
+    }
+
+    public function activos(): AnonymousResourceCollection
+    {
+        $conductores = Conductor::query()
+            ->with(['usuario', 'vehiculo', 'estadoActual'])
+            ->whereHas('estadoActual', fn ($q) => $q->where('estado', 'ONLINE'))
+            ->join('usuarios', 'usuarios.id_usuario', '=', 'conductores.id_usuario')
+            ->orderBy('usuarios.nombre')
+            ->select('conductores.*')
+            ->get();
+
+        return ConductorActivoResource::collection($conductores);
     }
 
     public function show(Conductor $conductor): JsonResponse
@@ -124,13 +138,18 @@ class ConductorController extends Controller
         return response()->json(new ConductorResource($conductor), 201);
     }
 
+    /**
+     * `disponibilidad` no forma parte de este `PUT` (spec tenant/003): el AdminCliente no decide la
+     * disponibilidad operativa de un conductor, la sincroniza el propio conductor al conectarse/
+     * desconectarse desde `panda_express` (`Conductor\EstadoController@actualizar`, spec
+     * tenant/013). Si el payload la incluye, `validate()` la descarta sin error.
+     */
     public function update(Request $request, Conductor $conductor): JsonResponse
     {
         $data = $request->validate([
             'numero_licencia' => ['required', 'string', 'max:255'],
             'fecha_vencimiento_licencia' => ['nullable', 'date'],
             'estado' => ['required', Rule::in(['ACTIVO', 'INACTIVO', 'BLOQUEADO'])],
-            'disponibilidad' => ['required', Rule::in(['DISPONIBLE', 'OCUPADO', 'DESCANSO', 'FUERA_DE_SERVICIO'])],
             'id_despachador' => ['nullable', 'integer', 'exists:despachadores,id_despachador'],
             ...$this->reglasVehiculo($conductor->vehiculo?->id_vehiculo),
         ]);

@@ -41,8 +41,11 @@ Deja funcionando:
   módulo tenant, `ConductorController`).
 - Notificaciones push nativas (FCM) — las alertas de pedido nuevo siguen siendo sonido/vibración/
   toast dentro de la app, como ya tiene `panda_express`.
-- Cambiar la app a otros estados de `conductor_estado` (`DISPONIBLE`, `OCUPADO`, `DESCANSO`,
-  `FUERA_DE_SERVICIO`) — desde la app solo se maneja `ONLINE`/`OFFLINE`.
+- Que la app mande a `conductor_estado.estado` otro valor que no sea `ONLINE`/`OFFLINE` — el
+  conductor no elige `OCUPADO`/`DESCANSO` explícitamente, solo se conecta o desconecta.
+  `conductores.disponibilidad` sí queda sincronizada por este toggle (ver "Decisión técnica"), pero
+  solo entre `DISPONIBLE` y `FUERA_DE_SERVICIO`; los valores `OCUPADO`/`DESCANSO` de ese enum quedan
+  sin usarse por ahora.
 
 ## Decisión técnica
 
@@ -134,6 +137,17 @@ migración que las quitó. `PedidoController@store`/`update` (despachador) las v
 nuevo, y `NuevaEntregaPanel.vue` (frontend del panel) vuelve a enviarlas en el `POST /pedidos` —ya
 las tenía resueltas en `recogidaCoord`/`entregaCoord`, solo no las incluía en el payload.
 
+### El toggle ONLINE/OFFLINE también sincroniza `conductores.disponibilidad`
+
+Hasta ahora `conductores.disponibilidad` era un campo que el AdminCliente editaba a mano desde el
+CRUD de conductores (`tenant/003`) — pero esa decisión no le corresponde a él: es el propio
+conductor quien decide si está disponible para operar, al conectarse o desconectarse desde esta app.
+Por eso `EstadoController@actualizar` ya no solo escribe `conductor_estado.estado`: en la misma
+petición actualiza `conductores.disponibilidad` (`ONLINE → 'DISPONIBLE'`,
+`OFFLINE → 'FUERA_DE_SERVICIO'`). `ConductorController@update` (spec `tenant/003`) deja de aceptar
+`disponibilidad` en su `PUT` — el AdminCliente ya solo controla el `estado` del conductor (darlo de
+baja del equipo si ya no labora ahí), no su disponibilidad operativa.
+
 ### Ubicación: se escribe en dos lugares con cada envío
 
 Cada `POST /conductor/ubicacion` actualiza `conductor_estado.ultima_latitud/ultima_longitud/
@@ -157,10 +171,13 @@ existen en el esquema, ninguna se modifica.
    cualquier punto antes de `ENTREGADO`.
 6. Conectarse (`estado: 'ONLINE'`) es requisito para ver el pool de pedidos disponibles;
    desconectarse (`'OFFLINE'`) no afecta un pedido ya en curso.
-7. El saldo de viajes del conductor (`GET /conductor/saldo-viajes`) solo aplica cuando el tenant usa
+7. Cada cambio de `ONLINE`/`OFFLINE` actualiza también `conductores.disponibilidad`
+   (`ONLINE → DISPONIBLE`, `OFFLINE → FUERA_DE_SERVICIO`) — es la única forma en que ese campo
+   cambia; el AdminCliente ya no lo edita a mano (`tenant/003`).
+8. El saldo de viajes del conductor (`GET /conductor/saldo-viajes`) solo aplica cuando el tenant usa
    modalidad `Prepago` (spec 015); con modalidad `Comision`, el endpoint responde `saldo: null` y la
    app oculta el chip de saldo.
-8. Cada pedido `ENTREGADO` por el conductor liquida igual que hoy (`PedidoEstadoService`, migrado
+9. Cada pedido `ENTREGADO` por el conductor liquida igual que hoy (`PedidoEstadoService`, migrado
    sin cambios de `PedidoController::liquidarConductor`): descuenta 1 viaje prepagado o calcula la
    comisión, según la modalidad del tenant.
 
@@ -180,7 +197,9 @@ existen en el esquema, ninguna se modifica.
   - `AuthController@logout` — revoca el token actual (`$request->user('conductor-token')
     ->currentAccessToken()->delete()`).
   - `EstadoController@actualizar` — `POST /conductor/estado`, body `{ estado: 'ONLINE'|'OFFLINE' }`,
-    `ConductorEstado::updateOrCreate(['id_conductor' => …], [...])`.
+    `ConductorEstado::updateOrCreate(['id_conductor' => …], [...])`, y además actualiza
+    `conductores.disponibilidad` del conductor autenticado (`ONLINE → 'DISPONIBLE'`,
+    `OFFLINE → 'FUERA_DE_SERVICIO'`).
   - `UbicacionController@actualizar` — `POST /conductor/ubicacion`, body
     `{ latitud, longitud, precision?, velocidad?, rumbo?, bateria? }`; actualiza
     `conductor_estado` e inserta en `conductor_posiciones` (ver "Decisión técnica").
@@ -294,8 +313,11 @@ alcance.
 - Modelo de asignación dirigida vía `pedido_asignaciones`.
 - Registro de conductores desde la app.
 - Notificaciones push nativas (FCM/APNs).
-- Estados `DISPONIBLE`/`OCUPADO`/`DESCANSO`/`FUERA_DE_SERVICIO` de `conductor_estado` — la app solo
-  maneja `ONLINE`/`OFFLINE`.
+- Que la app envíe o elija directamente `DISPONIBLE`/`OCUPADO`/`DESCANSO`/`FUERA_DE_SERVICIO` — solo
+  maneja `ONLINE`/`OFFLINE`; `conductores.disponibilidad` se deriva de eso en el backend, sin que la
+  app conozca esos valores.
+- Que el conductor elija `OCUPADO`/`DESCANSO` explícitamente — esos dos valores del enum de
+  `disponibilidad` quedan sin usarse por ahora (posible historia futura).
 - Selección manual de vehículo por el conductor al aceptar un pedido.
 - Multi-tenant dentro de una sola instalación de la app (selector de empresa al login).
 
@@ -314,16 +336,20 @@ alcance.
    422.
 7. Al llegar a `ENTREGADO` desde la app, se liquida igual que hoy desde el panel (descuento de
    prepago o comisión, según modalidad del tenant) — mismo resultado, sin duplicar lógica.
-8. `POST /conductor/ubicacion` dentro de un mismo minuto deja una fila nueva en
+8. `POST /conductor/estado` con `{ estado: 'ONLINE' }` deja `conductores.disponibilidad` en
+   `'DISPONIBLE'`; con `{ estado: 'OFFLINE' }` la deja en `'FUERA_DE_SERVICIO'`.
+   `PUT /t/{slug}/conductores/{id}` (panel de AdminCliente) que incluya `disponibilidad` en el
+   payload la ignora sin error y sin modificar la columna.
+9. `POST /conductor/ubicacion` dentro de un mismo minuto deja una fila nueva en
    `conductor_posiciones` por cada envío, y actualiza `conductor_estado.ultima_latitud/longitud` a
    la más reciente.
-9. Un segundo conductor conectado al mismo tenant recibe el evento `PedidoYaTomado` por WebSocket en
-   menos de 2 segundos después de que el primero acepta el pedido, sin necesidad de esperar al
-   sondeo.
-10. `panda_express` compilado contra este backend completa el flujo: login → conectarse → ver pool →
+10. Un segundo conductor conectado al mismo tenant recibe el evento `PedidoYaTomado` por WebSocket en
+    menos de 2 segundos después de que el primero acepta el pedido, sin necesidad de esperar al
+    sondeo.
+11. `panda_express` compilado contra este backend completa el flujo: login → conectarse → ver pool →
     aceptar → avanzar hasta entregado → ver saldo actualizado, sin ningún error de red por nombre de
     campo o de endpoint inexistente.
-11. Pint y ESLint/Prettier corren sin errores sobre el código nuevo; `php artisan test` pasa.
+12. Pint y ESLint/Prettier corren sin errores sobre el código nuevo; `php artisan test` pasa.
 
 ## Supuestos asumidos (registro completo)
 
@@ -338,7 +364,10 @@ alcance.
    pedidos ajenos.
 5. Un conductor tiene como máximo un pedido activo (no final) a la vez.
 6. Conectar/desconectar desde la app escribe directo en `conductor_estado.estado`
-   (`ONLINE`/`OFFLINE` únicamente); los demás valores del enum quedan fuera de alcance de la app.
+   (`ONLINE`/`OFFLINE` únicamente); los demás valores de ese enum quedan fuera de alcance de la app.
+   Ese mismo cambio sincroniza además `conductores.disponibilidad` (`DISPONIBLE`/
+   `FUERA_DE_SERVICIO`) — es la única forma en que ese campo cambia, ya no lo edita el AdminCliente
+   a mano desde el CRUD (`tenant/003`).
 7. Cada envío de ubicación actualiza la posición "actual" en `conductor_estado` y además deja
    registro histórico en `conductor_posiciones` (no se descarta el histórico).
 8. El vehículo del pedido se toma automático del vehículo propio del conductor
@@ -372,3 +401,9 @@ alcance.
 19. `views/WalletDashboard.vue` de `panda_express` queda fuera de esta historia — sigue mostrando
     datos ficticios, sin conectarse a `driver.viajesDisponibles` ni a ningún endpoint real, porque
     el backend no tiene (ni esta historia agrega) un endpoint de historial de movimientos.
+20. La disponibilidad operativa del conductor (`conductores.disponibilidad`) la decide el conductor,
+    no el AdminCliente: `EstadoController@actualizar` sincroniza esa columna en cada
+    conexión/desconexión (`ONLINE → DISPONIBLE`, `OFFLINE → FUERA_DE_SERVICIO`), y
+    `ConductorController@update` (`tenant/003`) deja de aceptarla en su `PUT`. `OCUPADO`/`DESCANSO`
+    quedan sin usarse por ahora, al no existir todavía una forma de que el conductor los elija desde
+    la app.

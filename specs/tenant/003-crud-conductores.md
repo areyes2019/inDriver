@@ -2,9 +2,12 @@
 
 ## Historia de usuario
 
-Como AdminCliente, quiero dar de alta el perfil operativo (licencia, disponibilidad) de un usuario
-con rol `Conductor` que ya existe, verlo en una lista, y editar sus datos y estado, para tener
-registrado quién puede operar como conductor y con qué licencia.
+Como AdminCliente, quiero dar de alta el perfil operativo (licencia) de un usuario con rol
+`Conductor` que ya existe, verlo en una lista, y editar sus datos y estado, para tener registrado
+quién puede operar como conductor, con qué licencia, y poder darlo de baja del equipo cuando ya no
+labora conmigo. La disponibilidad para operar (`DISPONIBLE`/`OCUPADO`/`DESCANSO`/`FUERA_DE_SERVICIO`)
+no la decide el AdminCliente: la decide el propio conductor al conectarse/desconectarse desde su app
+(`panda_express`, spec tenant/013) — aquí solo se muestra como dato informativo de solo lectura.
 
 ## Objetivo / Alcance
 
@@ -18,8 +21,12 @@ Deja funcionando:
   `rol = Conductor` y captura sus datos de licencia).
 - Listado de conductores (con el nombre/email del usuario asociado) con búsqueda y paginación.
 - Edición de los datos propios del conductor: `numero_licencia`, `fecha_vencimiento_licencia`,
-  `estado`, `disponibilidad`.
+  `estado` — este último es la única palanca real que tiene el AdminCliente sobre la operación del
+  conductor (darlo de baja poniéndolo `INACTIVO`/`BLOQUEADO`).
 - Borrado automático del perfil cuando el usuario deja de tener `rol = Conductor`.
+- `disponibilidad` se sigue mostrando en el listado y en la edición, pero como dato de solo lectura:
+  se sincroniza sola desde `conductor_estado` cuando el conductor se conecta/desconecta en la app
+  (spec tenant/013), no se captura ni se edita desde aquí (ver "Decisión técnica").
 
 **No** incluye:
 
@@ -28,8 +35,8 @@ Deja funcionando:
 - Un botón "Eliminar conductor" independiente — se maneja cambiando el rol o eliminando el usuario,
   igual que `despachadores`.
 - La tabla `conductor_vehiculo` (inciso 05) ni ninguna asignación de vehículo — historia futura.
-- Que `disponibilidad` se sincronice con la tabla `conductor_estado` (inciso 14, la fuente "en vivo"
-  del estado del conductor en campo) — aquí es un campo editable a mano desde el panel.
+- Editar `disponibilidad` a mano desde este panel — ese campo ya no es editable por el AdminCliente
+  (ver "Decisión técnica" y `tenant/013-conexion-panda-express.md`).
 
 ## Decisión técnica
 
@@ -69,9 +76,23 @@ Igual que `despachadores`: la migración de `conductores` ya corrió sin `unique
 ### Un solo endpoint de edición, no un `cambiarEstado` aparte
 
 A diferencia de `despachadores` (que solo tiene `estado`), aquí hay varios campos propios que tiene
-sentido editar juntos en un solo formulario, incluyendo `estado` y `disponibilidad`. Por eso
-`ConductorController@update` es un `PUT` completo, patrón `ClienteController@update`/
-`UsuarioController@update`, no un endpoint de cambio de estado aislado.
+sentido editar juntos en un solo formulario: `numero_licencia`, `fecha_vencimiento_licencia`,
+`estado` (y los datos del vehículo). Por eso `ConductorController@update` es un `PUT` completo,
+patrón `ClienteController@update`/`UsuarioController@update`, no un endpoint de cambio de estado
+aislado. `disponibilidad` no forma parte de este `PUT` (ver siguiente decisión).
+
+### `disponibilidad` no la decide el AdminCliente — la decide el conductor desde su app
+
+`conductores.disponibilidad` (`DISPONIBLE`/`OCUPADO`/`DESCANSO`/`FUERA_DE_SERVICIO`) y
+`conductor_estado.estado` (`ONLINE`/`OFFLINE`) son columnas distintas, pero la segunda gobierna a la
+primera: cuando el conductor se conecta/desconecta desde `panda_express`
+(`Tenant\Conductor\EstadoController@actualizar`, spec tenant/013), el backend actualiza también
+`conductores.disponibilidad` (`ONLINE → DISPONIBLE`, `OFFLINE → FUERA_DE_SERVICIO`). El AdminCliente
+no tiene ningún control operativo sobre un conductor más allá de su `estado`
+(`ACTIVO`/`INACTIVO`/`BLOQUEADO`, es decir, darlo de baja del equipo) — por eso
+`ConductorController@update` ya no acepta `disponibilidad` en el payload: si el frontend la manda
+igual, Laravel la descarta en la validación sin generar error, y la columna no se toca desde este
+endpoint.
 
 ## Reglas de negocio
 
@@ -88,6 +109,9 @@ sentido editar juntos en un solo formulario, incluyendo `estado` y `disponibilid
   no se valida.
 - Solo `AdminCliente` accede a las rutas de `conductores` — mismo middleware de rol y mismo límite de
   peticiones (`tenant-usuarios`) que usuarios/clientes/despachadores.
+- `disponibilidad` no es editable desde `PUT /conductores/{id}` — cambia únicamente como efecto de
+  que el conductor se conecte/desconecte en `panda_express` (`tenant/013`). Si la petición incluye
+  ese campo, se ignora sin error.
 
 ## Backend (Laravel)
 
@@ -107,8 +131,9 @@ sentido editar juntos en un solo formulario, incluyendo `estado` y `disponibilid
   - `show(Conductor $conductor)`: un conductor con los datos de su usuario asociado — lo usa la
     pantalla de edición para precargar el formulario (binding implícito, mismo criterio de seguridad
     que `cambiarEstado` de `despachadores`).
-  - `update(Request $request, Conductor $conductor)`: valida y actualiza todos los campos propios,
-    incluidos `estado` y `disponibilidad` (`Rule::in` contra sus enums).
+  - `update(Request $request, Conductor $conductor)`: valida y actualiza `numero_licencia`,
+    `fecha_vencimiento_licencia`, `estado` (`Rule::in` contra su enum) y los datos del vehículo — ya
+    no acepta `disponibilidad`.
 - **Modifica** `App\Http\Controllers\Tenant\UsuarioController@update`: agrega, junto a la regla ya
   existente de `despachadores`, que si el rol anterior era `Conductor` y el nuevo no lo es, borra la
   fila en `conductores` (misma transacción).
@@ -133,7 +158,8 @@ sentido editar juntos en un solo formulario, incluyendo `estado` y `disponibilid
   `usuariosDisponibles` (mensaje explicativo si viene vacío) + campos de licencia. Mismo patrón que
   `CrearClienteView.vue`/`CrearUsuarioView.vue`.
 - **Vista nueva** `views/tenant/conductores/EditarConductorView.vue`: mismos campos de licencia, más
-  `estado` y `disponibilidad` como `<select>`.
+  `estado` como `<select>` — no incluye `disponibilidad`, que es de solo lectura (se sincroniza sola
+  desde la app del conductor, tenant/013).
 - **Rutas** (`router/index.ts`): `/t/:slug/panel/conductores`,
   `/t/:slug/panel/conductores/crear`, `/t/:slug/panel/conductores/:id/editar`, con
   `meta: { requiresTenantAuth: true }`.
@@ -145,7 +171,8 @@ sentido editar juntos en un solo formulario, incluyendo `estado` y `disponibilid
 - Alta automática del perfil al poner `rol = Conductor` en un usuario.
 - Botón "Eliminar conductor" independiente.
 - Tabla `conductor_vehiculo` (inciso 05) y cualquier asignación de vehículo.
-- Sincronizar `disponibilidad` con `conductor_estado` (inciso 14) — queda como campo editable a mano.
+- Editar `disponibilidad` desde este CRUD — ese campo se sincroniza solo, desde `conductor_estado`
+  (tenant/013), cuando el conductor se conecta/desconecta en `panda_express`.
 - Restricción `unique` a nivel de base de datos sobre `conductores.id_usuario` — la migración ya
   corrió; la garantía queda a nivel de aplicación (mismo criterio que `despachadores`).
 
@@ -163,8 +190,8 @@ sentido editar juntos en un solo formulario, incluyendo `estado` y `disponibilid
    **desde** `Conductor` hacia otro rol borra su fila en `conductores`.
 6. `GET /api/v1/t/{slug}/conductores` sin sesión responde `401`; con sesión de un usuario
    `Despachador` o `Conductor` responde `403`; con `AdminCliente` lista con búsqueda y paginación.
-7. `PUT /api/v1/t/{slug}/conductores/{id}` con un `estado` o `disponibilidad` fuera de su enum
-   responde `422`.
+7. `PUT /api/v1/t/{slug}/conductores/{id}` con un `estado` fuera de su enum responde `422`; si el
+   payload incluye `disponibilidad`, se ignora sin error y la columna no cambia.
 8. El frontend expone `/t/:slug/panel/conductores` con la tabla y el botón "Nuevo conductor"; ese
    formulario muestra un selector con los usuarios disponibles (o un mensaje si no hay ninguno); el
    menú del tenant incluye el enlace "Conductores".
@@ -176,8 +203,9 @@ sentido editar juntos en un solo formulario, incluyendo `estado` y `disponibilid
 ## Supuestos asumidos (registro completo)
 
 1. El alcance es "CRUD completo" = listar (búsqueda/paginación), crear (alta manual, no automática),
-   editar (todos los campos propios incluidos `estado`/`disponibilidad`) — sin "eliminar"
-   independiente, mismo criterio que `despachadores`.
+   editar (`numero_licencia`, `fecha_vencimiento_licencia`, `estado`) — sin "eliminar" independiente,
+   mismo criterio que `despachadores`. `disponibilidad` no forma parte de lo editable: es de solo
+   lectura, sincronizada desde `conductor_estado` (ver punto 7 corregido abajo).
 2. A diferencia de `despachadores`, la dependencia con `usuarios` **no** se resuelve con alta
    automática: `numero_licencia` es `NOT NULL` sin default en una migración ya aplicada, y ese dato
    no se captura en el formulario de usuarios. Por eso existe una pantalla "Nuevo conductor"
@@ -191,11 +219,15 @@ sentido editar juntos en un solo formulario, incluyendo `estado` y `disponibilid
    fila en `conductores` — mismo mecanismo ya usado para `despachadores`, extendido en el mismo
    método `UsuarioController@update`.
 6. `numero_licencia` no se valida como único, ni en la aplicación ni en la base de datos.
-7. `disponibilidad` se edita a mano desde este mismo formulario — no se conecta con `conductor_estado`
-   (inciso 14), que queda fuera de esta historia.
-8. `ConductorController@update` usa un solo `PUT` con todos los campos propios (incluido
-   `estado`/`disponibilidad`), no un endpoint de cambio de estado aislado como `despachadores` —
-   porque aquí sí hay varios campos que editar juntos.
+7. `disponibilidad` no se edita a mano desde este formulario: el AdminCliente no decide la
+   disponibilidad operativa de un conductor, la decide el propio conductor al conectarse/
+   desconectarse desde `panda_express` (tenant/013), que sincroniza `conductores.disponibilidad`
+   automáticamente. Lo único que el AdminCliente controla sobre el conductor es su `estado`
+   (darlo de baja del equipo).
+8. `ConductorController@update` usa un solo `PUT` con los campos propios editables (`numero_licencia`,
+   `fecha_vencimiento_licencia`, `estado`, vehículo), no un endpoint de cambio de estado aislado como
+   `despachadores` — porque aquí sí hay varios campos que editar juntos. `disponibilidad` queda fuera
+   de ese `PUT` por completo.
 9. Sin "eliminar conductor" independiente — se maneja cambiando el rol o eliminando el usuario desde
    la pantalla de usuarios ya existente (punto 5 arriba).
 10. La tabla de `ListaConductoresView.vue` ocupa el 100% del ancho interior del card, sin
