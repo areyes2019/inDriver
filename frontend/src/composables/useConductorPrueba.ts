@@ -35,8 +35,16 @@ export function useConductorPrueba(slug: string, token: string) {
   const log = ref<string[]>([])
   let detenido = false
 
+  // Aunque autentica por Bearer (guard `conductor-token`), Sanctum igual exige CSRF en estas
+  // llamadas: como corren desde el mismo origen que el Panel (localhost:5173, un dominio
+  // "stateful" por SANCTUM_STATEFUL_DOMAINS), `EnsureFrontendRequestsAreStateful` las trata como
+  // de sesión antes de que la petición llegue al guard de la ruta. `withCredentials` +
+  // `withXSRFToken` reusan la cookie XSRF-TOKEN que ya dejó el login del Panel — panda_express no
+  // lo necesita porque no corre desde un origen "stateful".
   const api = axios.create({
     baseURL: API_URL,
+    withCredentials: true,
+    withXSRFToken: true,
     headers: { Authorization: `Bearer ${token}` },
   })
 

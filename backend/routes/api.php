@@ -123,6 +123,7 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
 
             Route::get('/conductores-prueba', [ConductorPruebaController::class, 'index']);
             Route::post('/conductores-prueba', [ConductorPruebaController::class, 'store']);
+            Route::post('/conductores-prueba/{conductor}/reconectar', [ConductorPruebaController::class, 'reconectar']);
             Route::delete('/conductores-prueba/{conductor}', [ConductorPruebaController::class, 'destroy']);
 
             Route::get('/zonas-cobertura', [ZonaCoberturaController::class, 'index']);

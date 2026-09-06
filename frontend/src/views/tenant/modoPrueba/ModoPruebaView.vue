@@ -32,6 +32,7 @@ const tokens: Record<number, string> = {}
 const demos = shallowReactive<Record<number, ReturnType<typeof useConductorPrueba>>>({})
 const conductorAEliminar = ref<ConductorPrueba | null>(null)
 const eliminandoId = ref<number | null>(null)
+const reconectandoId = ref<number | null>(null)
 
 const ETIQUETAS_ESTADO: Record<EstadoDemo, string> = {
   inactivo: 'Sin iniciar',
@@ -73,6 +74,22 @@ async function crearConductor() {
     error.value = 'No se pudo crear el conductor de prueba.'
   } finally {
     creando.value = false
+  }
+}
+
+async function reconectar(conductor: ConductorPrueba) {
+  reconectandoId.value = conductor.id_conductor
+  error.value = ''
+  try {
+    const { data } = await http.post(
+      `/t/${slug}/conductores-prueba/${conductor.id_conductor}/reconectar`,
+    )
+    tokens[conductor.id_conductor] = data.token
+    delete demos[conductor.id_conductor]
+  } catch {
+    error.value = 'No se pudo reconectar el conductor de prueba.'
+  } finally {
+    reconectandoId.value = null
   }
 }
 
@@ -181,11 +198,12 @@ onBeforeUnmount(() => {
               <button
                 v-if="!tokens[conductor.id_conductor]"
                 type="button"
-                disabled
-                title="Este conductor se creó en otra sesión: elimínalo y crea uno nuevo para poder operarlo."
-                class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-semibold text-body/50"
+                :disabled="reconectandoId === conductor.id_conductor"
+                title="El token de este conductor se perdió al recargar la página."
+                class="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                @click="reconectar(conductor)"
               >
-                Sin sesión activa
+                Reconectar
               </button>
               <button
                 v-else-if="

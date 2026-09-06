@@ -96,6 +96,22 @@ class ConductorPruebaController extends Controller
         ], 201);
     }
 
+    /**
+     * Reemite el token de un conductor de prueba ya existente (spec "modo prueba"): el token
+     * solo vive en memoria del navegador, así que se pierde al recargar la página. Evita tener
+     * que borrar y crear uno nuevo solo para recuperar la sesión.
+     */
+    public function reconectar(Request $request, Conductor $conductor): JsonResponse
+    {
+        if (! $conductor->es_prueba) {
+            abort(403, 'Solo se pueden reconectar conductores de prueba.');
+        }
+
+        return response()->json([
+            'token' => $conductor->usuario->createToken('panel-prueba')->plainTextToken,
+        ]);
+    }
+
     public function destroy(Request $request, Conductor $conductor): JsonResponse
     {
         if (! $conductor->es_prueba) {
