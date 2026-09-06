@@ -13,11 +13,11 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
 
 /**
- * Un pedido con conductor asignado pasó a CANCELADO (spec tenant/013) — típicamente cancelado desde
- * el panel de despachador mientras el conductor ya lo tenía activo en la app; se le avisa al
- * instante en vez de que se entere hasta el próximo sondeo. Es uno de los eventos "críticos" (spec
- * tenant/018, RN-04): además del socket, se manda por push al conductor asignado vía
- * `EnviarPushSiEsCritico`.
+ * Un pedido con conductor asignado pasó a CANCELADO (spec tenant/013, tenant/022) — típicamente
+ * cancelado desde el panel de despachador mientras el conductor ya lo tenía activo en la app; se
+ * le avisa al instante en vez de que se entere hasta el próximo sondeo. Es uno de los eventos
+ * "críticos" (spec tenant/018, RN-04): además del socket, se manda por push al conductor asignado
+ * vía `EnviarPushSiEsCritico`.
  */
 class PedidoCanceladoParaConductor implements ShouldBroadcast
 {
@@ -29,6 +29,10 @@ class PedidoCanceladoParaConductor implements ShouldBroadcast
         public readonly int $idPedido,
         public readonly string $tenantSlug,
         public readonly int $idConductor,
+        public readonly ?string $canceladoPor = null,
+        public readonly ?string $motivo = null,
+        public readonly bool $compensationEligible = false,
+        public readonly ?string $instruction = null,
     ) {
         $this->eventId = (string) Str::uuid();
     }
@@ -51,6 +55,13 @@ class PedidoCanceladoParaConductor implements ShouldBroadcast
      */
     public function broadcastWith(): array
     {
-        return ['id_pedido' => $this->idPedido, 'event_id' => $this->eventId];
+        return [
+            'id_pedido' => $this->idPedido,
+            'cancelado_por' => $this->canceladoPor,
+            'motivo' => $this->motivo,
+            'compensation_eligible' => $this->compensationEligible,
+            'instruction' => $this->instruction,
+            'event_id' => $this->eventId,
+        ];
     }
 }

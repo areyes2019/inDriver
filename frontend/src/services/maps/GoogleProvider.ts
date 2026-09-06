@@ -167,13 +167,15 @@ export default class GoogleProvider extends BaseProvider {
       renderer.setDirections(response)
       instance.routes.set(routeId, renderer)
 
-      const leg = response.routes[0]?.legs[0]
+      const route = response.routes[0]
+      const leg = route?.legs[0]
       if (!leg?.distance || !leg?.duration) return null
 
       return {
         distance: leg.distance.text,
         duration: leg.duration.text,
         distanceKm: leg.distance.value / 1000,
+        path: (route?.overview_path ?? []).map((point) => ({ lat: point.lat(), lng: point.lng() })),
       }
     } catch {
       const polyline = new google.maps.Polyline({
@@ -185,6 +187,34 @@ export default class GoogleProvider extends BaseProvider {
       })
       instance.routes.set(routeId, polyline)
       return null
+    }
+  }
+
+  /**
+   * Puntos de una ruta sin dibujar nada ni requerir un mapa visible (spec "modo prueba"): el
+   * conductor virtual necesita por dónde avanzar, no un `<div>` en pantalla. Cae a una línea recta
+   * de 2 puntos si Directions falla, igual que `drawRoute`.
+   */
+  async getRoutePath(origin: LatLngLike, destination: LatLngLike): Promise<LatLngLike[]> {
+    if (!this.apiKey) {
+      throw new Error('VITE_GOOGLE_MAPS_API_KEY no está configurada.')
+    }
+
+    await loadSdk(this.apiKey)
+
+    try {
+      const response = await new google.maps.DirectionsService().route({
+        origin,
+        destination,
+        travelMode: google.maps.TravelMode.DRIVING,
+      })
+
+      const path = response.routes[0]?.overview_path
+      if (!path || path.length < 2) return [origin, destination]
+
+      return path.map((point) => ({ lat: point.lat(), lng: point.lng() }))
+    } catch {
+      return [origin, destination]
     }
   }
 

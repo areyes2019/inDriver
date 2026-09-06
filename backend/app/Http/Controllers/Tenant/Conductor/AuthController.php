@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Tenant\Conductor;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Tenant\UsuarioResource;
 use App\Models\Tenant\Usuario;
+use App\Services\DisponibilidadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -14,6 +15,8 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    public function __construct(private readonly DisponibilidadService $disponibilidad) {}
+
     /**
      * Login de la app de conductor (panda_express), por token de Sanctum en vez de sesión (spec
      * tenant/013) — solo emite token a un `Usuario` con `rol = 'Conductor'`.
@@ -45,6 +48,12 @@ class AuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
+        $conductor = $request->user('conductor-token')->conductor;
+
+        // Al cerrar sesión se desconecta siempre (spec tenant/019, RN-05), aunque tenga un pedido
+        // en curso: a diferencia de `PUT /estado`, aquí no hay a quién devolverle un error.
+        $this->disponibilidad->desconectar($conductor, forzar: true);
+
         $request->user('conductor-token')->currentAccessToken()->delete();
 
         return response()->json(status: 204);

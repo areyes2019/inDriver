@@ -1,14 +1,26 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import http from '@/lib/http'
 import UiBadge from '@/components/ui/UiBadge.vue'
+import realtimeService from '@/services/realtime'
 
 interface ConductorActivo {
   id_conductor: number
   nombre: string
   disponibilidad: 'DISPONIBLE' | 'OCUPADO' | 'DESCANSO' | 'FUERA_DE_SERVICIO'
   placa: string | null
+}
+
+interface DisponibilidadCambiadaPayload {
+  id_conductor: number
+  disponibilidad: 'DISPONIBLE' | 'FUERA_DE_SERVICIO'
+  event_id: string
+}
+
+interface Toast {
+  id: string
+  texto: string
 }
 
 const disponibilidadColor: Record<string, 'gray' | 'blue' | 'orange' | 'green' | 'red'> = {
@@ -24,6 +36,7 @@ const slug = route.params.slug as string
 const conductores = ref<ConductorActivo[]>([])
 const cargando = ref(false)
 const error = ref(false)
+const toasts = ref<Toast[]>([])
 
 async function cargarConductores() {
   cargando.value = true
@@ -39,7 +52,39 @@ async function cargarConductores() {
   }
 }
 
-onMounted(cargarConductores)
+function mostrarToast(texto: string) {
+  const id = crypto.randomUUID()
+  toasts.value.push({ id, texto })
+  setTimeout(() => {
+    toasts.value = toasts.value.filter((toast) => toast.id !== id)
+  }, 4000)
+}
+
+/**
+ * Se puso en línea o se desconectó (spec tenant/019): recarga la lista para que el Panel refleje
+ * el cambio sin recargar la página, y avisa con un toast solo cuando se conecta.
+ */
+async function onDisponibilidadCambiada(payload: DisponibilidadCambiadaPayload) {
+  await cargarConductores()
+
+  if (payload.disponibilidad === 'DISPONIBLE') {
+    const conductor = conductores.value.find((c) => c.id_conductor === payload.id_conductor)
+    mostrarToast(conductor ? `${conductor.nombre} está en línea` : 'Un conductor está en línea')
+  }
+}
+
+onMounted(() => {
+  cargarConductores()
+  realtimeService
+    .subscribe(slug)
+    ?.bind('conductor.disponibilidad-cambiada', onDisponibilidadCambiada)
+})
+
+onUnmounted(() => {
+  realtimeService
+    .subscribe(slug)
+    ?.unbind('conductor.disponibilidad-cambiada', onDisponibilidadCambiada)
+})
 </script>
 
 <template>
@@ -81,6 +126,16 @@ onMounted(cargarConductores)
           <p class="truncate text-xs text-body/70">{{ conductor.placa ?? 'Sin vehículo' }}</p>
         </li>
       </ul>
+    </div>
+
+    <div class="pointer-events-none fixed bottom-4 right-[calc(30%+1rem)] z-40 flex flex-col gap-2">
+      <div
+        v-for="toast in toasts"
+        :key="toast.id"
+        class="pointer-events-auto rounded bg-heading px-4 py-2 text-sm text-white shadow-lg"
+      >
+        {{ toast.texto }}
+      </div>
     </div>
   </aside>
 </template>

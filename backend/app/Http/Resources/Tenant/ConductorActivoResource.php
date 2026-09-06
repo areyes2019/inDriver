@@ -18,11 +18,29 @@ class ConductorActivoResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // `pedidos` ya viene filtrado a solo el activo (ver `ConductorController::activos()`):
+        // como mucho hay uno (spec tenant/020, RN-06, un conductor no puede tener dos a la vez).
+        $pedido = $this->pedidos->first();
+
         return [
             'id_conductor' => $this->id_conductor,
             'nombre' => trim("{$this->usuario->nombre} {$this->usuario->apellido_paterno}"),
             'disponibilidad' => $this->disponibilidad,
             'placa' => $this->vehiculo?->placa,
+            'es_prueba' => $this->es_prueba,
+            'latitud' => $this->estadoActual?->ultima_latitud !== null ? (float) $this->estadoActual->ultima_latitud : null,
+            'longitud' => $this->estadoActual?->ultima_longitud !== null ? (float) $this->estadoActual->ultima_longitud : null,
+            'pedido_asignado' => $pedido ? [
+                'id_pedido' => $pedido->id_pedido,
+                'numero_pedido' => $pedido->numero_pedido,
+                'estado' => $pedido->estado,
+                'direccion_recogida' => $pedido->direccion_recogida,
+                'latitud_recogida' => (float) $pedido->latitud_recogida,
+                'longitud_recogida' => (float) $pedido->longitud_recogida,
+                'direccion_entrega' => $pedido->direccion_entrega,
+                'latitud_entrega' => (float) $pedido->latitud_entrega,
+                'longitud_entrega' => (float) $pedido->longitud_entrega,
+            ] : null,
         ];
     }
 }

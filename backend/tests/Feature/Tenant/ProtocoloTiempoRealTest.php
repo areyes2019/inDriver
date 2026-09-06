@@ -9,6 +9,7 @@ use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConductorDispositivo;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
+use App\Models\Tenant\PedidoOferta;
 use App\Models\Tenant\Usuario;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -199,12 +200,21 @@ it('syncs pedido activo, pedidos disponibles, and saldo in one response', functi
         'modalidad_pago' => 'RECEPTOR_PAGA_ENVIO', 'importe_envio' => 80, 'estado' => 'TOMADO',
         'id_conductor' => $datos['conductor']->id_conductor,
     ]);
-    Pedido::create([
+    $disponible = Pedido::create([
         'numero_pedido' => 'PED-100002', 'nombre_solicitante' => 'Ana', 'telefono_solicitante' => '5511223355',
         'direccion_recogida' => 'Av. Juárez 50', 'direccion_entrega' => 'Av. Chapultepec 80',
         'fecha_servicio' => now()->toDateString(), 'lo_antes_posible' => true,
         'modalidad_pago' => 'RECEPTOR_PAGA_ENVIO', 'importe_envio' => 60, 'estado' => 'PUBLICADO',
         'fecha_publicacion' => now(),
+    ]);
+    // Bajo spec tenant/020, /sync solo lista las ofertas propias vigentes del conductor, no todo
+    // lo PUBLICADO del tenant.
+    PedidoOferta::create([
+        'id_pedido' => $disponible->id_pedido,
+        'id_conductor' => $datos['conductor']->id_conductor,
+        'estado' => 'PENDIENTE',
+        'ofrecida_en' => now(),
+        'expira_en' => now()->addSeconds(45),
     ]);
     tenancy()->end();
 
@@ -270,20 +280,21 @@ it('dispatches PedidoReprogramado when the schedule of an assigned pedido change
     $pedido = Pedido::create([
         'numero_pedido' => 'PED-200001', 'nombre_solicitante' => 'Mario', 'telefono_solicitante' => '5511223344',
         'direccion_recogida' => 'Av. Reforma 100', 'direccion_entrega' => 'Av. Insurgentes 200',
-        'fecha_servicio' => '2026-01-01', 'lo_antes_posible' => false,
+        'fecha_servicio' => now()->addDays(5)->toDateString(), 'lo_antes_posible' => false,
         'hora_desde' => '09:00', 'hora_hasta' => '11:00',
         'modalidad_pago' => 'RECEPTOR_PAGA_ENVIO', 'importe_envio' => 80, 'estado' => 'TOMADO',
         'id_conductor' => $datos['conductor']->id_conductor,
     ]);
     tenancy()->end();
 
+    // spec tenant/022, RN-06: reprogramar exige al menos 15 minutos en el futuro.
     $this->actingAs($admin, 'usuario')
         ->putJson("/api/v1/t/cafe-luna/pedidos/{$pedido->id_pedido}", [
             'nombre_solicitante' => 'Mario',
             'telefono_solicitante' => '5511223344',
             'direccion_recogida' => 'Av. Reforma 100',
             'direccion_entrega' => 'Av. Insurgentes 200',
-            'fecha_servicio' => '2026-01-02',
+            'fecha_servicio' => now()->addDays(6)->toDateString(),
             'lo_antes_posible' => false,
             'hora_desde' => '09:00',
             'hora_hasta' => '11:00',
@@ -407,6 +418,17 @@ it('dispatches UbicacionActualizada when the conductor sends its location', func
     protocoloConfigurar($tenant);
     $datos = protocoloCrearConductor($tenant);
     $token = protocoloConductorToken('beto@cafeluna.com', 'Password123!');
+
+    // spec tenant/021, RN-01: solo se registra tracking con un envío activo.
+    tenancy()->initialize($tenant);
+    Pedido::create([
+        'numero_pedido' => 'PED-100003', 'nombre_solicitante' => 'Mario', 'telefono_solicitante' => '5511223344',
+        'direccion_recogida' => 'Av. Reforma 100', 'direccion_entrega' => 'Av. Insurgentes 200',
+        'fecha_servicio' => now()->toDateString(), 'lo_antes_posible' => true,
+        'modalidad_pago' => 'RECEPTOR_PAGA_ENVIO', 'importe_envio' => 80, 'estado' => 'TOMADO',
+        'id_conductor' => $datos['conductor']->id_conductor,
+    ]);
+    tenancy()->end();
 
     $this->withHeader('Authorization', "Bearer {$token}")
         ->postJson('/api/v1/t/cafe-luna/conductor/ubicacion', [

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['id_conductor', 'latitud', 'longitud', 'precision', 'velocidad', 'rumbo', 'bateria', 'fecha_posicion'])]
+#[Fillable(['id_conductor', 'id_pedido', 'latitud', 'longitud', 'precision', 'velocidad', 'rumbo', 'bateria', 'fecha_posicion'])]
 class ConductorPosicion extends Model
 {
     protected $table = 'conductor_posiciones';
@@ -32,5 +32,10 @@ class ConductorPosicion extends Model
     public function conductor(): BelongsTo
     {
         return $this->belongsTo(Conductor::class, 'id_conductor', 'id_conductor');
+    }
+
+    public function pedido(): BelongsTo
+    {
+        return $this->belongsTo(Pedido::class, 'id_pedido', 'id_pedido');
     }
 }

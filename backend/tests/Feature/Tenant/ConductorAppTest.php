@@ -9,6 +9,7 @@ use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConductorPosicion;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
+use App\Models\Tenant\PedidoOferta;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\Vehiculo;
 use App\Models\Tenant\VentaViajeConductor;
@@ -112,6 +113,23 @@ function conductorAppToken(string $email, string $password): string
     return $response->json('token');
 }
 
+/**
+ * Acredita 1 viaje prepagado al conductor (spec tenant/019, RN-02): desde SPEC-019, ponerse ONLINE
+ * exige saldo disponible, así que las pruebas de conexión ya no arrancan de un saldo en cero.
+ */
+function conductorAppAcreditarViaje(Tenant $tenant, Conductor $conductor, Usuario $usuario): void
+{
+    tenancy()->initialize($tenant);
+    VentaViajeConductor::create([
+        'id_conductor' => $conductor->id_conductor,
+        'cantidad_viajes' => 1,
+        'monto_pagado' => 50,
+        'id_usuario' => $usuario->id_usuario,
+        'fecha_venta' => now(),
+    ]);
+    tenancy()->end();
+}
+
 function conductorAppPedidoPublicado(Tenant $tenant, array $overrides = []): Pedido
 {
     tenancy()->initialize($tenant);
@@ -168,27 +186,41 @@ it('rejects conductor routes without a token', function () {
     $this->getJson('/api/v1/t/cafe-luna/conductor/pedidos/disponibles')->assertUnauthorized();
 });
 
-it('only lists PUBLICADO pedidos with no conductor assigned', function () {
+it('only lists the conductor own pending, unexpired offers', function () {
     $tenant = conductorAppTenant();
     conductorAppConfigurar($tenant);
     $datos = conductorAppCrear($tenant);
     $token = conductorAppToken('beto@cafeluna.com', 'Password123!');
 
-    $disponible = conductorAppPedidoPublicado($tenant);
-    conductorAppPedidoPublicado($tenant, ['numero_pedido' => 'PED-999999', 'estado' => 'PENDIENTE']);
-    conductorAppPedidoPublicado($tenant, [
-        'numero_pedido' => 'PED-888888',
-        'estado' => 'TOMADO',
+    $conOferta = conductorAppPedidoPublicado($tenant, ['numero_pedido' => 'PED-111111']);
+    $ofertaExpirada = conductorAppPedidoPublicado($tenant, ['numero_pedido' => 'PED-222222']);
+    conductorAppPedidoPublicado($tenant, ['numero_pedido' => 'PED-333333']); // sin oferta para este conductor
+
+    tenancy()->initialize($tenant);
+    PedidoOferta::create([
+        'id_pedido' => $conOferta->id_pedido,
         'id_conductor' => $datos['conductor']->id_conductor,
+        'estado' => 'PENDIENTE',
+        'ofrecida_en' => now(),
+        'expira_en' => now()->addSeconds(45),
     ]);
+    PedidoOferta::create([
+        'id_pedido' => $ofertaExpirada->id_pedido,
+        'id_conductor' => $datos['conductor']->id_conductor,
+        'estado' => 'PENDIENTE',
+        'ofrecida_en' => now()->subSeconds(90),
+        'expira_en' => now()->subSeconds(45),
+    ]);
+    tenancy()->end();
 
     $response = $this->withHeader('Authorization', "Bearer {$token}")
         ->getJson('/api/v1/t/cafe-luna/conductor/pedidos/disponibles')
         ->assertOk();
 
     expect($response->json('data'))->toHaveCount(1);
-    expect($response->json('data.0.id_pedido'))->toBe($disponible->id_pedido);
+    expect($response->json('data.0.id_pedido'))->toBe($conOferta->id_pedido);
     expect($response->json('data.0.latitud_recogida'))->not->toBeNull();
+    expect($response->json('data.0'))->not->toHaveKey('telefono_solicitante');
 });
 
 it('accepts an available pedido, assigns the vehicle, and broadcasts pedido.tomado', function () {
@@ -373,6 +405,7 @@ it('connects and disconnects the conductor', function () {
     $tenant = conductorAppTenant();
     conductorAppConfigurar($tenant);
     $datos = conductorAppCrear($tenant);
+    conductorAppAcreditarViaje($tenant, $datos['conductor'], $datos['usuario']);
     $token = conductorAppToken('beto@cafeluna.com', 'Password123!');
 
     $this->withHeader('Authorization', "Bearer {$token}")
@@ -391,6 +424,7 @@ it('syncs conductores.disponibilidad from the ONLINE/OFFLINE toggle, not the adm
     $tenant = conductorAppTenant();
     conductorAppConfigurar($tenant);
     $datos = conductorAppCrear($tenant, [], ['disponibilidad' => 'FUERA_DE_SERVICIO']);
+    conductorAppAcreditarViaje($tenant, $datos['conductor'], $datos['usuario']);
     $token = conductorAppToken('beto@cafeluna.com', 'Password123!');
 
     $this->withHeader('Authorization', "Bearer {$token}")
@@ -426,6 +460,9 @@ it('records a location update in conductor_estado and conductor_posiciones', fun
     conductorAppConfigurar($tenant);
     $datos = conductorAppCrear($tenant);
     $token = conductorAppToken('beto@cafeluna.com', 'Password123!');
+
+    // spec tenant/021, RN-01: solo se registra tracking con un envío activo.
+    conductorAppPedidoPublicado($tenant, ['id_conductor' => $datos['conductor']->id_conductor, 'estado' => 'TOMADO']);
 
     $this->withHeader('Authorization', "Bearer {$token}")
         ->postJson('/api/v1/t/cafe-luna/conductor/ubicacion', [

@@ -8,6 +8,7 @@ use App\Events\Tenant\PedidoCanceladoParaConductor;
 use App\Events\Tenant\PedidoDisponible;
 use App\Events\Tenant\PedidoReprogramado;
 use App\Events\Tenant\SaldoAcreditado;
+use App\Events\Tenant\SaldoCambiado;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConductorDispositivo;
 use App\Services\FcmSender;
@@ -22,7 +23,7 @@ class EnviarPushSiEsCritico
 {
     public function __construct(private readonly FcmSender $fcm) {}
 
-    public function handle(PedidoDisponible|PedidoCanceladoParaConductor|PedidoReprogramado|SaldoAcreditado $event): void
+    public function handle(PedidoDisponible|PedidoCanceladoParaConductor|PedidoReprogramado|SaldoAcreditado|SaldoCambiado $event): void
     {
         [$idsConductor, $titulo, $cuerpo, $datos] = match (true) {
             $event instanceof PedidoDisponible => [
@@ -48,6 +49,12 @@ class EnviarPushSiEsCritico
                 'Saldo acreditado',
                 "Se acreditaron {$event->viajesAcreditados} viaje(s) a tu saldo.",
                 ['event_id' => $event->eventId, 'tipo' => 'saldo.acreditado'],
+            ],
+            $event instanceof SaldoCambiado => [
+                [$event->movimiento->id_conductor],
+                'Saldo actualizado',
+                "Tu saldo cambió: {$event->movimiento->monto} ({$event->movimiento->tipo}).",
+                ['event_id' => $event->eventId, 'tipo' => 'saldo.cambiado'],
             ],
         };
 

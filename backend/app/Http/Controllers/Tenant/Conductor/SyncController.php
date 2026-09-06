@@ -6,9 +6,12 @@ namespace App\Http\Controllers\Tenant\Conductor;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Tenant\VentaViajeConductorController;
+use App\Http\Resources\Tenant\Conductor\PedidoOfertaResource;
 use App\Http\Resources\Tenant\Conductor\PedidoResource;
+use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
+use App\Models\Tenant\PedidoOferta;
 use App\Services\PedidoEstadoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,13 +28,24 @@ class SyncController extends Controller
     {
         $conductor = $request->user('conductor-token')->conductor;
 
+        // Latido de vida del conductor (spec tenant/019, RN-04): sin esto, uno en línea pero sin
+        // pedido activo (que no manda LOCATION_UPDATE) se vería inactivo aunque siga sondeando.
+        ConductorEstado::updateOrCreate(
+            ['id_conductor' => $conductor->id_conductor],
+            ['ultima_actualizacion' => now()],
+        );
+
         $pedidoActivo = Pedido::where('id_conductor', $conductor->id_conductor)
             ->whereNotIn('estado', PedidoEstadoService::ESTADOS_FINALES)
             ->first();
 
-        $pedidosDisponibles = Pedido::where('estado', 'PUBLICADO')
-            ->whereNull('id_conductor')
-            ->orderBy('fecha_publicacion')
+        // Ofertas propias vigentes (spec tenant/020), no "todo lo PUBLICADO del tenant": mismo
+        // criterio que `PedidoController::disponibles()`.
+        $ofertas = PedidoOferta::where('id_conductor', $conductor->id_conductor)
+            ->where('estado', 'PENDIENTE')
+            ->where('expira_en', '>', now())
+            ->with('pedido')
+            ->orderBy('ofrecida_en')
             ->get();
 
         $modalidad = ConfiguracionTenant::obtener(ConfiguracionTenant::MODALIDAD, 'Prepago');
@@ -39,7 +53,7 @@ class SyncController extends Controller
 
         return response()->json([
             'pedido_activo' => $pedidoActivo ? new PedidoResource($pedidoActivo) : null,
-            'pedidos_disponibles' => PedidoResource::collection($pedidosDisponibles),
+            'pedidos_disponibles' => PedidoOfertaResource::collection($ofertas),
             'saldo' => $saldo,
         ]);
     }

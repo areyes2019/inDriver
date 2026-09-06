@@ -23,6 +23,8 @@ export interface RouteResult {
   distance: string
   duration: string
   distanceKm: number
+  /** Puntos de la ruta tal como los devolvió el proveedor (Directions), para animar sobre ellos. */
+  path: LatLngLike[]
 }
 
 export interface AddressSuggestion {

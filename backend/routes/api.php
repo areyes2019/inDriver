@@ -15,10 +15,12 @@ use App\Http\Controllers\Tenant\Conductor\SaldoController as ConductorSaldoContr
 use App\Http\Controllers\Tenant\Conductor\SyncController as ConductorSyncController;
 use App\Http\Controllers\Tenant\Conductor\UbicacionController as ConductorUbicacionController;
 use App\Http\Controllers\Tenant\ConductorController;
+use App\Http\Controllers\Tenant\ConductorPruebaController;
 use App\Http\Controllers\Tenant\ConfiguracionController;
 use App\Http\Controllers\Tenant\DespachadorController;
 use App\Http\Controllers\Tenant\DireccionClienteController;
 use App\Http\Controllers\Tenant\PedidoController;
+use App\Http\Controllers\Tenant\SaldoConductorController;
 use App\Http\Controllers\Tenant\UsuarioController;
 use App\Http\Controllers\Tenant\VentaViajeConductorController;
 use App\Http\Controllers\Tenant\ZonaCoberturaController;
@@ -105,6 +107,9 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::get('/conductores/{conductor}/historial-pagos', [VentaViajeConductorController::class, 'historialConductor']);
             Route::get('/reportes/pagos-conductores', [VentaViajeConductorController::class, 'reportePagos']);
 
+            Route::post('/conductores/{conductor}/saldo', [SaldoConductorController::class, 'store']);
+            Route::get('/conductores/{conductor}/saldo', [SaldoConductorController::class, 'historial']);
+
             Route::post('/clientes', [ClienteController::class, 'store']);
             Route::put('/clientes/{cliente}', [ClienteController::class, 'update']);
             Route::patch('/clientes/{cliente}/estado', [ClienteController::class, 'cambiarEstado']);
@@ -114,6 +119,11 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::delete('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'destroy']);
 
             Route::put('/configuracion', [ConfiguracionController::class, 'update']);
+            Route::patch('/configuracion/modo-prueba', [ConfiguracionController::class, 'modoPrueba']);
+
+            Route::get('/conductores-prueba', [ConductorPruebaController::class, 'index']);
+            Route::post('/conductores-prueba', [ConductorPruebaController::class, 'store']);
+            Route::delete('/conductores-prueba/{conductor}', [ConductorPruebaController::class, 'destroy']);
 
             Route::get('/zonas-cobertura', [ZonaCoberturaController::class, 'index']);
             Route::post('/zonas-cobertura', [ZonaCoberturaController::class, 'store']);
@@ -129,6 +139,9 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::get('/pedidos/{pedido}', [PedidoController::class, 'show']);
             Route::put('/pedidos/{pedido}', [PedidoController::class, 'update']);
             Route::patch('/pedidos/{pedido}/estado', [PedidoController::class, 'cambiarEstado']);
+            Route::get('/pedidos/{pedido}/recorrido', [PedidoController::class, 'recorrido']);
+            Route::post('/pedidos/{pedido}/reubicacion/cotizar', [PedidoController::class, 'cotizarReubicacion']);
+            Route::patch('/pedidos/{pedido}/destino', [PedidoController::class, 'aplicarReubicacion']);
 
             Route::get('/clientes', [ClienteController::class, 'index']);
             Route::get('/clientes/{cliente}', [ClienteController::class, 'show']);
@@ -145,14 +158,19 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
 
         Route::post('/estado', [ConductorEstadoController::class, 'actualizar']);
         Route::post('/ubicacion', [ConductorUbicacionController::class, 'actualizar']);
+        Route::post('/pedidos/{pedido}/ubicaciones/lote', [ConductorUbicacionController::class, 'lote']);
 
         Route::get('/pedidos/disponibles', [ConductorPedidoController::class, 'disponibles']);
         Route::get('/pedidos/activo', [ConductorPedidoController::class, 'activo']);
         Route::post('/pedidos/{pedido}/aceptar', [ConductorPedidoController::class, 'aceptar']);
+        Route::post('/pedidos/{pedido}/rechazar', [ConductorPedidoController::class, 'rechazar']);
         Route::post('/pedidos/{pedido}/estado', [ConductorPedidoController::class, 'cambiarEstado']);
         Route::post('/pedidos/{pedido}/cancelar', [ConductorPedidoController::class, 'cancelar']);
+        Route::post('/pedidos/{pedido}/notificado', [ConductorPedidoController::class, 'notificado']);
 
         Route::get('/saldo-viajes', [ConductorSaldoController::class, 'show']);
+        Route::get('/saldo', [ConductorSaldoController::class, 'dinero']);
+        Route::get('/movimientos-saldo', [ConductorSaldoController::class, 'movimientos']);
 
         // Registro del token de push (FCM, spec tenant/018) y endpoint de sincronización al
         // reconectar (RN-02/RN-07): junta pedido activo + pool + saldo en una sola respuesta.

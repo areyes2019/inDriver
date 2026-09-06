@@ -14,8 +14,8 @@ use Illuminate\Support\Str;
 
 /**
  * Cambió la fecha/hora agendada de un pedido que ya tiene conductor asignado (spec tenant/018,
- * DELIVERY_SCHEDULE_UPDATED). Es un evento "crítico" (RN-04): además del socket, se manda por push
- * al conductor asignado vía `EnviarPushSiEsCritico`.
+ * tenant/022, DELIVERY_SCHEDULE_UPDATED). Es un evento "crítico" (RN-04): además del socket, se
+ * manda por push al conductor asignado vía `EnviarPushSiEsCritico`.
  */
 class PedidoReprogramado implements ShouldBroadcast
 {
@@ -27,6 +27,8 @@ class PedidoReprogramado implements ShouldBroadcast
         public readonly int $idPedido,
         public readonly string $tenantSlug,
         public readonly int $idConductor,
+        public readonly ?string $fechaAnterior = null,
+        public readonly ?string $fechaNueva = null,
     ) {
         $this->eventId = (string) Str::uuid();
     }
@@ -49,6 +51,12 @@ class PedidoReprogramado implements ShouldBroadcast
      */
     public function broadcastWith(): array
     {
-        return ['id_pedido' => $this->idPedido, 'event_id' => $this->eventId];
+        return [
+            'id_pedido' => $this->idPedido,
+            'fecha_anterior' => $this->fechaAnterior,
+            'fecha_nueva' => $this->fechaNueva,
+            'requiere_confirmacion' => true,
+            'event_id' => $this->eventId,
+        ];
     }
 }

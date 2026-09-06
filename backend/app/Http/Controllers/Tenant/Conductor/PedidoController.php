@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Tenant\Conductor;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Tenant\Conductor\PedidoOfertaResource;
 use App\Http\Resources\Tenant\Conductor\PedidoResource;
 use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\Pedido;
+use App\Models\Tenant\PedidoOferta;
+use App\Services\CambioEnvioService;
+use App\Services\OfertaPedidoService;
 use App\Services\PedidoEstadoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,20 +23,27 @@ use Illuminate\Validation\ValidationException;
 
 class PedidoController extends Controller
 {
-    public function __construct(private readonly PedidoEstadoService $estados) {}
+    public function __construct(
+        private readonly PedidoEstadoService $estados,
+        private readonly OfertaPedidoService $ofertas,
+        private readonly CambioEnvioService $cambios,
+    ) {}
 
     /**
-     * Pool abierto (spec tenant/013): todo pedido PUBLICADO sin conductor asignado del tenant del
-     * token, visible para cualquier conductor conectado — gana el primero que lo acepta.
+     * Pool del conductor (spec tenant/013, tenant/020): ya no es "todo lo PUBLICADO del tenant",
+     * sino sus propias ofertas vigentes en `pedido_ofertas` — así nunca ve un pedido que ya
+     * rechazó, perdió, o que no le corresponde en esta ronda (RN-05).
      */
-    public function disponibles(): AnonymousResourceCollection
+    public function disponibles(Request $request): AnonymousResourceCollection
     {
-        $pedidos = Pedido::where('estado', 'PUBLICADO')
-            ->whereNull('id_conductor')
-            ->orderBy('fecha_publicacion')
+        $ofertas = PedidoOferta::where('id_conductor', $this->conductorActual($request)->id_conductor)
+            ->where('estado', 'PENDIENTE')
+            ->where('expira_en', '>', now())
+            ->with('pedido')
+            ->orderBy('ofrecida_en')
             ->get();
 
-        return PedidoResource::collection($pedidos);
+        return PedidoOfertaResource::collection($ofertas);
     }
 
     /**
@@ -53,33 +64,58 @@ class PedidoController extends Controller
         return response()->json(new PedidoResource($pedido));
     }
 
+    /**
+     * Resuelve la carrera con `lockForUpdate` (spec tenant/020, RN-02): dos conductores pueden
+     * llegar aquí casi al mismo tiempo, pero solo uno bloquea la fila primero y la encuentra
+     * `PUBLICADO`; el otro la ve ya `TOMADO` y recibe el mismo error de siempre.
+     */
     public function aceptar(Request $request, Pedido $pedido): JsonResponse
     {
         $conductor = $this->conductorActual($request);
 
-        if ($pedido->estado !== 'PUBLICADO' || $pedido->id_conductor !== null) {
-            throw ValidationException::withMessages([
-                'estado' => 'Este pedido ya no está disponible.',
-            ]);
-        }
-
-        if ($this->tienePedidoActivo($conductor)) {
+        if ($conductor->tienePedidoActivo()) {
             throw ValidationException::withMessages([
                 'estado' => 'Ya tienes un pedido activo, no puedes aceptar otro.',
             ]);
         }
 
-        DB::transaction(function () use ($pedido, $conductor) {
-            $pedido->id_conductor = $conductor->id_conductor;
-            $pedido->id_vehiculo = $conductor->vehiculo?->id_vehiculo;
+        $pedido = DB::transaction(function () use ($pedido, $conductor) {
+            /** @var Pedido $pedidoBloqueado */
+            $pedidoBloqueado = Pedido::query()->lockForUpdate()->findOrFail($pedido->id_pedido);
 
-            $this->estados->transicionar($pedido, 'TOMADO');
-            $pedido->save();
+            if ($pedidoBloqueado->estado !== 'PUBLICADO' || $pedidoBloqueado->id_conductor !== null) {
+                throw ValidationException::withMessages([
+                    'estado' => 'Este pedido ya no está disponible.',
+                ]);
+            }
+
+            $pedidoBloqueado->id_conductor = $conductor->id_conductor;
+            $pedidoBloqueado->id_vehiculo = $conductor->vehiculo?->id_vehiculo;
+
+            $this->estados->transicionar($pedidoBloqueado, 'TOMADO');
+            $pedidoBloqueado->save();
+
+            $this->ofertas->cerrarPorAceptacion($pedidoBloqueado, $conductor);
+
+            return $pedidoBloqueado;
         });
 
         $this->registrarAuditoria($request, $pedido, "El conductor aceptó el pedido {$pedido->numero_pedido}");
 
         return response()->json(new PedidoResource($pedido));
+    }
+
+    /**
+     * Rechazo explícito, sin castigo (spec tenant/020, RN-07): a diferencia de dejar expirar, no
+     * cuenta para el apagado automático por 3 expiraciones seguidas.
+     */
+    public function rechazar(Request $request, Pedido $pedido): JsonResponse
+    {
+        $this->ofertas->rechazar($pedido, $this->conductorActual($request));
+
+        $this->registrarAuditoria($request, $pedido, "El conductor rechazó la oferta del pedido {$pedido->numero_pedido}");
+
+        return response()->json(status: 204);
     }
 
     /**
@@ -122,16 +158,20 @@ class PedidoController extends Controller
         return response()->json(new PedidoResource($pedido));
     }
 
+    /**
+     * El "ack" del sistema (spec tenant/022, RN-03/RN-16): confirma que la App vio el último
+     * cambio (cancelación, reprogramación o reubicación) que le tocaba a este pedido.
+     */
+    public function notificado(Request $request, Pedido $pedido): JsonResponse
+    {
+        $this->cambios->confirmar($this->conductorActual($request), $pedido);
+
+        return response()->json(status: 204);
+    }
+
     private function conductorActual(Request $request): Conductor
     {
         return $request->user('conductor-token')->conductor;
-    }
-
-    private function tienePedidoActivo(Conductor $conductor): bool
-    {
-        return Pedido::where('id_conductor', $conductor->id_conductor)
-            ->whereNotIn('estado', PedidoEstadoService::ESTADOS_FINALES)
-            ->exists();
     }
 
     private function verificarPropiedad(Pedido $pedido, Conductor $conductor): void

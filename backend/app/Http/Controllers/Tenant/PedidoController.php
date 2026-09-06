@@ -8,19 +8,26 @@ use App\Events\Tenant\PedidoReprogramado;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Tenant\PedidoResource;
 use App\Models\Tenant\Auditoria;
+use App\Models\Tenant\ConductorPosicion;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
+use App\Models\Tenant\PedidoCotizacion;
+use App\Services\CambioEnvioService;
 use App\Services\PedidoEstadoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class PedidoController extends Controller
 {
-    public function __construct(private readonly PedidoEstadoService $estados) {}
+    public function __construct(
+        private readonly PedidoEstadoService $estados,
+        private readonly CambioEnvioService $cambios,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -103,6 +110,22 @@ class PedidoController extends Controller
             fn ($valorAnterior, string $campo) => array_key_exists($campo, $data) && $data[$campo] != $valorAnterior
         );
 
+        // spec tenant/022, RN-07: con el paquete ya en la mano, se cancela o se entrega, no se
+        // reprograma. RN-06: no tiene sentido reprogramar a un horario que ya casi llegó.
+        if ($cambioAgenda) {
+            if (in_array($pedido->estado, ['EN_CAMINO', 'ARRIBADO_A_ENTREGA'], true)) {
+                throw ValidationException::withMessages([
+                    'fecha_servicio' => ['CANNOT_RESCHEDULE_IN_TRANSIT'],
+                ]);
+            }
+
+            if (! $data['lo_antes_posible'] && Carbon::parse("{$data['fecha_servicio']} {$data['hora_desde']}")->lt(now()->addMinutes(15))) {
+                throw ValidationException::withMessages([
+                    'hora_desde' => ['SCHEDULE_IN_PAST'],
+                ]);
+            }
+        }
+
         $pedido->update($data);
         $pedido->load(['cliente', 'despachador.usuario', 'conductor.usuario', 'vehiculo']);
 
@@ -113,20 +136,128 @@ class PedidoController extends Controller
             'descripcion' => "Edición del pedido {$pedido->numero_pedido}",
         ]);
 
-        if ($cambioAgenda && $pedido->id_conductor !== null && $slug = tenant()?->slug) {
-            PedidoReprogramado::dispatch($pedido->id_pedido, $slug, $pedido->id_conductor);
+        if ($cambioAgenda && $pedido->id_conductor !== null) {
+            $agendaDespues = [
+                'fecha_servicio' => $pedido->fecha_servicio?->toDateString(),
+                'hora_desde' => $pedido->hora_desde,
+                'hora_hasta' => $pedido->hora_hasta,
+                'lo_antes_posible' => $pedido->lo_antes_posible,
+            ];
+
+            $this->cambios->registrarCambio($pedido, 'REPROGRAMADO', $agendaAntes, $agendaDespues, 'ADMIN', $request->user('usuario')->id_usuario);
+            $this->cambios->requiereConfirmacion($pedido);
+            $pedido->save();
+
+            if ($slug = tenant()?->slug) {
+                PedidoReprogramado::dispatch(
+                    $pedido->id_pedido,
+                    $slug,
+                    $pedido->id_conductor,
+                    $agendaAntes['lo_antes_posible'] ? 'Lo antes posible' : "{$agendaAntes['fecha_servicio']} {$agendaAntes['hora_desde']}",
+                    $agendaDespues['lo_antes_posible'] ? 'Lo antes posible' : "{$agendaDespues['fecha_servicio']} {$agendaDespues['hora_desde']}",
+                );
+            }
         }
 
         return response()->json(new PedidoResource($pedido));
+    }
+
+    /**
+     * Cotiza el cambio de destino sin aplicarlo (spec tenant/022, RN-10/RN-11/RN-13/RN-15).
+     */
+    public function cotizarReubicacion(Request $request, Pedido $pedido): JsonResponse
+    {
+        if (in_array($pedido->estado, PedidoEstadoService::ESTADOS_FINALES, true)) {
+            throw ValidationException::withMessages([
+                'estado' => ['DELIVERY_ALREADY_COMPLETED'],
+            ]);
+        }
+
+        $data = $request->validate([
+            'direccion' => ['required', 'string', 'max:255'],
+            'latitud' => ['required', 'numeric', 'between:-90,90'],
+            'longitud' => ['required', 'numeric', 'between:-180,180'],
+        ]);
+
+        $cotizacion = $this->cambios->cotizarReubicacion($pedido, (float) $data['latitud'], (float) $data['longitud'], $data['direccion']);
+
+        return response()->json([
+            'quote_id' => $cotizacion->id_cotizacion,
+            'extra_distance_km' => (float) $cotizacion->distancia_extra_km,
+            'extra_charge' => (float) $cotizacion->cargo_extra,
+            'expires_at' => $cotizacion->expira_en,
+        ]);
+    }
+
+    /**
+     * Aplica una cotización vigente (spec tenant/022, RN-12/RN-16).
+     */
+    public function aplicarReubicacion(Request $request, Pedido $pedido): JsonResponse
+    {
+        $data = $request->validate([
+            'quote_id' => ['required', 'integer'],
+        ]);
+
+        $cotizacion = PedidoCotizacion::where('id_pedido', $pedido->id_pedido)->find($data['quote_id']);
+
+        if (! $cotizacion) {
+            throw ValidationException::withMessages([
+                'quote_id' => ['QUOTE_NOT_FOUND'],
+            ]);
+        }
+
+        $this->cambios->aplicarReubicacion($pedido, $cotizacion, $request->user('usuario'));
+
+        Auditoria::create([
+            'id_usuario' => $request->user('usuario')->id_usuario,
+            'tabla_afectada' => 'pedidos',
+            'accion' => 'EDICION',
+            'descripcion' => "Cambio de destino del pedido {$pedido->numero_pedido}",
+        ]);
+
+        return response()->json([
+            'id_pedido' => $pedido->id_pedido,
+            'direccion_entrega' => $pedido->direccion_entrega,
+            'cargo_extra' => (float) $pedido->cargo_extra,
+            'conteo_reubicaciones' => $pedido->conteo_reubicaciones,
+        ]);
+    }
+
+    /**
+     * Recorrido del envío para el mapa del Panel (spec tenant/021): mientras esté activo, es la
+     * posición en vivo más el historial; a los 7 días de entregado, `conductor_posiciones` ya se
+     * purgó y solo queda `resumen_ruta`.
+     */
+    public function recorrido(Pedido $pedido): JsonResponse
+    {
+        $puntos = ConductorPosicion::where('id_pedido', $pedido->id_pedido)
+            ->orderBy('fecha_posicion')
+            ->get(['latitud', 'longitud', 'fecha_posicion']);
+
+        return response()->json([
+            'data' => $puntos,
+            'distancia_recorrida_km' => $pedido->distancia_recorrida_km,
+            'resumen_ruta' => $pedido->resumen_ruta,
+        ]);
     }
 
     public function cambiarEstado(Request $request, Pedido $pedido): JsonResponse
     {
         $data = $request->validate([
             'estado' => ['required', Rule::in(array_keys(PedidoEstadoService::TRANSICIONES))],
+            // spec tenant/022: solo aplican al cancelar un envío que ya tiene conductor; se
+            // ignoran en cualquier otra transición.
+            'motivo' => ['nullable', 'string', 'max:120'],
+            'cancelado_por' => ['nullable', Rule::in(['CLIENTE', 'ADMIN'])],
         ]);
 
         $nuevoEstado = $data['estado'];
+
+        if ($nuevoEstado === 'CANCELADO') {
+            $pedido->motivo_cancelacion = $data['motivo'] ?? null;
+            $pedido->cancelado_por = $data['cancelado_por'] ?? 'ADMIN';
+        }
+
         $this->estados->transicionar($pedido, $nuevoEstado);
 
         $pedido->save();

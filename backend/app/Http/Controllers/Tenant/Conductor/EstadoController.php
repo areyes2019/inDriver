@@ -5,16 +5,18 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Tenant\Conductor;
 
 use App\Http\Controllers\Controller;
-use App\Models\Tenant\ConductorEstado;
+use App\Services\DisponibilidadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class EstadoController extends Controller
 {
+    public function __construct(private readonly DisponibilidadService $disponibilidad) {}
+
     /**
-     * Conectar/desconectar (spec tenant/013): la app solo maneja ONLINE/OFFLINE, nunca los otros
-     * valores del enum de `conductor_estado.estado` (DISPONIBLE, OCUPADO, DESCANSO,
+     * Conectar/desconectar (spec tenant/013, tenant/019): la app solo maneja ONLINE/OFFLINE, nunca
+     * los otros valores del enum de `conductor_estado.estado` (DISPONIBLE, OCUPADO, DESCANSO,
      * FUERA_DE_SERVICIO), que quedan fuera de su alcance. Este mismo cambio sincroniza
      * `conductores.disponibilidad` (ONLINE → DISPONIBLE, OFFLINE → FUERA_DE_SERVICIO): es el
      * conductor quien decide su disponibilidad, no el AdminCliente (spec tenant/003).
@@ -27,12 +29,9 @@ class EstadoController extends Controller
 
         $conductor = $request->user('conductor-token')->conductor;
 
-        $estado = ConductorEstado::firstOrNew(['id_conductor' => $conductor->id_conductor]);
-        $estado->estado = $data['estado'];
-        $estado->{$data['estado'] === 'ONLINE' ? 'ultima_conexion' : 'ultima_desconexion'} = now();
-        $estado->save();
-
-        $conductor->update(['disponibilidad' => $data['estado'] === 'ONLINE' ? 'DISPONIBLE' : 'FUERA_DE_SERVICIO']);
+        $estado = $data['estado'] === 'ONLINE'
+            ? $this->disponibilidad->conectar($conductor)
+            : $this->disponibilidad->desconectar($conductor);
 
         return response()->json(['estado' => $estado->estado]);
     }

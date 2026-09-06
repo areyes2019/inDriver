@@ -77,6 +77,10 @@ const items = computed(() => {
 
   lista.push({ label: 'Conductores', to: `/t/${slug.value}/panel/conductores` })
 
+  if (auth.usuario?.modo_prueba) {
+    lista.push({ label: 'Modo prueba', to: `/t/${slug.value}/panel/modo-prueba` })
+  }
+
   return lista
 })
 

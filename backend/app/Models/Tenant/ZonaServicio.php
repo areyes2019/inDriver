@@ -46,4 +46,48 @@ class ZonaServicio extends Model
             'west' => (float) $puntos->min('lng'),
         ];
     }
+
+    /**
+     * ¿El punto cae dentro de alguna zona `Activo` con polígono? (spec tenant/022, RN-15,
+     * `DROPOFF_OUT_OF_COVERAGE`). Si ningún tenant activo tiene un polígono cargado, no hay nada
+     * que restrinja la cobertura y se considera cubierto — la geocerca es opcional (spec
+     * tenant/016).
+     */
+    public static function cubrePunto(float $lat, float $lng): bool
+    {
+        $zonas = static::where('estado', 'Activo')->whereNotNull('poligono')->get(['poligono']);
+
+        if ($zonas->isEmpty()) {
+            return true;
+        }
+
+        return $zonas->contains(fn (self $zona) => $zona->contienePunto($lat, $lng));
+    }
+
+    /**
+     * Ray casting estándar: cuenta cuántas veces un rayo horizontal desde el punto cruza los
+     * lados del polígono. Impar = adentro, par = afuera.
+     */
+    public function contienePunto(float $lat, float $lng): bool
+    {
+        $vertices = $this->poligono ?? [];
+        $total = count($vertices);
+        $dentro = false;
+
+        for ($i = 0, $j = $total - 1; $i < $total; $j = $i++) {
+            $latI = (float) $vertices[$i]['lat'];
+            $lngI = (float) $vertices[$i]['lng'];
+            $latJ = (float) $vertices[$j]['lat'];
+            $lngJ = (float) $vertices[$j]['lng'];
+
+            $cruza = ($latI > $lat) !== ($latJ > $lat)
+                && $lng < ($lngJ - $lngI) * ($lat - $latI) / ($latJ - $latI) + $lngI;
+
+            if ($cruza) {
+                $dentro = ! $dentro;
+            }
+        }
+
+        return $dentro;
+    }
 }

@@ -7,6 +7,7 @@ namespace App\Models\Tenant;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'numero_pedido',
@@ -36,6 +37,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'fecha_asignacion',
     'fecha_entrega',
     'fecha_cancelacion',
+    'veces_ofertado',
+    'distancia_recorrida_km',
+    'resumen_ruta',
+    'cancelado_por',
+    'motivo_cancelacion',
+    'notificado_conductor_en',
+    'conteo_reubicaciones',
+    'cargo_extra',
+    'pago_extra',
 ])]
 class Pedido extends Model
 {
@@ -60,6 +70,11 @@ class Pedido extends Model
             'fecha_asignacion' => 'datetime',
             'fecha_entrega' => 'datetime',
             'fecha_cancelacion' => 'datetime',
+            'distancia_recorrida_km' => 'decimal:2',
+            'resumen_ruta' => 'array',
+            'notificado_conductor_en' => 'datetime',
+            'cargo_extra' => 'decimal:2',
+            'pago_extra' => 'decimal:2',
         ];
     }
 
@@ -81,5 +96,25 @@ class Pedido extends Model
     public function vehiculo(): BelongsTo
     {
         return $this->belongsTo(Vehiculo::class, 'id_vehiculo', 'id_vehiculo');
+    }
+
+    public function ofertas(): HasMany
+    {
+        return $this->hasMany(PedidoOferta::class, 'id_pedido', 'id_pedido');
+    }
+
+    public function posiciones(): HasMany
+    {
+        return $this->hasMany(ConductorPosicion::class, 'id_pedido', 'id_pedido');
+    }
+
+    public function cambios(): HasMany
+    {
+        return $this->hasMany(PedidoCambio::class, 'id_pedido', 'id_pedido');
+    }
+
+    public function cotizaciones(): HasMany
+    {
+        return $this->hasMany(PedidoCotizacion::class, 'id_pedido', 'id_pedido');
     }
 }

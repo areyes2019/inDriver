@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Events\Tenant\PedidoCanceladoParaConductor;
-use App\Events\Tenant\PedidoDisponible;
 use App\Events\Tenant\PedidoYaTomado;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
@@ -30,7 +29,9 @@ class PedidoEstadoService
      */
     public const TRANSICIONES = [
         'PENDIENTE' => ['PUBLICADO', 'CANCELADO'],
-        'PUBLICADO' => ['TOMADO', 'RECHAZADO', 'CANCELADO'],
+        // PUBLICADO -> PENDIENTE: spec tenant/020, RN-04. Se reofertó 3 veces sin que nadie
+        // aceptara; vuelve al punto de partida para que el AdminCliente lo asigne a mano.
+        'PUBLICADO' => ['TOMADO', 'PENDIENTE', 'RECHAZADO', 'CANCELADO'],
         'TOMADO' => ['ARRIBADO', 'CANCELADO'],
         'ARRIBADO' => ['EN_CAMINO', 'CANCELADO'],
         'EN_CAMINO' => ['ARRIBADO_A_ENTREGA', 'CANCELADO'],
@@ -55,6 +56,12 @@ class PedidoEstadoService
         'ARRIBADO_A_ENTREGA' => ['ENTREGADO', 'CANCELADO'],
     ];
 
+    public function __construct(
+        private readonly OfertaPedidoService $ofertas,
+        private readonly TrackingService $tracking,
+        private readonly CambioEnvioService $cambios,
+    ) {}
+
     /**
      * Aplica la transición y sus efectos (fechas, liquidación) sobre el modelo en memoria. No
      * llama a `save()` — el llamador decide cuándo persistir, para poder envolverlo en su propia
@@ -64,7 +71,8 @@ class PedidoEstadoService
      */
     public function transicionar(Pedido $pedido, string $nuevoEstado): void
     {
-        $permitidos = self::TRANSICIONES[$pedido->estado] ?? [];
+        $estadoAnterior = $pedido->estado;
+        $permitidos = self::TRANSICIONES[$estadoAnterior] ?? [];
 
         if (! in_array($nuevoEstado, $permitidos, true)) {
             throw ValidationException::withMessages([
@@ -84,9 +92,10 @@ class PedidoEstadoService
 
         if ($nuevoEstado === 'ENTREGADO' && $pedido->id_conductor) {
             $this->liquidarConductor($pedido);
+            $this->tracking->calcularResumenRuta($pedido);
         }
 
-        $this->notificarConductores($pedido, $nuevoEstado);
+        $this->notificarConductores($pedido, $nuevoEstado, $estadoAnterior);
     }
 
     /**
@@ -96,8 +105,22 @@ class PedidoEstadoService
      * nombrar el canal porque panda_express ya lo conoce en build-time (spec tenant/013, "un solo
      * tenant por build") — evita agregar `id_tenant` a las respuestas de la API solo para esto.
      */
-    private function notificarConductores(Pedido $pedido, string $nuevoEstado): void
+    private function notificarConductores(Pedido $pedido, string $nuevoEstado, string $estadoAnterior): void
     {
+        // PUBLICADO no dispara un solo aviso general: spec tenant/020 crea una oferta individual
+        // por conductor elegible, con su propia ventana de 45s — ver `OfertaPedidoService`.
+        if ($nuevoEstado === 'PUBLICADO') {
+            $this->ofertas->ofertar($pedido);
+
+            return;
+        }
+
+        if ($nuevoEstado === 'CANCELADO' && $pedido->id_conductor !== null) {
+            $this->notificarCancelacion($pedido, $estadoAnterior);
+
+            return;
+        }
+
         $slug = tenant()?->slug;
 
         if ($slug === null) {
@@ -105,11 +128,48 @@ class PedidoEstadoService
         }
 
         match (true) {
-            $nuevoEstado === 'PUBLICADO' => PedidoDisponible::dispatch($pedido, $slug),
             $nuevoEstado === 'TOMADO' => PedidoYaTomado::dispatch($pedido->id_pedido, $slug),
-            $nuevoEstado === 'CANCELADO' && $pedido->id_conductor !== null => PedidoCanceladoParaConductor::dispatch($pedido->id_pedido, $slug, $pedido->id_conductor),
             default => null,
         };
+    }
+
+    /**
+     * spec tenant/022: solo se avisa por evento si el envío tiene conductor (RN-01) — cancelar uno
+     * sin conductor asignado ya quedó cubierto arriba, sin más trámite. `EN_CAMINO` y
+     * `ARRIBADO_A_ENTREGA` son los únicos estados donde el conductor ya trae el paquete encima
+     * (RN-04, RN-10 de tenant/021): de ahí sale la compensación y la instrucción de qué hacer con
+     * el paquete.
+     */
+    private function notificarCancelacion(Pedido $pedido, string $estadoAnterior): void
+    {
+        $slug = tenant()?->slug;
+
+        if ($slug === null) {
+            return;
+        }
+
+        $llevaPaquete = in_array($estadoAnterior, ['EN_CAMINO', 'ARRIBADO_A_ENTREGA'], true);
+
+        $this->cambios->registrarCambio(
+            $pedido,
+            'CANCELADO',
+            ['estado' => $estadoAnterior],
+            ['estado' => 'CANCELADO', 'motivo' => $pedido->motivo_cancelacion],
+            $pedido->cancelado_por === 'CLIENTE' ? 'CLIENTE' : 'ADMIN',
+            null,
+        );
+
+        PedidoCanceladoParaConductor::dispatch(
+            $pedido->id_pedido,
+            $slug,
+            $pedido->id_conductor,
+            $pedido->cancelado_por,
+            $pedido->motivo_cancelacion,
+            $llevaPaquete,
+            $llevaPaquete ? 'RETURN_TO_PICKUP' : 'STOP',
+        );
+
+        $this->cambios->requiereConfirmacion($pedido);
     }
 
     /**

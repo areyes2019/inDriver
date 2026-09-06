@@ -28,6 +28,8 @@ class ConfiguracionTenant extends Model
 
     public const USAR_DESPACHADORES = 'usar_despachadores';
 
+    public const MODO_PRUEBA = 'modo_prueba';
+
     public static function obtener(string $clave, ?string $default = null): ?string
     {
         return static::query()->where('clave', $clave)->value('valor') ?? $default;

@@ -13,6 +13,7 @@ use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\Vehiculo;
+use App\Services\PedidoEstadoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -37,6 +38,7 @@ class ConductorController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         $query = Conductor::query()
+            ->where('es_prueba', false)
             ->with(['usuario', 'despachador.usuario', 'vehiculo'])
             ->withSum('ventasViajes as viajes_vendidos', 'cantidad_viajes')
             ->withCount(['pedidos as viajes_consumidos' => fn ($q) => $q->where('prepago_descontado', true)])
@@ -56,10 +58,18 @@ class ConductorController extends Controller
         return ConductorResource::collection($query->paginate(15));
     }
 
+    /**
+     * Para el mapa y la lista lateral del Panel (spec tenant/009, tenant/014): incluye a los
+     * conductores de prueba (spec tenant "modo prueba") a propósito — deben verse en el mapa
+     * exactamente igual que uno real, es todo el punto de esa función.
+     */
     public function activos(): AnonymousResourceCollection
     {
         $conductores = Conductor::query()
-            ->with(['usuario', 'vehiculo', 'estadoActual'])
+            ->with([
+                'usuario', 'vehiculo', 'estadoActual',
+                'pedidos' => fn ($q) => $q->whereNotIn('estado', PedidoEstadoService::ESTADOS_FINALES),
+            ])
             ->whereHas('estadoActual', fn ($q) => $q->where('estado', 'ONLINE'))
             ->join('usuarios', 'usuarios.id_usuario', '=', 'conductores.id_usuario')
             ->orderBy('usuarios.nombre')
