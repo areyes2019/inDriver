@@ -746,8 +746,15 @@ onBeforeUnmount(() => {
           <UiAlert variant="info">
             Con el modo prueba activo aparece en el menú la sección "Modo prueba", donde puedes
             crear conductores virtuales y correr un envío completo de punta a punta (conectar,
-            aceptar, recorrer la ruta y entregar) sin un teléfono ni un vehículo real. No afecta a
-            los conductores reales.
+            aceptar, recorrer la ruta y entregar) sin un teléfono ni un vehículo real.
+          </UiAlert>
+
+          <UiAlert variant="warning">
+            Mientras esté activo, todo envío que se cree (incluso desde "Nueva Entrega", con
+            conductores reales de la app) queda marcado como prueba: su ubicación en el mapa la
+            genera el sistema en vez del GPS del teléfono, y al entregarlo no se descuenta saldo
+            real ni se calcula comisión real. Evita activarlo si tienes conductores reales
+            operando envíos reales al mismo tiempo.
           </UiAlert>
 
           <label class="flex items-center gap-3">

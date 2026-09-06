@@ -60,6 +60,7 @@ class PedidoEstadoService
         private readonly OfertaPedidoService $ofertas,
         private readonly TrackingService $tracking,
         private readonly CambioEnvioService $cambios,
+        private readonly SimuladorRutaService $simulador,
     ) {}
 
     /**
@@ -93,6 +94,13 @@ class PedidoEstadoService
         if ($nuevoEstado === 'ENTREGADO' && $pedido->id_conductor) {
             $this->liquidarConductor($pedido);
             $this->tracking->calcularResumenRuta($pedido);
+        }
+
+        // spec "PWA agnóstica a LIVE/TEST": el tramo recogida→entrega es el único que se simula
+        // (mismo alcance que `useConductorPrueba.ts` del Panel) — arrancar antes no tiene contra
+        // qué comparar, porque el conductor real decide cuándo tocó "Llegué"/"Recogido".
+        if ($nuevoEstado === 'EN_CAMINO' && $pedido->es_prueba) {
+            $this->simulador->iniciar($pedido);
         }
 
         $this->notificarConductores($pedido, $nuevoEstado, $estadoAnterior);
@@ -175,9 +183,17 @@ class PedidoEstadoService
     /**
      * Descuenta 1 viaje del saldo prepagado del conductor, o calcula la comisión del pedido, según
      * la modalidad de cobro configurada para el tenant (spec 015).
+     *
+     * Un pedido `es_prueba` con un conductor real (no uno virtual del Panel, que ya tiene crédito
+     * "ilimitado") nunca debe tocar su saldo real: spec "PWA agnóstica a LIVE/TEST", sección
+     * "Seguridad" — el modo TEST no debe afectar viajes prepagados ni comisiones reales.
      */
     private function liquidarConductor(Pedido $pedido): void
     {
+        if ($pedido->es_prueba) {
+            return;
+        }
+
         $modalidad = ConfiguracionTenant::obtener(ConfiguracionTenant::MODALIDAD, 'Prepago');
 
         if ($modalidad === 'Comision') {
