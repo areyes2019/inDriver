@@ -27,8 +27,10 @@ Deja funcionando:
   `UiPersonListItem` que planteaba la spec 010 original.
 - Cada ítem muestra: nombre del conductor, un badge con su disponibilidad
   (`DISPONIBLE`/`OCUPADO`/`DESCANSO`/`FUERA_DE_SERVICIO`) y la placa de su vehículo.
-- `MapaConductores.vue` gana un margen derecho (`mr-[30%]`), simétrico al margen izquierdo que ya
-  tiene, para no quedar tapado por el panel nuevo.
+- `MapaConductores.vue` gana un margen derecho (`mr-[30%]`), del ancho de este panel, para no quedar
+  tapado por él. (Al momento de esta spec era simétrico con el margen izquierdo; después
+  `tenant/008` redujo el panel izquierdo a `20%` y el margen izquierdo bajó a `ml-[20%]`, así que
+  hoy los dos márgenes son distintos.)
 
 **No** incluye (por ahora):
 
@@ -108,8 +110,12 @@ traduce cada valor de estado a un color de `UiBadge`): `DISPONIBLE: blue`, `OCUP
 
 Hoy el contenedor del mapa en `PanelView.vue` tiene `class="ml-[30%] ..."` para no quedar bajo el
 panel izquierdo, sin margen derecho porque no había nada a la derecha. Se agrega `mr-[30%]` a esa
-misma clase para que el mapa quede centrado entre los dos paneles fijos, en vez de que su franja
-derecha quede tapada por el panel nuevo.
+misma clase para que el mapa quede entre los dos paneles fijos, en vez de que su franja derecha
+quede tapada por el panel nuevo.
+
+Cada margen vale lo que mide el panel de ese lado, y no tienen por qué coincidir: `tenant/008`
+redujo después el panel izquierdo a `20%`, con lo que el margen izquierdo pasó a `ml-[20%]` y el
+derecho se quedó en `mr-[30%]`.
 
 ## Reglas de negocio
 
@@ -169,14 +175,15 @@ derecha quede tapada por el panel nuevo.
   - `estadoColor` local (`Record<'DISPONIBLE' | 'OCUPADO' | 'DESCANSO' | 'FUERA_DE_SERVICIO', ...>`),
     igual patrón que `ServiciosEnTurno.vue`.
   - Template: `<aside>` con `position: fixed`, `right-0` (en vez de `left-0`), mismas clases de alto
-    (`top-[4.25rem]`, `h-[calc(100vh-4.25rem)]`), mismo ancho (`w-[30%]`) y `z-index` que el panel
-    izquierdo; header "Conductores activos"; mismos bloques `v-if="cargando"` /
+    (`top-[4.25rem]`, `h-[calc(100vh-4.25rem)]`), ancho `w-[30%]` y mismo `z-index` que el panel
+    izquierdo (que después bajó a `w-[20%]` en `tenant/008`; este panel se queda en `30%`);
+    header "Conductores activos"; mismos bloques `v-if="cargando"` /
     `v-else-if="error"` (con botón "Reintentar") / lista vacía / lista con ítems (`<li>` con borde,
     nombre + badge arriba, placa debajo) que ya usa `ServiciosEnTurno.vue`.
 - **`frontend/src/views/tenant/panel/PanelView.vue`**:
   - Importa y monta `<ConductoresActivos />` junto a `<ServiciosEnTurno>` y `<MapaConductores>`.
   - El `<div>` que envuelve `<MapaConductores />` cambia de `class="ml-[30%] ..."` a
-    `class="ml-[30%] mr-[30%] ..."`.
+    `class="ml-[30%] mr-[30%] ..."`. (El margen izquierdo pasó luego a `ml-[20%]` en `tenant/008`.)
 
 ## Fuera de alcance
 
@@ -232,8 +239,9 @@ derecha quede tapada por el panel nuevo.
 12. El nuevo endpoint vive en el grupo de rutas `rol.tenant:AdminCliente,Despachador` (el mismo que
     ya usa `/pedidos`), no en el grupo exclusivo de `AdminCliente` donde vive el resto de
     `ConductorController`.
-13. `MapaConductores.vue` gana `mr-[30%]` simétrico al `ml-[30%]` que ya tenía, para no quedar tapado
-    por el panel nuevo.
+13. `MapaConductores.vue` gana `mr-[30%]`, del ancho de este panel, para no quedar tapado por él. En
+    su momento resultó simétrico con el `ml-[30%]` que ya tenía; dejó de serlo cuando `tenant/008`
+    redujo el panel izquierdo a `20%`.
 14. Colores del badge de disponibilidad: `DISPONIBLE: blue`, `OCUPADO: orange`, `DESCANSO: gray`,
     `FUERA_DE_SERVICIO: gray` — mismo patrón (`Record` de color por estado) que ya usa
     `ServiciosEnTurno.vue`.

@@ -11,6 +11,12 @@ Flujo esperado: Nuevo envío → Laravel API → Base de datos → listado/barra
 No se modifica el diseño visual actual salvo lo estrictamente necesario para conectar los datos
 reales (indicador de carga y mensaje de error).
 
+> **Nota posterior:** el diseño de las tarjetas y la interacción del panel **sí cambiaron después**,
+> en `tenant/008-servicios.md` (nuevo estilo de tarjeta, tarjeta clickeable, panel de detalle y
+> cancelación). Esta spec sigue siendo la referencia de **cómo se cargan los datos** (paginación
+> completa, carga, error, `AbortController`, recarga tras agendar); para **qué se muestra y cómo se
+> ve**, manda la 008.
+
 ## Objetivo / Alcance
 
 `tenant/006-crud-pedidos.md` dejó funcionando el guardado real de pedidos (`POST /pedidos`) y dejó
@@ -37,7 +43,8 @@ Deja funcionando:
 - Actualización en tiempo real por polling o websockets.
 - Conexión del mapa de conductores (`MapaConductores.vue`) a datos reales — sigue usando
   `conductoresActivosFixture`.
-- Click, filtros, búsqueda o acciones de cambio de estado sobre las tarjetas (igual que en 008).
+- Click, filtros, búsqueda o acciones sobre las tarjetas. (El click y la cancelación llegaron
+  después, en `tenant/008-servicios.md`; filtros y búsqueda siguen sin existir.)
 - Filtrado por despachador (igual que en 008: se ve la operación completa del tenant).
 
 ## Decisión técnica
@@ -83,6 +90,11 @@ El fixture definía su propio tipo `ViajeEnTurno` con los mismos 6 campos que ya
 dentro del propio `ServiciosEnTurno.vue` (ya no en el archivo de fixtures) como la forma esperada de
 cada elemento de `data` en la respuesta de `GET /pedidos`.
 
+`tenant/008-servicios.md` amplía después ese tipo con los campos que necesitan la tarjeta nueva y el
+panel de detalle (`id_pedido`, `direccion_recogida`, `fecha_servicio`, `nombre_solicitante`,
+`telefono_solicitante`, `importe_envio`) y lo exporta desde el componente. La decisión de dónde vive
+el tipo no cambia; solo crece la lista de campos.
+
 ## Reglas de negocio
 
 1. "Viajes en turno" = pedidos del tenant en estado `PENDIENTE, PUBLICADO, TOMADO, ARRIBADO,
@@ -114,7 +126,8 @@ Sin cambios. Se reutiliza tal como está:
 
 - **`frontend/src/components/panel/ServiciosEnTurno.vue`**:
   - Quita `import { viajesEnTurnoFixture } from '@/fixtures/panelDespachador'`.
-  - Define localmente `interface ViajeEnTurno` (los mismos 6 campos que antes).
+  - Define localmente `interface ViajeEnTurno` (los mismos 6 campos que antes; `tenant/008` le
+    agrega después los campos de la tarjeta nueva y del detalle).
   - Estado local: `viajesRaw = ref<ViajeEnTurno[]>([])`, `cargando = ref(false)`,
     `error = ref(false)`.
   - Función `cargarViajes()`: usa `http` (`@/lib/http`) y `route.params.slug` (mismo patrón que
@@ -143,7 +156,8 @@ Sin cambios. Se reutiliza tal como está:
 - Cualquier cambio al backend (rutas, controlador, resource, migraciones).
 - Polling, websockets o cualquier otra forma de actualización en tiempo real sin acción del usuario.
 - Conexión de `MapaConductores.vue` a datos reales de conductores.
-- Click, filtros, búsqueda o acciones (cambio de estado) sobre las tarjetas del panel.
+- Click, filtros, búsqueda o acciones (cambio de estado) sobre las tarjetas del panel — fuera del
+  alcance **de esta spec**. El click y la cancelación se agregan luego en `tenant/008-servicios.md`.
 - Filtrado por despachador.
 - Optimización del backend para filtrar por múltiples estados en una sola petición (`?estado[]=` o
   endpoint dedicado "en turno") — se acepta traer y filtrar en el cliente por ahora.
@@ -166,8 +180,10 @@ Sin cambios. Se reutiliza tal como está:
    en la barra lateral sin recargar la página.
 9. Navegar fuera del panel mientras la carga está en curso no produce errores en la consola del
    navegador.
-10. El diseño visual (posición, ancho, tipografía, colores, esquinas rectas, badges de estado) no
-    cambia respecto al estado actual, salvo los bloques nuevos de carga y error.
+10. El diseño visual no cambia respecto al estado que tenía el panel **al momento de esta spec**,
+    salvo los bloques nuevos de carga y error. (El rediseño posterior de las tarjetas lo define
+    `tenant/008-servicios.md`; este criterio se verifica contra el estado de entonces, no contra el
+    diseño actual.)
 11. ESLint/Prettier corren sin errores; no se requieren cambios ni pruebas nuevas en el backend.
 
 ## Supuestos asumidos (registro completo)
@@ -188,7 +204,9 @@ Sin cambios. Se reutiliza tal como está:
    de rol ni de middleware.
 9. No se requieren cambios en el backend: `GET /pedidos` y `PedidoResource` ya devuelven todo lo
    necesario.
-10. `cliente_nombre = null` se sigue mostrando como "Solicitante ocasional".
+10. `cliente_nombre = null` se sigue mostrando como "Solicitante ocasional". **Ya no aplica al
+    panel:** `tenant/008-servicios.md` quitó el nombre del cliente de la tarjeta. La regla sigue
+    vigente en el listado de Pedidos (`tenant/006`).
 11. El filtrado por estado "no final" se hace en el cliente (una sola petición sin `?estado=`,
     recorriendo todas las páginas), no con múltiples peticiones por estado ni con un endpoint nuevo
     — optimizarlo queda fuera de esta spec.
@@ -199,4 +217,4 @@ Sin cambios. Se reutiliza tal como está:
     termine, para evitar errores de consola o actualizaciones sobre un componente ya destruido.
 14. El tipo `ViajeEnTurno` se conserva con el mismo nombre y forma, pero pasa a vivir dentro de
     `ServiciosEnTurno.vue` en vez del archivo de fixtures, ya que ahora describe la respuesta real
-    de la API y no un dato de ejemplo.
+    de la API y no un dato de ejemplo. (`tenant/008` mantiene esa decisión y solo le suma campos.)

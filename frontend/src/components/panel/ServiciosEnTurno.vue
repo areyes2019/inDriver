@@ -1,25 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { Icon } from '@iconify/vue'
 import http from '@/lib/http'
-import UiBadge from '@/components/ui/UiBadge.vue'
 
-interface ViajeEnTurno {
+export interface ViajeEnTurno {
+  id_pedido: number
   numero_pedido: string
-  cliente_nombre: string | null
+  direccion_recogida: string
   direccion_entrega: string
   estado: 'PENDIENTE' | 'PUBLICADO' | 'TOMADO' | 'ARRIBADO' | 'EN_CAMINO' | 'ARRIBADO_A_ENTREGA'
   lo_antes_posible: boolean
+  fecha_servicio: string | null
   hora_desde: string | null
+  nombre_solicitante: string | null
+  telefono_solicitante: string | null
+  importe_envio: string | number | null
 }
 
-interface PedidoApiItem {
-  numero_pedido: string
-  cliente_nombre: string | null
-  direccion_entrega: string
+interface PedidoApiItem extends Omit<ViajeEnTurno, 'estado'> {
   estado: string
-  lo_antes_posible: boolean
-  hora_desde: string | null
 }
 
 const ESTADOS_EN_TURNO = new Set([
@@ -31,14 +31,9 @@ const ESTADOS_EN_TURNO = new Set([
   'ARRIBADO_A_ENTREGA',
 ])
 
-const estadoColor: Record<string, 'gray' | 'blue' | 'orange' | 'green' | 'red'> = {
-  PENDIENTE: 'gray',
-  PUBLICADO: 'blue',
-  TOMADO: 'orange',
-  ARRIBADO: 'orange',
-  EN_CAMINO: 'blue',
-  ARRIBADO_A_ENTREGA: 'blue',
-}
+withDefaults(defineProps<{ seleccionadoId?: number | null }>(), { seleccionadoId: null })
+
+const emit = defineEmits<{ seleccionar: [viaje: ViajeEnTurno] }>()
 
 const route = useRoute()
 const slug = route.params.slug as string
@@ -91,6 +86,39 @@ const viajes = computed(() => {
   return [...loAntesPosible, ...conHora]
 })
 
+// El backend manda `fecha_servicio` ('YYYY-MM-DD') y `hora_desde` por separado; la etiqueta
+// "sáb 5 de sept 09:41 a.m." se compone aquí (spec tenant/008). Se acepta la abreviatura de mes que
+// devuelve Intl en español ('sept'), sin mapear los doce meses a mano.
+const formatoFecha = new Intl.DateTimeFormat('es-MX', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+})
+const formatoHora = new Intl.DateTimeFormat('es-MX', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: true,
+})
+
+function construirFecha(viaje: ViajeEnTurno): Date | null {
+  if (!viaje.fecha_servicio) return null
+  const hora = (viaje.hora_desde ?? '00:00').slice(0, 5)
+  const fecha = new Date(`${viaje.fecha_servicio}T${hora}:00`)
+  return Number.isNaN(fecha.getTime()) ? null : fecha
+}
+
+function etiquetaFecha(viaje: ViajeEnTurno): string {
+  if (viaje.lo_antes_posible) return 'Lo antes posible'
+
+  const fecha = construirFecha(viaje)
+  if (fecha === null) return viaje.hora_desde ?? ''
+
+  const partes = Object.fromEntries(
+    formatoFecha.formatToParts(fecha).map((parte) => [parte.type, parte.value]),
+  )
+  return `${partes.weekday} ${partes.day} de ${partes.month} ${formatoHora.format(fecha)}`
+}
+
 onMounted(cargarViajes)
 onUnmounted(() => controller?.abort())
 
@@ -99,13 +127,13 @@ defineExpose({ recargar: cargarViajes })
 
 <template>
   <aside
-    class="fixed left-0 top-[4.25rem] z-30 flex h-[calc(100vh-4.25rem)] w-[30%] flex-col bg-white shadow-xl"
+    class="fixed left-0 top-[4.25rem] z-30 flex h-[calc(100vh-4.25rem)] w-[20%] flex-col bg-white shadow-xl"
   >
-    <header class="border-b border-default px-5 py-4">
+    <header class="border-b border-default bg-white px-5 py-4">
       <h2 class="text-base font-semibold text-heading">Viajes en turno</h2>
     </header>
 
-    <div class="flex-1 overflow-y-auto p-4">
+    <div class="flex-1 overflow-y-auto bg-slate-50 p-4">
       <p v-if="cargando" class="text-sm text-body">Cargando...</p>
       <div v-else-if="error" class="flex flex-col items-start gap-2">
         <p class="text-sm text-body">No se pudo cargar la lista de viajes.</p>
@@ -119,18 +147,40 @@ defineExpose({ recargar: cargarViajes })
       </div>
       <p v-else-if="viajes.length === 0" class="text-sm text-body">No hay viajes en turno</p>
       <ul v-else class="flex flex-col gap-3">
-        <li v-for="viaje in viajes" :key="viaje.numero_pedido" class="border border-default p-3">
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-sm font-semibold text-heading">{{ viaje.numero_pedido }}</span>
-            <UiBadge :text="viaje.estado" :color="estadoColor[viaje.estado] ?? 'gray'" />
-          </div>
-          <p class="truncate text-sm text-body">
-            {{ viaje.cliente_nombre ?? 'Solicitante ocasional' }}
-          </p>
-          <p class="truncate text-xs text-body/70">{{ viaje.direccion_entrega }}</p>
-          <p class="text-xs text-body/70">
-            {{ viaje.lo_antes_posible ? 'Lo antes posible' : viaje.hora_desde }}
-          </p>
+        <li v-for="viaje in viajes" :key="viaje.id_pedido">
+          <button
+            type="button"
+            class="w-full rounded-lg border-l-4 border-accent bg-white p-3 text-left shadow-md transition-shadow hover:shadow-hover focus:outline-none focus:ring-2 focus:ring-accent"
+            :class="viaje.id_pedido === seleccionadoId ? 'ring-2 ring-accent' : ''"
+            @click="emit('seleccionar', viaje)"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <span class="flex min-w-0 items-center gap-1.5">
+                <Icon
+                  icon="flat-color-icons:calendar"
+                  width="18"
+                  height="18"
+                  aria-hidden="true"
+                  class="shrink-0"
+                />
+                <span class="truncate text-sm font-semibold text-heading">
+                  #{{ viaje.numero_pedido }}
+                </span>
+              </span>
+              <span class="shrink-0 text-xs font-medium text-accent">
+                {{ etiquetaFecha(viaje) }}
+              </span>
+            </div>
+
+            <div class="mt-2 flex min-w-0 items-center gap-2">
+              <span class="h-2 w-2 shrink-0 rounded-full bg-blue-500" aria-hidden="true"></span>
+              <p class="truncate text-sm text-heading">{{ viaje.direccion_recogida }}</p>
+            </div>
+            <div class="mt-1 flex min-w-0 items-center gap-2">
+              <span class="h-2 w-2 shrink-0 rounded-full bg-red-500" aria-hidden="true"></span>
+              <p class="truncate text-sm text-heading">{{ viaje.direccion_entrega }}</p>
+            </div>
+          </button>
         </li>
       </ul>
     </div>

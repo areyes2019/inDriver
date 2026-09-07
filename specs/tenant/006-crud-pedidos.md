@@ -57,8 +57,8 @@ Deja funcionando:
   sobre ese botón.
 - Al activarlo (clic, o Enter/Espacio con el foco puesto en él), un panel se **desliza** desde fuera
   de la pantalla por la izquierda hasta cubrir el 45% del ancho del viewport — más ancho que
-  `ServiciosEnTurno` (que ocupa 30%), así que al abrirse tapa visualmente tanto a Servicios en turno
-  como una franja adicional del contenido a su derecha. La animación usa `transform:
+  `ServiciosEnTurno` (que ocupa 20%, spec `tenant/008`), así que al abrirse tapa visualmente tanto a
+  Servicios en turno como una franja adicional del contenido a su derecha. La animación usa `transform:
   translateX(...)` con una transición de `0.4s ease-in-out` (el panel siempre está en el DOM; lo que
   cambia es su posición, no su visibilidad, para que el deslizamiento se vea).
 - El panel ocupa la altura completa del navegador (de `top: 0` a `bottom: 100vh`) — a diferencia de
@@ -391,7 +391,7 @@ pantalla), con `transition: transform 0.4s ease-in-out`.
 ### Por qué tapa a `ServiciosEnTurno` en vez de convivir a su lado
 
 El panel usa `left: 0` igual que `ServiciosEnTurno` (spec 008), pero un ancho mayor (`45%` contra el
-`30%` de `ServiciosEnTurno`): al abrirse no solo coincide con su lugar, sino que se extiende más
+`20%` de `ServiciosEnTurno`): al abrirse no solo coincide con su lugar, sino que se extiende más
 allá. Su `z-index` va entre el de `ServiciosEnTurno` (30) y el del navbar (40): por encima de
 Servicios en turno y de lo que haya a su derecha dentro de ese 45% (los tapa mientras está abierto)
 pero por debajo del navbar (que siempre queda visible y utilizable).
@@ -623,7 +623,7 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
 11. Ninguna ruta del frontend expone `/t/:slug/panel/pedidos` (ni `/crear` ni `/:id/editar`); el
     menú lateral no incluye un ítem "Pedidos".
 12. Al activar el botón, el panel se desliza desde la izquierda hasta cubrir el 45% del ancho del
-    viewport, tapando a `ServiciosEnTurno` (30%) y la franja adicional a su derecha, con una
+    viewport, tapando a `ServiciosEnTurno` (20%) y la franja adicional a su derecha, con una
     transición de 0.4s; ocupa toda la altura del navegador, con el navbar visible por encima.
 13. Activar el botón de nuevo, o "Cancelar", o `Escape` con el foco dentro del formulario, desliza el
     panel de regreso fuera de la pantalla y devuelve el foco al botón del navbar.

@@ -193,13 +193,43 @@ existen en el esquema, ninguna se modifica.
   - `AuthController@login` — valida credenciales + `rol === 'Conductor'`, emite el token, responde
     `{ token, usuario }` (mismo shape de datos de usuario que ya arma
     `TenantAuthController::respuestaUsuario`, sin `ciudades_tenant`/`cobertura_bounds` que no
-    aplican al conductor).
+    aplican al conductor), **más `id_conductor`**:
+
+    ```json
+    {
+      "token": "12|xxxxxxxx",
+      "usuario": {
+        "id_usuario": 17,
+        "nombre": "Pedro",
+        "apellido_paterno": "Lamas",
+        "email": "pedro@pedro.com",
+        "rol": "Conductor",
+        "estado": "Activo",
+        "id_conductor": 12
+      }
+    }
+    ```
+
+    `id_conductor` **no** es redundante con `id_usuario`: es el identificador que viaja en los
+    eventos de tiempo real. Como el canal es uno por tenant (spec `018`), la app recibe también los
+    eventos de sus compañeros y necesita este número para quedarse solo con los suyos
+    (spec `018`, RN-09). Se compone en este controlador y no en `UsuarioResource`, que también
+    alimenta listados del Panel donde cargar la relación por fila costaría una consulta por usuario.
+
+    Puede venir `null`: un `Usuario` con `rol = 'Conductor'` al que todavía no se le creó su ficha en
+    `conductores`. En ese caso la app **no** puede filtrar, y la conducta correcta es no mostrar
+    ningún aviso dirigido — nunca mostrarlos todos.
+  - `AuthController@me` — `GET /conductor/me`, mismo contenido de `usuario` que devuelve el login,
+    `id_conductor` incluido. Es lo que la app vuelve a pedir al abrir para refrescar una sesión
+    guardada de una versión anterior.
   - `AuthController@logout` — revoca el token actual (`$request->user('conductor-token')
     ->currentAccessToken()->delete()`).
-  - `EstadoController@actualizar` — `POST /conductor/estado`, body `{ estado: 'ONLINE'|'OFFLINE' }`,
-    `ConductorEstado::updateOrCreate(['id_conductor' => …], [...])`, y además actualiza
-    `conductores.disponibilidad` del conductor autenticado (`ONLINE → 'DISPONIBLE'`,
-    `OFFLINE → 'FUERA_DE_SERVICIO'`).
+  - `EstadoController@actualizar` — `POST /conductor/estado`, body `{ estado: 'ONLINE'|'OFFLINE' }`.
+    Esta spec solo deja la ruta y el guard; **la lógica completa vive en la spec `019`**
+    (`DisponibilidadService`: validación de saldo y de entrega en curso, escritura de
+    `conductor_estado.estado` y `conductores.disponibilidad` en una sola transacción, y aviso al
+    Panel). No se describe aquí para que los dos documentos no cuenten versiones distintas del mismo
+    hecho.
   - `UbicacionController@actualizar` — `POST /conductor/ubicacion`, body
     `{ latitud, longitud, precision?, velocidad?, rumbo?, bateria? }`; actualiza
     `conductor_estado` e inserta en `conductor_posiciones` (ver "Decisión técnica").
@@ -325,31 +355,33 @@ alcance.
 
 1. `POST /t/{slug}/conductor/login` con credenciales de un `Usuario` `rol=Conductor` responde un
    token válido; con cualquier otro rol responde 403.
-2. Las rutas bajo `/t/{slug}/conductor/*` responden 401 sin token, y el token de un conductor no
+2. `POST /conductor/login` y `GET /conductor/me` devuelven el `id_conductor` del conductor
+   autenticado, y `null` si ese usuario todavía no tiene ficha en `conductores`.
+3. Las rutas bajo `/t/{slug}/conductor/*` responden 401 sin token, y el token de un conductor no
    sirve para las rutas de despachador/admin ni viceversa.
-3. `GET /conductor/pedidos/disponibles` solo devuelve pedidos `PUBLICADO` sin conductor asignado del
+4. `GET /conductor/pedidos/disponibles` solo devuelve pedidos `PUBLICADO` sin conductor asignado del
    tenant del token.
-4. Aceptar un pedido ya tomado por otro conductor responde 409/422 sin modificar el pedido.
-5. Un conductor con un pedido activo no puede aceptar uno segundo.
-6. Las transiciones de estado del conductor respetan exactamente
+5. Aceptar un pedido ya tomado por otro conductor responde 409/422 sin modificar el pedido.
+6. Un conductor con un pedido activo no puede aceptar uno segundo.
+7. Las transiciones de estado del conductor respetan exactamente
    `TOMADO→ARRIBADO→EN_CAMINO→ARRIBADO_A_ENTREGA→ENTREGADO`; cualquier otra combinación responde
    422.
-7. Al llegar a `ENTREGADO` desde la app, se liquida igual que hoy desde el panel (descuento de
+8. Al llegar a `ENTREGADO` desde la app, se liquida igual que hoy desde el panel (descuento de
    prepago o comisión, según modalidad del tenant) — mismo resultado, sin duplicar lógica.
-8. `POST /conductor/estado` con `{ estado: 'ONLINE' }` deja `conductores.disponibilidad` en
+9. `POST /conductor/estado` con `{ estado: 'ONLINE' }` deja `conductores.disponibilidad` en
    `'DISPONIBLE'`; con `{ estado: 'OFFLINE' }` la deja en `'FUERA_DE_SERVICIO'`.
    `PUT /t/{slug}/conductores/{id}` (panel de AdminCliente) que incluya `disponibilidad` en el
    payload la ignora sin error y sin modificar la columna.
-9. `POST /conductor/ubicacion` dentro de un mismo minuto deja una fila nueva en
+10. `POST /conductor/ubicacion` dentro de un mismo minuto deja una fila nueva en
    `conductor_posiciones` por cada envío, y actualiza `conductor_estado.ultima_latitud/longitud` a
    la más reciente.
-10. Un segundo conductor conectado al mismo tenant recibe el evento `PedidoYaTomado` por WebSocket en
+11. Un segundo conductor conectado al mismo tenant recibe el evento `PedidoYaTomado` por WebSocket en
     menos de 2 segundos después de que el primero acepta el pedido, sin necesidad de esperar al
     sondeo.
-11. `panda_express` compilado contra este backend completa el flujo: login → conectarse → ver pool →
+12. `panda_express` compilado contra este backend completa el flujo: login → conectarse → ver pool →
     aceptar → avanzar hasta entregado → ver saldo actualizado, sin ningún error de red por nombre de
     campo o de endpoint inexistente.
-12. Pint y ESLint/Prettier corren sin errores sobre el código nuevo; `php artisan test` pasa.
+13. Pint y ESLint/Prettier corren sin errores sobre el código nuevo; `php artisan test` pasa.
 
 ## Supuestos asumidos (registro completo)
 

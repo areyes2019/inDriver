@@ -3,9 +3,11 @@ import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import TenantLayout from '@/layouts/TenantLayout.vue'
 import ServiciosEnTurno from '@/components/panel/ServiciosEnTurno.vue'
+import type { ViajeEnTurno } from '@/components/panel/ServiciosEnTurno.vue'
 import MapaConductores from '@/components/panel/MapaConductores.vue'
 import ConductoresActivos from '@/components/panel/ConductoresActivos.vue'
 import NuevaEntregaPanel from '@/components/panel/NuevaEntregaPanel.vue'
+import DetalleEnvioPanel from '@/components/panel/DetalleEnvioPanel.vue'
 import { useRealtime } from '@/composables/useRealtime'
 
 // Deja lista la conexión de tiempo real del tenant (spec tenant/018) — sin listeners todavía,
@@ -15,9 +17,14 @@ useRealtime(useRoute().params.slug as string)
 const layoutRef = ref<InstanceType<typeof TenantLayout>>()
 const serviciosRef = ref<InstanceType<typeof ServiciosEnTurno>>()
 const nuevaEntregaAbierta = ref(false)
+// Cuál viaje está abierto en el detalle vive aquí y no en ServiciosEnTurno: es el único punto que
+// ve a los dos paneles deslizantes, y por eso el único que puede garantizar que nunca estén los dos
+// abiertos a la vez (spec tenant/008).
+const viajeSeleccionado = ref<ViajeEnTurno | null>(null)
 
 function alternarNuevaEntrega() {
   nuevaEntregaAbierta.value = !nuevaEntregaAbierta.value
+  if (nuevaEntregaAbierta.value) viajeSeleccionado.value = null
 }
 
 function cerrarNuevaEntrega() {
@@ -29,6 +36,16 @@ function onAgendado() {
   serviciosRef.value?.recargar()
   cerrarNuevaEntrega()
 }
+
+function onSeleccionarViaje(viaje: ViajeEnTurno) {
+  viajeSeleccionado.value = viaje
+  nuevaEntregaAbierta.value = false
+}
+
+function onViajeCancelado() {
+  viajeSeleccionado.value = null
+  serviciosRef.value?.recargar()
+}
 </script>
 
 <template>
@@ -37,10 +54,14 @@ function onAgendado() {
     :nueva-entrega-abierta="nuevaEntregaAbierta"
     @toggle-nueva-entrega="alternarNuevaEntrega"
   >
-    <!-- Columna izquierda (viajes en turno), fija sobre el 30% izquierdo: tenant/008-servicios.md, tenant/012-datos-reales-servicios-en-turno.md -->
-    <ServiciosEnTurno ref="serviciosRef" />
+    <!-- Columna izquierda (viajes en turno), fija sobre el 20% izquierdo: tenant/008-servicios.md, tenant/012-datos-reales-servicios-en-turno.md -->
+    <ServiciosEnTurno
+      ref="serviciosRef"
+      :seleccionado-id="viajeSeleccionado?.id_pedido ?? null"
+      @seleccionar="onSeleccionarViaje"
+    />
     <!-- Columna central (mapa de conductores), centrada entre los dos paneles fijos: tenant/009-mapa.md -->
-    <div class="ml-[30%] mr-[30%] min-h-[calc(100vh-4.25rem-2rem)]">
+    <div class="ml-[20%] mr-[30%] min-h-[calc(100vh-4.25rem-2rem)]">
       <MapaConductores />
     </div>
     <!-- Columna derecha (conductores activos), fija sobre el 30% derecho: tenant/014-datos-reales-conductores-activos.md -->
@@ -50,6 +71,12 @@ function onAgendado() {
       :abierto="nuevaEntregaAbierta"
       @cerrar="cerrarNuevaEntrega"
       @agendado="onAgendado"
+    />
+    <!-- Panel deslizante con el detalle del viaje seleccionado, sobre la columna izquierda: tenant/008-servicios.md -->
+    <DetalleEnvioPanel
+      :viaje="viajeSeleccionado"
+      @cerrar="viajeSeleccionado = null"
+      @cancelado="onViajeCancelado"
     />
   </TenantLayout>
 </template>

@@ -155,7 +155,8 @@ Deja funcionando:
 - Interacción entre componentes (seleccionar un conductor no resalta su marcador en el mapa, etc.).
 - Actualización en tiempo real (polling/websockets).
 - Un tratamiento específico para pantallas angostas (mobile) — el panel izquierdo usa el mismo
-  ancho fijo (`w-[30%]`) en cualquier tamaño de pantalla; no hay un layout mobile distinto todavía.
+  ancho fijo (`w-[20%]`, spec `tenant/008`) en cualquier tamaño de pantalla; no hay un layout mobile
+  distinto todavía.
 
 ### Frontend (Vue 3)
 

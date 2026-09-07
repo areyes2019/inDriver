@@ -244,72 +244,104 @@ Llevar el saldo de cada repartidor y avisarle en tiempo real cuando cambia, ya s
 
 ## 4. Modelo de datos
 
-`couriers.balance` — decimal(10,2), default 0. Es el saldo vigente, calculado y almacenado.
+> **Nombres reales.** Lo que sigue traduce la redacción original al sistema implementado:
+> `couriers.balance` es `conductores.saldo`, `balance_movements` es `movimientos_saldo`, y los tipos
+> van en español. No hay `tenant_id` en las tablas: cada tenant tiene su propia base de datos
+> (spec `005`), así que la separación ya está garantizada por la conexión.
 
-`balance_movements` — libro de movimientos, solo inserción:
+`conductores.saldo` — decimal(10,2), default 0. Es el saldo vigente en **dinero**, calculado y
+almacenado. Aplica a la modalidad **Comisión**.
 
-- `id` — ulid, PK
-- `courier_id` — FK, indexado
-- `tenant_id` — FK, indexado
-- `type` — enum: `CREDIT`, `COMMISSION`, `COMPENSATION`, `ADJUSTMENT`
-- `amount` — decimal(10,2), positivo en abonos, negativo en cargos
-- `balance_after` — decimal(10,2)
-- `delivery_id` — FK, nullable
-- `reference` — string(120), nullable
-- `created_by` — ulid, nullable
+`movimientos_saldo` — libro de movimientos, solo inserción:
+
+- `id_movimiento` — PK
+- `id_conductor` — FK, indexado
+- `tipo` — enum: `CREDITO`, `COMISION`, `COMPENSACION`, `AJUSTE`
+- `monto` — decimal(10,2), positivo en abonos, negativo en cargos
+- `saldo_resultante` — decimal(10,2)
+- `id_pedido` — FK, nullable
+- `referencia` — string, nullable
+- `creado_por` — FK a `usuarios`, nullable
 - `created_at` — timestamp
 
-Índices: `(courier_id, created_at)`, `(delivery_id)`.
+Índices: `(id_conductor, created_at)`, `(id_pedido)`.
+
+**La modalidad Prepago no usa esta tabla.** Ahí el dueño no acredita dinero sino viajes, mediante una
+venta registrada en `ventas_viajes_conductor` (spec `013`), y el saldo del conductor es la resta entre
+lo que se le vendió y lo que ha consumido. Son dos mecanismos distintos que terminan en el mismo aviso
+al repartidor (ver §5).
 
 Nunca se edita ni se borra un movimiento. Un error se corrige con un `ADJUSTMENT` en sentido contrario, y así el historial siempre cuadra con el saldo.
 
 ## 5. Endpoints
 
+Rutas reales (la columna de la izquierda es el nombre de la propuesta original):
+
 | Método | Ruta | Descripción | Éxito |
 |---|---|---|---|
-| POST | `/api/v1/couriers/{id}/balance` | Panel acredita o ajusta saldo | 201 |
-| GET | `/api/v1/me/balance` | Saldo actual del repartidor | 200 |
-| GET | `/api/v1/me/movements` | Historial paginado | 200 |
+| POST | `/t/{slug}/conductores/{conductor}/saldo` | El Panel acredita o ajusta saldo en dinero (Comisión) | 201 |
+| GET | `/t/{slug}/conductores/{conductor}/saldo` | Historial del repartidor, visto desde el Panel | 200 |
+| POST | `/t/{slug}/conductores/{conductor}/vender-viajes` | El Panel vende viajes prepagados (Prepago) | 201 |
+| GET | `/t/{slug}/conductor/saldo` | Saldo en dinero del repartidor autenticado | 200 |
+| GET | `/t/{slug}/conductor/saldo-viajes` | Viajes prepagados restantes del repartidor autenticado | 200 |
+| GET | `/t/{slug}/conductor/movimientos-saldo` | Historial paginado del repartidor autenticado | 200 |
 
 ```json
-// POST /api/v1/couriers/01JB2C8N/balance
-{ "type": "CREDIT", "amount": 200.00, "reference": "Depósito OXXO 4471" }
+// POST /t/{slug}/conductores/12/saldo
+{ "tipo": "CREDITO", "monto": 200.00, "referencia": "Depósito OXXO 4471" }
 
 // response 201
 {
   "data": {
-    "movement_id": "01JB2S7FQ3",
-    "type": "CREDIT",
-    "amount": 200.00,
-    "balance_after": 540.50,
+    "id_movimiento": 34,
+    "tipo": "CREDITO",
+    "monto": 200.00,
+    "saldo_resultante": 540.50,
     "created_at": "2026-09-04T12:00:00Z"
   }
 }
 ```
 
-**`BALANCE_CREDITED`** hacia `private-courier.{courier_id}`:
+### Eventos y qué ve el repartidor
 
-```json
-{
-  "event": "BALANCE_CREDITED",
-  "event_id": "01JB2S8GT5",
-  "emitted_at": "2026-09-04T12:00:00Z",
-  "payload": {
-    "movement_id": "01JB2S7FQ3",
-    "type": "CREDIT",
-    "amount": 200.00,
-    "balance_after": 540.50,
-    "reference": "Depósito OXXO 4471"
-  }
-}
-```
+El `BALANCE_CREDITED` de la propuesta original se implementó como **dos** eventos, uno por cada camino
+de acreditación, ambos sobre el canal por tenant de la spec `018` — no sobre un canal por repartidor,
+que habría obligado al Panel a suscribirse a uno por cada conductor. `saldo.cambiado` sirve para los
+cuatro tipos de movimiento:
 
-El mismo evento sirve para los cuatro tipos de movimiento. El nombre quedó de la propuesta original; si prefieres, `BALANCE_CHANGED` describe mejor lo que hace, y cambiarlo ahora cuesta nada.
+| Camino | Evento | Payload relevante |
+|---|---|---|
+| Prepago: el dueño le vende viajes | `saldo.acreditado` | `id_conductor`, `viajes_acreditados`, `event_id` |
+| Comisión: movimiento de dinero | `saldo.cambiado` | `id_conductor`, `tipo`, `monto`, `saldo_resultante`, `referencia`, `event_id` |
+
+**Lo que ve el repartidor** en `panda_express`, en los dos casos: un aviso flotante estilo abono
+bancario —el monto acreditado en grande (`+50 viajes` o `+$200.00`), el título "Saldo acreditado" y
+una línea de detalle—, unos 8 segundos en pantalla y se cierra tocándolo. Al mostrarse, la cifra de
+saldo de la barra superior se vuelve a consultar al servidor en ese mismo momento, para que el aviso y
+el chip no puedan decir números distintos.
+
+**Solo se anuncia lo que suma.** `saldo.cambiado` con `monto` negativo —una `COMISION` cobrada al
+entregar, un `AJUSTE` en contra— actualiza la cifra en silencio: celebrar un descuento con el mismo
+aviso sería engañoso. `saldo.acreditado` siempre suma, por definición.
+
+**Filtro obligatorio:** como el canal es por tenant, cada app recibe también las acreditaciones de sus
+compañeros. Antes de mostrar nada, la app compara el `id_conductor` del evento con el suyo (spec
+`018`, RN-09; el campo llega en el login, spec `013`).
+
+**Garantías heredadas de la spec `018`:** el aviso se emite en el acto (`ShouldBroadcastNow`, RN-08) y
+va después de confirmar el movimiento, protegido: si el broker está caído, **la acreditación queda
+registrada igual** y el Panel recibe su `201` normal; solo se pierde el aviso en pantalla. Y si
+`BROADCAST_CONNECTION` no apunta al broker real en el servidor, únicamente llega la notificación push
+— eso es configuración de entorno, no un fallo de la app.
+
+**El aviso es de sesión viva.** Con la app cerrada, el repartidor se entera por el push nativo y al
+abrir ve el saldo ya correcto, pero sin el aviso flotante. Recuperar avisos perdidos queda fuera de
+alcance (spec `018`).
 
 ## 6. Reglas de negocio
 
-- **RN-01:** Todo cambio de saldo inserta un movimiento y actualiza `couriers.balance` en la misma transacción, con `lockForUpdate` sobre el repartidor.
-- **RN-02:** `balance_after` se guarda en cada movimiento. Permite auditar sin recalcular toda la serie.
+- **RN-01:** Todo cambio de saldo inserta un movimiento y actualiza `conductores.saldo` en la misma transacción, con `lockForUpdate` sobre el repartidor.
+- **RN-02:** `saldo_resultante` se guarda en cada movimiento. Permite auditar sin recalcular toda la serie.
 - **RN-03:** El saldo puede quedar negativo por comisiones, pero con saldo en cero o menos el repartidor no puede ponerse en línea (SPEC-019, RN-02).
 - **RN-04:** Un `COMMISSION` se registra al **entregar**, no al aceptar. Un envío cancelado no cobra comisión.
 - **RN-05:** Un `COMPENSATION` se registra cuando SPEC-022 marca `compensation_eligible: true`. El monto lo define el `admin_cliente`; el sistema solo abre el pendiente.
@@ -327,12 +359,20 @@ El mismo evento sirve para los cuatro tipos de movimiento. El nombre quedó de l
 
 ## 8. Criterios de aceptación
 
-- [ ] Acreditar 200 con saldo 340.50 deja `balance` en 540.50 y un movimiento con ese mismo `balance_after`.
-- [ ] La App muestra el saldo nuevo sin recargar tras recibir `BALANCE_CREDITED`.
+- [ ] Acreditar 200 con saldo 340.50 deja `conductores.saldo` en 540.50 y un movimiento con ese mismo `saldo_resultante`.
+- [ ] La App muestra el saldo nuevo sin recargar tras recibir la acreditación, y además un aviso
+      flotante con el monto correcto (`+50 viajes` en Prepago, `+$200.00` en Comisión).
+- [ ] El número del aviso y el del chip de saldo coinciden sin esperar al sondeo periódico.
+- [ ] Un movimiento de monto negativo (`COMISION`, `AJUSTE` en contra) actualiza la cifra **sin**
+      mostrar aviso flotante.
+- [ ] Con dos repartidores conectados al mismo tenant, acreditarle a uno no muestra nada en la
+      pantalla del otro.
+- [ ] Con el broker de tiempo real apagado, la acreditación se registra igual y el Panel recibe 201;
+      el fallo del aviso queda como `warning` en la bitácora.
 - [ ] Con la app cerrada, la acreditación llega como push.
 - [ ] Dos acreditaciones simultáneas de 100 sobre saldo 0 dejan el saldo en 200, nunca en 100.
 - [ ] Un envío cancelado antes de entregar no genera movimiento `COMMISSION`.
 - [ ] Un repartidor cuyo saldo baja a 0 estando en línea es marcado fuera de línea y recibe el aviso.
 - [ ] Un movimiento de 0 devuelve 422.
 - [ ] Un `admin_cliente` del tenant A recibe 404 al acreditar a un repartidor del tenant B.
-- [ ] La suma de `amount` de todos los movimientos de un repartidor coincide con su `balance`.
+- [ ] La suma de `monto` de todos los movimientos de un repartidor coincide con su `saldo`.

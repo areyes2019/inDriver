@@ -27,6 +27,11 @@ const FLAT_COLOR_ICON_NAMES = [
   'paid',
   'shop',
   'checkmark',
+  // Panel "Viajes en turno" y detalle del envío (spec tenant/008).
+  'calendar',
+  'todo-list',
+  'businessman',
+  'phone',
 ]
 
 // fluent-color solo cubre los íconos que no existen en flat-color-icons (ej. no tiene campana ni
