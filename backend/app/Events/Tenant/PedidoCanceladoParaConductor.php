@@ -7,7 +7,7 @@ namespace App\Events\Tenant;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
@@ -19,7 +19,7 @@ use Illuminate\Support\Str;
  * "críticos" (spec tenant/018, RN-04): además del socket, se manda por push al conductor asignado
  * vía `EnviarPushSiEsCritico`.
  */
-class PedidoCanceladoParaConductor implements ShouldBroadcast
+class PedidoCanceladoParaConductor implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 

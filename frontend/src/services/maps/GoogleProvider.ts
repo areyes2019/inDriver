@@ -234,6 +234,23 @@ export default class GoogleProvider extends BaseProvider {
     }
   }
 
+  /**
+   * Google calcula el viewport una sola vez, al montar el mapa: si el contenedor cambia de tamaño
+   * después (spec tenant/023: el panel de flotilla se colapsa y el mapa gana un 20% de ancho), la
+   * superficie nueva queda en gris hasta que el usuario arrastra. `resize` la fuerza a remedirse
+   * conservando el centro, que `fitBounds` no garantiza.
+   */
+  resize(containerId: string): void {
+    const instance = this.instances.get(containerId)
+    if (!instance) return
+
+    const centro = instance.map.getCenter()
+    google.maps.event.trigger(instance.map, 'resize')
+    if (centro) {
+      instance.map.setCenter(centro)
+    }
+  }
+
   async searchAddress(
     query: string,
     bounds?: LatLngBoundsLike | null,

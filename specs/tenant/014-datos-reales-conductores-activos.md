@@ -1,5 +1,12 @@
 # Spec: Conductores activos (columna derecha del Panel de Despachador) — datos reales
 
+> **Superada en parte por `tenant/023-rediseno-panel-flotilla.md`**: el panel pasó a 20% de ancho,
+> se volvió colapsable, cambió su encabezado ("FLOTILLA" + "N en línea") y su estilo de ítem (avatar
+> + saldo de viajes, sin borde), y el badge dejó de pintar el enum `disponibilidad` para calcularse
+> por pedido asignado. Los márgenes del mapa (`ml-[20%] mr-[30%]`) desaparecieron: el mapa pasó a
+> pantalla completa y los paneles flotan encima. Lo que sigue vigente de esta spec es el endpoint,
+> la relación `Conductor::estadoActual()`, el recurso y la definición de "conductor activo".
+
 ## Historia de usuario
 
 Como dueño de tenant en mi papel de Despachador, o como Despachador propiamente, quiero ver una

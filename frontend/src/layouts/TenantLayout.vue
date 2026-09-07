@@ -7,9 +7,16 @@ import { useTenantAuthStore } from '@/stores/tenantAuth'
 const props = withDefaults(
   defineProps<{
     nuevaEntregaAbierta?: boolean
+    /**
+     * spec tenant/023: solo el Panel lo activa. Saca al `<main>` del carril centrado de 1280px con
+     * padding para que el mapa llegue a los bordes de la ventana; el resto de las pantallas del
+     * tenant conserva el carril.
+     */
+    anchoCompleto?: boolean
   }>(),
   {
     nuevaEntregaAbierta: false,
+    anchoCompleto: false,
   },
 )
 
@@ -123,7 +130,13 @@ function onClickConfiguracion() {
         </button>
       </template>
     </UiNavbar>
-    <main class="mx-auto max-w-screen-xl px-4 pb-4 pt-[5.25rem] md:px-8 md:pb-8 md:pt-[6.25rem]">
+    <main
+      :class="
+        anchoCompleto
+          ? 'pt-[4.25rem]'
+          : 'mx-auto max-w-screen-xl px-4 pb-4 pt-[5.25rem] md:px-8 md:pb-8 md:pt-[6.25rem]'
+      "
+    >
       <slot />
     </main>
   </div>

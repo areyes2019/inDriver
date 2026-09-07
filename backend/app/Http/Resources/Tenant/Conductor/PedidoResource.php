@@ -39,6 +39,9 @@ class PedidoResource extends JsonResource
             'id_vehiculo' => $this->id_vehiculo,
             'vehiculo_placa' => $this->vehiculo?->placa,
             'estado' => $this->estado,
+            // spec tenant/025: la app muestra la fila de hitos simulables solo si el pedido es de
+            // prueba. Sin este campo no tenía forma de distinguirlo de uno real.
+            'es_prueba' => $this->es_prueba,
             'fecha_asignacion' => $this->fecha_asignacion,
             'fecha_entrega' => $this->fecha_entrega,
         ];

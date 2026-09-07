@@ -7,7 +7,7 @@ namespace App\Events\Tenant;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
  * RN-05): va solo por socket, sin respaldo de push — si no hay conexión, el pool se corrige solo en
  * el siguiente sondeo o `/conductor/sync`.
  */
-class PedidoYaTomado implements ShouldBroadcast
+class PedidoYaTomado implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 

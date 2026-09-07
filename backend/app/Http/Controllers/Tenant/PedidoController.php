@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -85,6 +86,14 @@ class PedidoController extends Controller
             'accion' => 'ALTA',
             'descripcion' => "Alta del pedido {$pedido->numero_pedido}",
         ]);
+
+        // spec tenant/024: un pedido "lo antes posible" se publica en el acto — sin esto nace
+        // PENDIENTE y se queda ahí para siempre, porque nada más en el sistema lo publica y sin
+        // PUBLICADO nunca se crean las ofertas que forman el pool del conductor (spec tenant/020).
+        // Los agendados los publica `pedidos:publicar-agendados` 15 minutos antes de su horario.
+        if ($pedido->lo_antes_posible) {
+            $this->publicar($pedido);
+        }
 
         return response()->json(new PedidoResource($pedido), 201);
     }
@@ -274,6 +283,32 @@ class PedidoController extends Controller
         ]);
 
         return response()->json(new PedidoResource($pedido));
+    }
+
+    /**
+     * Publica el pedido: es lo único que abre la oferta a los conductores en línea
+     * (`PedidoEstadoService` -> `OfertaPedidoService::ofertar`, spec tenant/020).
+     *
+     * Va fuera de la transacción del alta y protegido (spec tenant/018, RN-08): si Reverb está
+     * caído, el despachador no tiene por qué recibir un error — el pedido queda publicado igual y
+     * el aviso perdido solo se anota en la bitácora. `transicionar` deja el estado en memoria
+     * antes de avisar, así que se persiste pase lo que pase: dejar ofertas abiertas sobre un
+     * pedido que en la base sigue PENDIENTE es peor que perder el aviso.
+     */
+    private function publicar(Pedido $pedido): void
+    {
+        try {
+            $this->estados->transicionar($pedido, 'PUBLICADO');
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo avisar de la publicación del pedido', [
+                'id_pedido' => $pedido->id_pedido,
+                'error' => $e->getMessage(),
+            ]);
+        } finally {
+            if ($pedido->estado === 'PUBLICADO') {
+                $pedido->save();
+            }
+        }
     }
 
     /**

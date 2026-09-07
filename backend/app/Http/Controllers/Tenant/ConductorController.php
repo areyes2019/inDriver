@@ -74,6 +74,15 @@ class ConductorController extends Controller
             ->join('usuarios', 'usuarios.id_usuario', '=', 'conductores.id_usuario')
             ->orderBy('usuarios.nombre')
             ->select('conductores.*')
+            // Mismos alias y misma fórmula que `index()` (spec tenant/015): dos subconsultas, no un
+            // `GET /conductores/{id}/saldo-viajes` por fila. Conviven con el `with('pedidos')`
+            // acotado de arriba porque `withCount` arma su propia subconsulta.
+            //
+            // Van DESPUÉS del `select('conductores.*')` a propósito: `withSum`/`withCount` agregan
+            // sus columnas con `addSelect`, y un `select()` posterior las borraría — el saldo
+            // llegaría siempre en 0.
+            ->withSum('ventasViajes as viajes_vendidos', 'cantidad_viajes')
+            ->withCount(['pedidos as viajes_consumidos' => fn ($q) => $q->where('prepago_descontado', true)])
             ->get();
 
         return ConductorActivoResource::collection($conductores);

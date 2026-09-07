@@ -7,7 +7,7 @@ namespace App\Events\Tenant;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
  * Un pedido se reofertó 3 veces sin que nadie lo aceptara y volvió a PENDIENTE (spec tenant/020,
  * RN-04): el AdminCliente tiene que asignarlo a mano desde el Panel.
  */
-class PedidoRequiereAsignacionManual implements ShouldBroadcast
+class PedidoRequiereAsignacionManual implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 

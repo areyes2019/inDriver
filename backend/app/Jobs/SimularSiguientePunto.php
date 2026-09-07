@@ -6,6 +6,7 @@ namespace App\Jobs;
 
 use App\Models\Tenant as TenantModel;
 use App\Models\Tenant\Pedido;
+use App\Services\PedidoEstadoService;
 use App\Services\TrackingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -15,11 +16,15 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
 /**
- * El "conductor virtual" del modo TEST (spec "PWA agnóstica a LIVE/TEST"): avanza un punto de la
- * ruta ya calculada por `SimuladorRutaService` y se reprograma a sí mismo, mismo patrón que
- * `ExpirarOfertaPedido`. Se detiene solo si el pedido ya no está `EN_CAMINO` — llegó a
- * `ARRIBADO_A_ENTREGA` (el conductor ya tocó "Llegué"), se canceló, o se entregó antes de terminar
- * el recorrido — en cualquier caso, seguir moviendo el punto ya no tiene sentido.
+ * El "conductor virtual" del modo TEST (spec "PWA agnóstica a LIVE/TEST", ampliada por spec
+ * tenant/025): avanza un punto del tramo ya calculado por `SimuladorRutaService`, se reprograma a sí
+ * mismo, y al escribir el último punto transiciona el pedido a `$estadoAlLlegar` — que es lo que
+ * hace caer los hitos de llegada (`ARRIBADO`, `ARRIBADO_A_ENTREGA`).
+ *
+ * Se detiene solo en cuanto el pedido ya no está en `$estadoEsperado`. Eso cubre las tres formas de
+ * quedarse sin trabajo: el conductor adelantó el hito con el botón, canceló, o el viaje terminó
+ * antes. Es también lo que garantiza que nunca haya dos recorridos vivos sobre el mismo pedido
+ * (RN-04): el botón mueve el estado, el recorrido viejo se apaga y la cadena sigue desde el nuevo.
  *
  * @param  array<int, array{lat: float, lng: float}>  $puntos
  */
@@ -33,9 +38,11 @@ class SimularSiguientePunto implements ShouldQueue
         private readonly array $puntos,
         private readonly int $indice,
         private readonly int $segundosEntrePuntos,
+        private readonly string $estadoEsperado,
+        private readonly string $estadoAlLlegar,
     ) {}
 
-    public function handle(TrackingService $tracking): void
+    public function handle(TrackingService $tracking, PedidoEstadoService $estados): void
     {
         $yaInicializado = tenancy()->initialized && tenancy()->tenant?->getTenantKey() === $this->tenant->getTenantKey();
 
@@ -46,7 +53,7 @@ class SimularSiguientePunto implements ShouldQueue
         try {
             $pedido = Pedido::find($this->idPedido);
 
-            if (! $pedido || ! $pedido->es_prueba || $pedido->estado !== 'EN_CAMINO') {
+            if (! $pedido || ! $pedido->es_prueba || $pedido->estado !== $this->estadoEsperado) {
                 return;
             }
 
@@ -62,9 +69,23 @@ class SimularSiguientePunto implements ShouldQueue
             $siguiente = $this->indice + 1;
 
             if ($siguiente < count($this->puntos)) {
-                self::dispatch($this->tenant, $this->idPedido, $this->puntos, $siguiente, $this->segundosEntrePuntos)
-                    ->delay(now()->addSeconds($this->segundosEntrePuntos));
+                self::dispatch(
+                    $this->tenant,
+                    $this->idPedido,
+                    $this->puntos,
+                    $siguiente,
+                    $this->segundosEntrePuntos,
+                    $this->estadoEsperado,
+                    $this->estadoAlLlegar,
+                )->delay(now()->addSeconds($this->segundosEntrePuntos));
+
+                return;
             }
+
+            // Último punto del tramo: el conductor virtual llegó. `transicionar()` no persiste, y de
+            // paso encadena el siguiente paso simulado desde el estado nuevo.
+            $estados->transicionar($pedido, $this->estadoAlLlegar);
+            $pedido->save();
         } catch (\Throwable $e) {
             Log::error('Fallo el generador de ubicación simulada', [
                 'id_pedido' => $this->idPedido,

@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Events\Tenant;
 
-use App\Http\Resources\Tenant\Conductor\PedidoResource;
-use App\Models\Tenant\Pedido;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -15,18 +13,21 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
 
 /**
- * Un pedido pasó a PUBLICADO: avisa a los conductores conectados del tenant (spec tenant/013) para
- * que lo vean en su pool al instante, sin esperar el sondeo de 10s que panda_express ya trae.
- * Es uno de los eventos "críticos" (spec tenant/018, RN-04): además del socket, se manda por push a
- * los conductores disponibles vía `EnviarPushSiEsCritico`.
+ * Un pedido pasó a ENTREGADO: el conductor que lo traía quedó libre y, en modalidad Prepago, se le
+ * descontó un viaje. Sin este aviso el Panel (spec tenant/023) dejaría al conductor pintado como
+ * "Ocupado" y con su saldo viejo hasta la siguiente recarga, porque el badge se calcula por pedido
+ * asignado y no por `conductores.disponibilidad`.
+ *
+ * No es un evento "crítico" (spec tenant/018, RN-05): va solo por socket, sin respaldo de push — si
+ * se pierde, la lista se corrige sola en la siguiente carga de `/panel`.
  */
-class PedidoDisponible implements ShouldBroadcastNow
+class PedidoEntregado implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public readonly string $eventId;
 
-    public function __construct(public readonly Pedido $pedido, public readonly string $tenantSlug)
+    public function __construct(public readonly int $idPedido, public readonly string $tenantSlug)
     {
         $this->eventId = (string) Str::uuid();
     }
@@ -41,7 +42,7 @@ class PedidoDisponible implements ShouldBroadcastNow
 
     public function broadcastAs(): string
     {
-        return 'pedido.disponible';
+        return 'pedido.entregado';
     }
 
     /**
@@ -49,6 +50,6 @@ class PedidoDisponible implements ShouldBroadcastNow
      */
     public function broadcastWith(): array
     {
-        return [...(new PedidoResource($this->pedido))->resolve(), 'event_id' => $this->eventId];
+        return ['id_pedido' => $this->idPedido, 'event_id' => $this->eventId];
     }
 }

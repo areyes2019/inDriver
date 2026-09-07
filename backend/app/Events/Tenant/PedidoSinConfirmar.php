@@ -7,7 +7,7 @@ namespace App\Events\Tenant;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
@@ -16,7 +16,7 @@ use Illuminate\Queue\SerializesModels;
  * segundos (spec tenant/022, RN-03): el Panel lo marca en rojo con botón de llamada. Va solo por
  * socket — es un aviso para el Panel, no para el conductor.
  */
-class PedidoSinConfirmar implements ShouldBroadcast
+class PedidoSinConfirmar implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 

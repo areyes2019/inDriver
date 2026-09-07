@@ -13,11 +13,19 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
 
 /**
- * Cambió la fecha/hora agendada de un pedido que ya tiene conductor asignado (spec tenant/018,
- * tenant/022, DELIVERY_SCHEDULE_UPDATED). Es un evento "crítico" (RN-04): además del socket, se
- * manda por push al conductor asignado vía `EnviarPushSiEsCritico`.
+ * Un pedido con conductor asignado cambió de estado (spec tenant/025). Hasta ahora la app solo
+ * conocía el estado que ella misma provocaba —lo tomaba de la respuesta de su propia petición—, así
+ * que cualquier cambio hecho del lado del servidor era invisible: el simulador del modo prueba podía
+ * llevar el viaje hasta `ENTREGADO` mientras el conductor seguía viendo `TOMADO` en pantalla.
+ *
+ * Se emite para todos los pedidos con conductor, no solo los de prueba: un cambio hecho desde el
+ * Panel tiene el mismo problema.
+ *
+ * Va dirigido a una persona, así que lleva `id_conductor` para que el cliente descarte lo ajeno
+ * (spec tenant/018, RN-09). No es crítico (RN-05): solo socket, sin respaldo de push — si se pierde,
+ * `/conductor/sync` reconstruye el estado real.
  */
-class PedidoReprogramado implements ShouldBroadcastNow
+class PedidoEstadoCambiado implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -25,10 +33,9 @@ class PedidoReprogramado implements ShouldBroadcastNow
 
     public function __construct(
         public readonly int $idPedido,
-        public readonly string $tenantSlug,
         public readonly int $idConductor,
-        public readonly ?string $fechaAnterior = null,
-        public readonly ?string $fechaNueva = null,
+        public readonly string $estado,
+        public readonly string $tenantSlug,
     ) {
         $this->eventId = (string) Str::uuid();
     }
@@ -43,7 +50,7 @@ class PedidoReprogramado implements ShouldBroadcastNow
 
     public function broadcastAs(): string
     {
-        return 'pedido.reprogramado';
+        return 'pedido.estado-cambiado';
     }
 
     /**
@@ -53,9 +60,8 @@ class PedidoReprogramado implements ShouldBroadcastNow
     {
         return [
             'id_pedido' => $this->idPedido,
-            'fecha_anterior' => $this->fechaAnterior,
-            'fecha_nueva' => $this->fechaNueva,
-            'requiere_confirmacion' => true,
+            'id_conductor' => $this->idConductor,
+            'estado' => $this->estado,
             'event_id' => $this->eventId,
         ];
     }

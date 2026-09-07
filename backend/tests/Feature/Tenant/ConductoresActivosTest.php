@@ -3,8 +3,10 @@
 use App\Models\Tenant;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConductorEstado;
+use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\Vehiculo;
+use App\Models\Tenant\VentaViajeConductor;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -193,6 +195,125 @@ it('returns nombre, disponibilidad and placa ordered by nombre', function () {
     expect($response->json('data.0.disponibilidad'))->toBe('DISPONIBLE');
     expect($response->json('data.0.placa'))->toBe('MTY-006');
     expect($response->json('data.1.nombre'))->toBe('Zoe Ruiz');
+});
+
+function conductoresActivosCrearPedido(Tenant $tenant, Conductor $conductor, array $overrides = []): Pedido
+{
+    tenancy()->initialize($tenant);
+
+    $pedido = Pedido::create(array_merge([
+        'numero_pedido' => 'PED-'.random_int(100000, 999999),
+        'nombre_solicitante' => 'Mario Sánchez',
+        'telefono_solicitante' => '5511223344',
+        'direccion_recogida' => 'Av. Reforma 100',
+        'latitud_recogida' => 19.4326,
+        'longitud_recogida' => -99.1332,
+        'direccion_entrega' => 'Av. Insurgentes 200',
+        'latitud_entrega' => 19.4200,
+        'longitud_entrega' => -99.1600,
+        'fecha_servicio' => now()->toDateString(),
+        'lo_antes_posible' => true,
+        'modalidad_pago' => 'RECEPTOR_PAGA_ENVIO',
+        'importe_envio' => 80,
+        'id_conductor' => $conductor->id_conductor,
+        'estado' => 'TOMADO',
+    ], $overrides));
+
+    tenancy()->end();
+
+    return $pedido;
+}
+
+it('returns the marca of the vehicle alongside the placa', function () {
+    $tenant = conductoresActivosTenant();
+    $admin = conductoresActivosUsuario($tenant);
+
+    conductoresActivosCrearConductor($tenant, [
+        'usuario' => ['nombre' => 'Fabio', 'email' => 'fabio@cafeluna.com'],
+        'placa' => 'MTY-007',
+        'estado_conexion' => 'ONLINE',
+    ]);
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->getJson('/api/v1/t/cafe-luna/conductores/activos')
+        ->assertOk();
+
+    expect($response->json('data.0.placa'))->toBe('MTY-007');
+    expect($response->json('data.0.marca'))->toBe('Nissan');
+});
+
+it('returns saldo_viajes as viajes vendidos minus viajes consumidos', function () {
+    $tenant = conductoresActivosTenant();
+    $admin = conductoresActivosUsuario($tenant);
+
+    $conductor = conductoresActivosCrearConductor($tenant, [
+        'usuario' => ['nombre' => 'Gina', 'email' => 'gina@cafeluna.com'],
+        'placa' => 'MTY-008',
+        'estado_conexion' => 'ONLINE',
+    ]);
+
+    tenancy()->initialize($tenant);
+    VentaViajeConductor::create([
+        'id_conductor' => $conductor->id_conductor,
+        'cantidad_viajes' => 10,
+        'monto_pagado' => 500,
+        'id_usuario' => $admin->id_usuario,
+        'fecha_venta' => now(),
+    ]);
+    tenancy()->end();
+
+    // Dos entregados que sí descontaron prepago y uno que no: el saldo baja solo por los primeros.
+    conductoresActivosCrearPedido($tenant, $conductor, ['estado' => 'ENTREGADO', 'prepago_descontado' => true]);
+    conductoresActivosCrearPedido($tenant, $conductor, ['estado' => 'ENTREGADO', 'prepago_descontado' => true]);
+    conductoresActivosCrearPedido($tenant, $conductor, ['estado' => 'ENTREGADO', 'prepago_descontado' => false]);
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->getJson('/api/v1/t/cafe-luna/conductores/activos')
+        ->assertOk();
+
+    expect($response->json('data.0.saldo_viajes'))->toBe(8);
+});
+
+it('returns saldo_viajes 0 for a conductor who was never sold viajes', function () {
+    $tenant = conductoresActivosTenant();
+    $admin = conductoresActivosUsuario($tenant);
+
+    conductoresActivosCrearConductor($tenant, [
+        'usuario' => ['nombre' => 'Hugo', 'email' => 'hugo@cafeluna.com'],
+        'estado_conexion' => 'ONLINE',
+    ]);
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->getJson('/api/v1/t/cafe-luna/conductores/activos')
+        ->assertOk();
+
+    expect($response->json('data.0.saldo_viajes'))->toBe(0);
+});
+
+it('reports the pedido asignado only while it is not in a final estado', function () {
+    $tenant = conductoresActivosTenant();
+    $admin = conductoresActivosUsuario($tenant);
+
+    $ocupado = conductoresActivosCrearConductor($tenant, [
+        'usuario' => ['nombre' => 'Ivan', 'email' => 'ivan@cafeluna.com'],
+        'estado_conexion' => 'ONLINE',
+    ]);
+    $libre = conductoresActivosCrearConductor($tenant, [
+        'usuario' => ['nombre' => 'Julia', 'email' => 'julia@cafeluna.com'],
+        'estado_conexion' => 'ONLINE',
+    ]);
+
+    conductoresActivosCrearPedido($tenant, $ocupado, ['estado' => 'EN_CAMINO']);
+    conductoresActivosCrearPedido($tenant, $libre, ['estado' => 'ENTREGADO']);
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->getJson('/api/v1/t/cafe-luna/conductores/activos')
+        ->assertOk();
+
+    expect($response->json('data.0.nombre'))->toBe('Ivan Ruiz');
+    expect($response->json('data.0.pedido_asignado'))->not->toBeNull();
+    expect($response->json('data.1.nombre'))->toBe('Julia Ruiz');
+    expect($response->json('data.1.pedido_asignado'))->toBeNull();
 });
 
 it('shows a null placa when the conductor has no vehicle', function () {

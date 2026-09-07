@@ -67,6 +67,10 @@ class MapService {
     this.provider.centerOn(containerId, position, zoom)
   }
 
+  resize(containerId: string): void {
+    this.provider.resize(containerId)
+  }
+
   searchAddress(query: string, bounds?: LatLngBoundsLike | null): Promise<AddressSuggestion[]> {
     return this.provider.searchAddress(query, bounds)
   }

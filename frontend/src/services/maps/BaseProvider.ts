@@ -63,6 +63,10 @@ export default class BaseProvider {
     throw new Error('Method "centerOn" must be implemented')
   }
 
+  resize(_containerId: string): void {
+    throw new Error('Method "resize" must be implemented')
+  }
+
   async searchAddress(
     _query: string,
     _bounds?: LatLngBoundsLike | null,

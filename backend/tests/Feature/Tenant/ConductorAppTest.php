@@ -2,6 +2,7 @@
 
 use App\Events\Tenant\PedidoCanceladoParaConductor;
 use App\Events\Tenant\PedidoDisponible;
+use App\Events\Tenant\PedidoEntregado;
 use App\Events\Tenant\PedidoYaTomado;
 use App\Models\Tenant;
 use App\Models\Tenant\Conductor;
@@ -325,6 +326,33 @@ it('advances a pedido through the conductor transitions and liquidates prepago o
     tenancy()->initialize($tenant);
     expect($pedido->fresh()->prepago_descontado)->toBeTrue();
     tenancy()->end();
+});
+
+it('broadcasts pedido.entregado when a pedido reaches ENTREGADO', function () {
+    Event::fake([PedidoEntregado::class]);
+
+    $tenant = conductorAppTenant();
+    conductorAppConfigurar($tenant);
+    $datos = conductorAppCrear($tenant);
+    $token = conductorAppToken('beto@cafeluna.com', 'Password123!');
+
+    $pedido = conductorAppPedidoPublicado($tenant);
+    tenancy()->initialize($tenant);
+    $pedido->update([
+        'id_conductor' => $datos['conductor']->id_conductor,
+        'estado' => 'ARRIBADO_A_ENTREGA',
+    ]);
+    tenancy()->end();
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->postJson("/api/v1/t/cafe-luna/conductor/pedidos/{$pedido->id_pedido}/estado", ['estado' => 'ENTREGADO'])
+        ->assertOk();
+
+    Event::assertDispatched(
+        PedidoEntregado::class,
+        fn (PedidoEntregado $evento) => $evento->idPedido === $pedido->id_pedido
+            && $evento->tenantSlug === 'cafe-luna',
+    );
 });
 
 it('rejects a conductor moving a pedido to RECHAZADO', function () {

@@ -10,11 +10,14 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Genera el recorrido simulado de un pedido `es_prueba` (spec "PWA agnóstica a LIVE/TEST"): calcula
- * la ruta real de recogida a entrega y arranca el generador de puntos (`SimularSiguientePunto`), que
- * es quien realmente va escribiendo la posición vía `TrackingService`. Igual que
- * `useConductorPrueba.ts` del Panel, solo se recorre el tramo recogida→entrega — no el
- * acercamiento del conductor hasta el punto de recogida.
+ * Genera los recorridos simulados de un pedido `es_prueba` (spec "PWA agnóstica a LIVE/TEST",
+ * ampliada por spec tenant/025): calcula la ruta real de cada tramo y arranca el generador de puntos
+ * (`SimularSiguientePunto`), que es quien va escribiendo la posición vía `TrackingService` y quien
+ * transiciona el pedido al llegar al final.
+ *
+ * Son dos tramos, no uno: el acercamiento (dónde está el conductor → recogida) y la entrega
+ * (recogida → entrega). Antes solo existía el segundo, y como el primero es el que hace caer
+ * `ARRIBADO`, un viaje de prueba se quedaba clavado en `TOMADO` para siempre.
  */
 class SimuladorRutaService
 {
@@ -24,14 +27,73 @@ class SimuladorRutaService
     /** Segundos entre cada punto simulado (limitado por el intervalo real del worker de colas, no por UX). */
     private const SEGUNDOS_ENTRE_PUNTOS = 2;
 
-    public function iniciar(Pedido $pedido): void
+    /**
+     * Tramo de acercamiento: de donde está el conductor al punto de recogida. Al terminar, el pedido
+     * pasa a `ARRIBADO` (h2 de la spec tenant/025).
+     */
+    public function iniciarAcercamiento(Pedido $pedido): void
     {
-        $origen = ['lat' => (float) $pedido->latitud_recogida, 'lng' => (float) $pedido->longitud_recogida];
-        $destino = ['lat' => (float) $pedido->latitud_entrega, 'lng' => (float) $pedido->longitud_entrega];
+        $this->recorrer($pedido, $this->posicionDelConductor($pedido), [
+            'lat' => (float) $pedido->latitud_recogida,
+            'lng' => (float) $pedido->longitud_recogida,
+        ], 'TOMADO', 'ARRIBADO');
+    }
 
+    /**
+     * Tramo de entrega: de la recogida al punto de entrega. Al terminar, el pedido pasa a
+     * `ARRIBADO_A_ENTREGA` (h3 de la spec tenant/025).
+     */
+    public function iniciarEntrega(Pedido $pedido): void
+    {
+        $this->recorrer($pedido, [
+            'lat' => (float) $pedido->latitud_recogida,
+            'lng' => (float) $pedido->longitud_recogida,
+        ], [
+            'lat' => (float) $pedido->latitud_entrega,
+            'lng' => (float) $pedido->longitud_entrega,
+        ], 'EN_CAMINO', 'ARRIBADO_A_ENTREGA');
+    }
+
+    /**
+     * @param  array{lat: float, lng: float}  $origen
+     * @param  array{lat: float, lng: float}  $destino
+     */
+    private function recorrer(Pedido $pedido, array $origen, array $destino, string $estadoEsperado, string $estadoAlLlegar): void
+    {
         $puntos = $this->calcularRuta($origen, $destino);
 
-        SimularSiguientePunto::dispatch(tenant(), $pedido->id_pedido, $puntos, 0, self::SEGUNDOS_ENTRE_PUNTOS);
+        // Con retraso, nunca inmediato (spec tenant/025, RN-05): `transicionar()` avisa antes de que
+        // el llamador persista el pedido, así que un job sin retraso leería el estado anterior de la
+        // base y se apagaría creyendo que alguien ya adelantó el hito.
+        SimularSiguientePunto::dispatch(
+            tenant(),
+            $pedido->id_pedido,
+            $puntos,
+            0,
+            self::SEGUNDOS_ENTRE_PUNTOS,
+            $estadoEsperado,
+            $estadoAlLlegar,
+        )->delay(now()->addSeconds(self::SEGUNDOS_ENTRE_PUNTOS));
+    }
+
+    /**
+     * Última posición conocida del conductor. Si nunca reportó una —se acaba de conectar—, el tramo
+     * de acercamiento arranca en el punto de recogida mismo: dura un punto y `ARRIBADO` cae de
+     * inmediato (spec tenant/025, supuesto 5). Es preferible a inventar un origen arbitrario.
+     *
+     * @return array{lat: float, lng: float}
+     */
+    private function posicionDelConductor(Pedido $pedido): array
+    {
+        // `estadoActual`, no `estado`: en `Conductor` esa columna es ACTIVO/INACTIVO; la posición
+        // vive en la relación con `conductor_estado`.
+        $estado = $pedido->conductor?->estadoActual;
+
+        if ($estado?->ultima_latitud === null || $estado?->ultima_longitud === null) {
+            return ['lat' => (float) $pedido->latitud_recogida, 'lng' => (float) $pedido->longitud_recogida];
+        }
+
+        return ['lat' => (float) $estado->ultima_latitud, 'lng' => (float) $estado->ultima_longitud];
     }
 
     /**

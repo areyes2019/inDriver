@@ -16,6 +16,7 @@ useRealtime(useRoute().params.slug as string)
 
 const layoutRef = ref<InstanceType<typeof TenantLayout>>()
 const serviciosRef = ref<InstanceType<typeof ServiciosEnTurno>>()
+const mapaRef = ref<InstanceType<typeof MapaConductores>>()
 const nuevaEntregaAbierta = ref(false)
 // Cuál viaje está abierto en el detalle vive aquí y no en ServiciosEnTurno: es el único punto que
 // ve a los dos paneles deslizantes, y por eso el único que puede garantizar que nunca estén los dos
@@ -46,11 +47,18 @@ function onViajeCancelado() {
   viajeSeleccionado.value = null
   serviciosRef.value?.recargar()
 }
+
+// El panel de flotilla tapa o destapa un 20% del mapa al colapsarse: Google no se entera solo del
+// cambio de tamaño y dejaría esa franja en gris (spec tenant/023).
+function onColapsoTerminado() {
+  mapaRef.value?.redimensionar()
+}
 </script>
 
 <template>
   <TenantLayout
     ref="layoutRef"
+    ancho-completo
     :nueva-entrega-abierta="nuevaEntregaAbierta"
     @toggle-nueva-entrega="alternarNuevaEntrega"
   >
@@ -60,12 +68,12 @@ function onViajeCancelado() {
       :seleccionado-id="viajeSeleccionado?.id_pedido ?? null"
       @seleccionar="onSeleccionarViaje"
     />
-    <!-- Columna central (mapa de conductores), centrada entre los dos paneles fijos: tenant/009-mapa.md -->
-    <div class="ml-[20%] mr-[30%] min-h-[calc(100vh-4.25rem-2rem)]">
-      <MapaConductores />
+    <!-- Mapa de fondo, a toda la ventana bajo la navbar; los dos paneles flotan encima: tenant/009-mapa.md, tenant/023-rediseno-panel-flotilla.md -->
+    <div class="h-[calc(100vh-4.25rem)] w-full">
+      <MapaConductores ref="mapaRef" />
     </div>
-    <!-- Columna derecha (conductores activos), fija sobre el 30% derecho: tenant/014-datos-reales-conductores-activos.md -->
-    <ConductoresActivos />
+    <!-- Columna derecha (flotilla), fija y colapsable sobre el 20% derecho: tenant/023-rediseno-panel-flotilla.md -->
+    <ConductoresActivos @colapso-terminado="onColapsoTerminado" />
     <!-- Panel deslizante de agendamiento rápido, se superpone a la columna izquierda al abrir: tenant/006-crud-pedidos.md -->
     <NuevaEntregaPanel
       :abierto="nuevaEntregaAbierta"

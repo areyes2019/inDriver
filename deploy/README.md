@@ -94,10 +94,36 @@ configuración cacheada es la causa habitual de "cambié el `.env` y no pasó na
 
 ## Tarea programada
 
-Ninguna todavía. `routes/console.php` no declara ningún comando propio. El día que se agregue una,
-a diferencia del hosting compartido de antes, aquí sí hay `crontab` real:
-`crontab -e` (como `root`, o el usuario que corra PHP-FPM) con una línea por minuto llamando a
-`php8.3 /var/www/<dominio>/backend/artisan schedule:run`.
+**Obligatoria.** `routes/console.php` ya declara cuatro tareas y sin el cron ninguna corre:
+
+| Tarea | Cada | Si no corre |
+| --- | --- | --- |
+| `conductor:apagar-inactivos` | minuto | Un conductor que cerró la app sigue "en línea" para siempre y se le siguen ofreciendo envíos (spec `tenant/019`, RN-04) |
+| `pedidos:publicar-agendados` | minuto | Un envío agendado nunca se le ofrece a nadie (spec `tenant/024`, RN-02) |
+| `queue:work --max-time=55` | minuto | Las ofertas no expiran ni se reofertan, el aviso de "sin confirmar" no sale y el conductor virtual del modo TEST no se mueve (spec `tenant/024`, RN-06) |
+| `conductor:purgar-posiciones-antiguas` | día | Las posiciones históricas crecen sin tope (spec `tenant/021`, RN-08) |
+
+A diferencia del hosting compartido de antes, aquí sí hay `crontab` real. Como `root` (o el usuario
+que corra PHP-FPM), `crontab -e` y una sola línea:
+
+```
+* * * * * php8.3 /var/www/<dominio>/backend/artisan schedule:run >> /dev/null 2>&1
+```
+
+Esa única línea dispara las cuatro: `schedule:run` decide cuáles tocan en ese minuto.
+
+### Por qué el worker de colas vive dentro del `schedule`
+
+Los tres jobs diferidos del sistema (`ExpirarOfertaPedido`, `AvisarSinConfirmar`,
+`SimularSiguientePunto`) necesitan un `queue:work` corriendo. En vez de meter supervisor/systemd y
+un proceso permanente que haya que reiniciar en cada despliegue, el propio `schedule` levanta un
+worker de 55 segundos por minuto, en segundo plano y sin solaparse. El costo es un hueco de unos 5
+segundos al final de cada minuto; la ganancia es que no hay ningún proceso nuevo que vigilar.
+
+Requiere que `DB_QUEUE_CONNECTION=mysql` esté en el `.env` de producción (ver
+`deploy/hostinger/env.production.example`): sin esa variable, un job encolado dentro de una petición
+de tenant se guarda en la base **del tenant**, y el worker —que corre sin tenancy— mira la
+**central** y nunca lo encuentra.
 
 ## Cuando algo no funciona
 

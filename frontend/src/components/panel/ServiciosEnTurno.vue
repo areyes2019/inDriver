@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import http from '@/lib/http'
+import realtimeService from '@/services/realtime'
 
 export interface ViajeEnTurno {
   id_pedido: number
@@ -119,8 +120,38 @@ function etiquetaFecha(viaje: ViajeEnTurno): string {
   return `${partes.weekday} ${partes.day} de ${partes.month} ${formatoHora.format(fecha)}`
 }
 
-onMounted(cargarViajes)
-onUnmounted(() => controller?.abort())
+// spec tenant/024: la lista deja de depender de que alguien recargue la página. Todo lo que saca
+// un viaje de la lista o le cambia el estado visible llega por el canal del tenant (spec
+// tenant/018) y dispara una recarga silenciosa — incluido `pedido.disponible`, que es como el
+// despachador ve que su envío recién creado ya se le ofreció a la flotilla.
+const EVENTOS_RECARGA = [
+  'pedido.disponible',
+  'pedido.tomado',
+  // spec tenant/025: el viaje camina por sus estados desde el servidor (el simulador del modo
+  // prueba, o el propio conductor desde su app); sin esto el Panel los mostraría congelados.
+  'pedido.estado-cambiado',
+  'pedido.cancelado',
+  'pedido.entregado',
+  'pedido.requiere-asignacion-manual',
+] as const
+
+onMounted(() => {
+  cargarViajes()
+
+  const channel = realtimeService.subscribe(slug)
+  for (const evento of EVENTOS_RECARGA) {
+    channel?.bind(evento, cargarViajes)
+  }
+})
+
+onUnmounted(() => {
+  controller?.abort()
+
+  const channel = realtimeService.subscribe(slug)
+  for (const evento of EVENTOS_RECARGA) {
+    channel?.unbind(evento, cargarViajes)
+  }
+})
 
 defineExpose({ recargar: cargarViajes })
 </script>

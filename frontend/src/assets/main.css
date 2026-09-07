@@ -65,3 +65,15 @@
     padding: 0 2rem;
   }
 }
+
+/*
+ * spec tenant/023: quien tiene activada la reducción de movimiento en su sistema operativo (por
+ * mareo o migraña) ve el panel de flotilla aparecer y desaparecer sin deslizamiento. El componente
+ * detecta la misma preferencia para avisarle al mapa que se remida, porque sin transición nunca
+ * llega el evento `transitionend`.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .panel-deslizante {
+    transition: none;
+  }
+}

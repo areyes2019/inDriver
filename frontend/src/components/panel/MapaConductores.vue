@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import UiCard from '@/components/ui/UiCard.vue'
 import mapService from '@/services/maps/MapService'
 import http from '@/lib/http'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
@@ -109,6 +108,7 @@ onMounted(async () => {
   channel?.bind('conductor.disponibilidad-cambiada', cargarYDibujar)
   channel?.bind('pedido.tomado', cargarYDibujar)
   channel?.bind('pedido.cancelado', cargarYDibujar)
+  channel?.bind('pedido.entregado', cargarYDibujar)
 })
 
 onBeforeUnmount(() => {
@@ -117,17 +117,28 @@ onBeforeUnmount(() => {
   channel?.unbind('conductor.disponibilidad-cambiada', cargarYDibujar)
   channel?.unbind('pedido.tomado', cargarYDibujar)
   channel?.unbind('pedido.cancelado', cargarYDibujar)
+  channel?.unbind('pedido.entregado', cargarYDibujar)
   mapService.destroy(CONTAINER_ID)
+})
+
+/**
+ * spec tenant/023: el mapa es el fondo de todo el Panel y el panel de flotilla se colapsa encima de
+ * él. Google no se entera solo de que su contenedor cambió de ancho, así que `PanelView` llama a
+ * esto al terminar la animación.
+ */
+defineExpose({
+  redimensionar: () => mapService.resize(CONTAINER_ID),
 })
 </script>
 
 <template>
-  <UiCard title="Mapa">
-    <div
-      v-if="mapService.hasApiKey()"
-      :id="CONTAINER_ID"
-      class="h-full min-h-[420px] w-full overflow-hidden rounded-lg"
-    />
-    <p v-else class="text-sm text-black/50">Configura la clave de Google Maps para ver el mapa.</p>
-  </UiCard>
+  <div
+    v-if="mapService.hasApiKey()"
+    :id="CONTAINER_ID"
+    class="h-full w-full"
+    data-testid="mapa-conductores"
+  />
+  <p v-else class="p-5 text-sm text-black/50">
+    Configura la clave de Google Maps para ver el mapa.
+  </p>
 </template>
