@@ -51,10 +51,6 @@ export default class BaseProvider {
     throw new Error('Method "drawRoute" must be implemented')
   }
 
-  async getRoutePath(_origin: LatLngLike, _destination: LatLngLike): Promise<LatLngLike[]> {
-    throw new Error('Method "getRoutePath" must be implemented')
-  }
-
   clearRoutes(_containerId: string): void {
     throw new Error('Method "clearRoutes" must be implemented')
   }

@@ -190,34 +190,6 @@ export default class GoogleProvider extends BaseProvider {
     }
   }
 
-  /**
-   * Puntos de una ruta sin dibujar nada ni requerir un mapa visible (spec "modo prueba"): el
-   * conductor virtual necesita por dónde avanzar, no un `<div>` en pantalla. Cae a una línea recta
-   * de 2 puntos si Directions falla, igual que `drawRoute`.
-   */
-  async getRoutePath(origin: LatLngLike, destination: LatLngLike): Promise<LatLngLike[]> {
-    if (!this.apiKey) {
-      throw new Error('VITE_GOOGLE_MAPS_API_KEY no está configurada.')
-    }
-
-    await loadSdk(this.apiKey)
-
-    try {
-      const response = await new google.maps.DirectionsService().route({
-        origin,
-        destination,
-        travelMode: google.maps.TravelMode.DRIVING,
-      })
-
-      const path = response.routes[0]?.overview_path
-      if (!path || path.length < 2) return [origin, destination]
-
-      return path.map((point) => ({ lat: point.lat(), lng: point.lng() }))
-    } catch {
-      return [origin, destination]
-    }
-  }
-
   clearRoutes(containerId: string): void {
     const instance = this.instances.get(containerId)
     if (!instance) return

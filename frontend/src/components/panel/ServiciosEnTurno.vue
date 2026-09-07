@@ -127,8 +127,8 @@ function etiquetaFecha(viaje: ViajeEnTurno): string {
 const EVENTOS_RECARGA = [
   'pedido.disponible',
   'pedido.tomado',
-  // spec tenant/025: el viaje camina por sus estados desde el servidor (el simulador del modo
-  // prueba, o el propio conductor desde su app); sin esto el Panel los mostraría congelados.
+  // El viaje camina por sus estados desde el servidor o desde la app del propio conductor; sin
+  // esto el Panel los mostraría congelados.
   'pedido.estado-cambiado',
   'pedido.cancelado',
   'pedido.entregado',

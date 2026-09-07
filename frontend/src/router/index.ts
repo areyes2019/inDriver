@@ -205,12 +205,6 @@ const router = createRouter({
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/modo-prueba',
-      name: 'tenant-modo-prueba',
-      component: () => import('../views/tenant/modoPrueba/ModoPruebaView.vue'),
-      meta: { requiresTenantAuth: true },
-    },
-    {
       path: '/t/:slug/panel/cambiar-password',
       name: 'tenant-cambiar-password',
       component: () => import('../views/tenant/cuenta/CambiarPasswordView.vue'),
@@ -267,13 +261,6 @@ router.beforeEach(async (to) => {
     if (
       (to.name === 'tenant-configuracion' || to.name === 'tenant-reporte-pagos-conductores') &&
       auth.usuario?.rol !== 'AdminCliente'
-    ) {
-      return { name: 'tenant-clientes-lista', params: { slug } }
-    }
-
-    if (
-      to.name === 'tenant-modo-prueba' &&
-      (auth.usuario?.rol !== 'AdminCliente' || !auth.usuario?.modo_prueba)
     ) {
       return { name: 'tenant-clientes-lista', params: { slug } }
     }

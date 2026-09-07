@@ -33,13 +33,12 @@ function puntosCiudadesTenant() {
   }))
 }
 
-type Pestana = 'tarifas' | 'comision' | 'zonas' | 'modo-prueba' | 'cuenta'
+type Pestana = 'tarifas' | 'comision' | 'zonas' | 'cuenta'
 const pestanaActiva = ref<Pestana>('tarifas')
 const pestanas: Array<{ id: Pestana; label: string }> = [
   { id: 'tarifas', label: 'Tarifas' },
   { id: 'comision', label: 'Comisión / Prepago' },
   { id: 'zonas', label: 'Zonas de cobertura' },
-  { id: 'modo-prueba', label: 'Modo prueba' },
   { id: 'cuenta', label: 'Mi cuenta' },
 ]
 
@@ -79,7 +78,6 @@ async function fetchConfiguracion() {
     form.usar_despachadores = data.usar_despachadores ?? 'No'
     valorOriginalUsarDespachadores.value = form.usar_despachadores
     saldoTenant.value = data.saldo_viajes_tenant ?? 0
-    modoPrueba.value = data.modo_prueba ?? false
   } catch {
     errorConfig.value = 'No se pudo cargar la configuración.'
   } finally {
@@ -128,32 +126,6 @@ async function guardarConfiguracion() {
     }
   } finally {
     guardando.value = false
-  }
-}
-
-// --- Modo prueba ---
-
-const modoPrueba = ref(false)
-const guardandoModoPrueba = ref(false)
-const errorModoPrueba = ref('')
-
-async function onToggleModoPrueba() {
-  const nuevoValor = !modoPrueba.value
-  guardandoModoPrueba.value = true
-  errorModoPrueba.value = ''
-
-  try {
-    const { data } = await http.patch(`/t/${slug.value}/configuracion/modo-prueba`, {
-      modo_prueba: nuevoValor ? 'Sí' : 'No',
-    })
-    modoPrueba.value = data.modo_prueba
-    // El nav (TenantLayout) lee `tenantAuth.usuario.modo_prueba` — sin esto, el link "Modo
-    // prueba" no aparece/desaparece hasta la próxima carga de página.
-    if (tenantAuth.usuario) tenantAuth.usuario.modo_prueba = data.modo_prueba
-  } catch {
-    errorModoPrueba.value = 'No se pudo cambiar el modo prueba.'
-  } finally {
-    guardandoModoPrueba.value = false
   }
 }
 
@@ -740,39 +712,6 @@ onBeforeUnmount(() => {
               </tbody>
             </table>
           </div>
-        </div>
-
-        <div v-else-if="pestanaActiva === 'modo-prueba'" class="max-w-lg space-y-4">
-          <UiAlert variant="info">
-            Con el modo prueba activo aparece en el menú la sección "Modo prueba", donde puedes
-            crear conductores virtuales y correr un envío completo de punta a punta (conectar,
-            aceptar, recorrer la ruta y entregar) sin un teléfono ni un vehículo real.
-          </UiAlert>
-
-          <UiAlert variant="warning">
-            Mientras esté activo, todo envío que se cree (incluso desde "Nueva Entrega", con
-            conductores reales de la app) queda marcado como prueba: su ubicación en el mapa la
-            genera el sistema en vez del GPS del teléfono, y al entregarlo no se descuenta saldo
-            real ni se calcula comisión real. Evita activarlo si tienes conductores reales
-            operando envíos reales al mismo tiempo.
-          </UiAlert>
-
-          <label class="flex items-center gap-3">
-            <input
-              type="checkbox"
-              :checked="modoPrueba"
-              :disabled="guardandoModoPrueba"
-              class="h-5 w-5 rounded border-gray-300 text-accent focus:ring-accent"
-              @change="onToggleModoPrueba"
-            />
-            <span class="text-sm font-medium text-heading">
-              {{ modoPrueba ? 'Modo prueba activado' : 'Modo prueba desactivado' }}
-            </span>
-          </label>
-
-          <p v-if="errorModoPrueba" role="alert" class="text-sm text-red-600">
-            {{ errorModoPrueba }}
-          </p>
         </div>
 
         <div v-else>

@@ -18,10 +18,10 @@ Schedule::command('conductor:purgar-posiciones-antiguas')->daily();
 Schedule::command('pedidos:publicar-agendados')->everyMinute();
 
 // spec tenant/024: el worker de colas, sin supervisor. Los jobs con `delay()` del sistema
-// (ExpirarOfertaPedido, AvisarSinConfirmar, SimularSiguientePunto) no tienen otra forma de correr
-// en producción, donde no hay ningún proceso permanente vigilado — solo este `schedule:run`.
+// (ExpirarOfertaPedido, AvisarSinConfirmar) no tienen otra forma de correr en producción, donde no
+// hay ningún proceso permanente vigilado — solo este `schedule:run`.
 //
-// Sin `--stop-when-empty` a propósito: los tres son jobs diferidos, y un worker que se apaga en
+// Sin `--stop-when-empty` a propósito: ambos son jobs diferidos, y un worker que se apaga en
 // cuanto la cola está vacía se iría justo antes de que el job venza. Se queda los 55s sondeando.
 // `runInBackground` es obligatorio: en primer plano bloquearía al resto de tareas del minuto.
 Schedule::command('queue:work --max-time=55 --sleep=1 --tries=3')

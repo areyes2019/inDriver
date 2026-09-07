@@ -72,9 +72,6 @@ class PedidoController extends Controller
                 ...$data,
                 'numero_pedido' => $numeroPedido,
                 'estado' => 'PENDIENTE',
-                // Snapshot del switch global LIVE/TEST (spec "PWA agnóstica a LIVE/TEST"): el
-                // pedido nace marcado o no, y ya no le importa si el switch cambia después.
-                'es_prueba' => ConfiguracionTenant::obtener(ConfiguracionTenant::MODO_PRUEBA, 'No') === 'Sí',
             ]);
         });
 

@@ -138,7 +138,6 @@ class AuthController extends Controller
         $data['ciudades_tenant'] = CiudadResource::collection($ciudadesTenant)->resolve();
         $data['cobertura_bounds'] = ZonaServicio::boundsDeZonasActivas();
         $data['usar_despachadores'] = ConfiguracionTenant::obtener(ConfiguracionTenant::USAR_DESPACHADORES, 'No');
-        $data['modo_prueba'] = ConfiguracionTenant::obtener(ConfiguracionTenant::MODO_PRUEBA, 'No') === 'Sí';
 
         return $data;
     }

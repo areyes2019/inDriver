@@ -15,7 +15,6 @@ use App\Http\Controllers\Tenant\Conductor\SaldoController as ConductorSaldoContr
 use App\Http\Controllers\Tenant\Conductor\SyncController as ConductorSyncController;
 use App\Http\Controllers\Tenant\Conductor\UbicacionController as ConductorUbicacionController;
 use App\Http\Controllers\Tenant\ConductorController;
-use App\Http\Controllers\Tenant\ConductorPruebaController;
 use App\Http\Controllers\Tenant\ConfiguracionController;
 use App\Http\Controllers\Tenant\DespachadorController;
 use App\Http\Controllers\Tenant\DireccionClienteController;
@@ -119,13 +118,6 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::delete('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'destroy']);
 
             Route::put('/configuracion', [ConfiguracionController::class, 'update']);
-            Route::patch('/configuracion/modo-prueba', [ConfiguracionController::class, 'modoPrueba']);
-
-            Route::get('/conductores-prueba', [ConductorPruebaController::class, 'index']);
-            Route::post('/conductores-prueba', [ConductorPruebaController::class, 'store']);
-            Route::post('/conductores-prueba/{conductor}/reconectar', [ConductorPruebaController::class, 'reconectar']);
-            Route::delete('/conductores-prueba/{conductor}', [ConductorPruebaController::class, 'destroy']);
-
             Route::get('/zonas-cobertura', [ZonaCoberturaController::class, 'index']);
             Route::post('/zonas-cobertura', [ZonaCoberturaController::class, 'store']);
             Route::get('/zonas-cobertura/{zona}', [ZonaCoberturaController::class, 'show']);

@@ -59,10 +59,6 @@ class MapService {
     this.provider.clearRoutes(containerId)
   }
 
-  getRoutePath(origin: LatLngLike, destination: LatLngLike): Promise<LatLngLike[]> {
-    return this.provider.getRoutePath(origin, destination)
-  }
-
   centerOn(containerId: string, position: LatLngLike, zoom?: number): void {
     this.provider.centerOn(containerId, position, zoom)
   }

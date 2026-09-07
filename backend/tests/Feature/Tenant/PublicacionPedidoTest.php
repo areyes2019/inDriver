@@ -252,8 +252,8 @@ it('schedules the offer window to close when publishing', function () {
 });
 
 it('keeps a queue worker in the schedule so the deferred jobs actually run', function () {
-    // spec tenant/024, RN-06: sin esta entrada, ExpirarOfertaPedido, AvisarSinConfirmar y
-    // SimularSiguientePunto no corren en producción, donde no hay ningún proceso supervisado.
+    // spec tenant/024, RN-06: sin esta entrada, ExpirarOfertaPedido y AvisarSinConfirmar no
+    // corren en producción, donde no hay ningún proceso supervisado.
     $comandos = collect(app(Schedule::class)->events())->map(fn ($evento) => $evento->command);
 
     expect($comandos->contains(fn ($comando) => str_contains((string) $comando, 'queue:work')))->toBeTrue();

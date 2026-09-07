@@ -61,28 +61,6 @@ class ConfiguracionController extends Controller
     }
 
     /**
-     * Interruptor del "modo prueba" (Panel): habilita la sección de conductores virtuales para
-     * probar el sistema completo sin salir a la calle. No afecta a los conductores reales.
-     */
-    public function modoPrueba(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'modo_prueba' => ['required', Rule::in(['Sí', 'No'])],
-        ]);
-
-        ConfiguracionTenant::establecer(ConfiguracionTenant::MODO_PRUEBA, $data['modo_prueba']);
-
-        Auditoria::create([
-            'id_usuario' => $request->user('usuario')->id_usuario,
-            'tabla_afectada' => 'configuraciones_tenant',
-            'accion' => 'EDICION',
-            'descripcion' => "Modo prueba del tenant cambiado a {$data['modo_prueba']}",
-        ]);
-
-        return response()->json(['modo_prueba' => $data['modo_prueba'] === 'Sí']);
-    }
-
-    /**
      * @return array<string, mixed>
      */
     private function estadoActual(): array
@@ -103,7 +81,6 @@ class ConfiguracionController extends Controller
             'comision_porcentaje' => ConfiguracionTenant::obtener(ConfiguracionTenant::COMISION_PORCENTAJE),
             'usar_despachadores' => ConfiguracionTenant::obtener(ConfiguracionTenant::USAR_DESPACHADORES, 'No'),
             'saldo_viajes_tenant' => $saldoTenant,
-            'modo_prueba' => ConfiguracionTenant::obtener(ConfiguracionTenant::MODO_PRUEBA, 'No') === 'Sí',
         ];
     }
 }

@@ -25,7 +25,6 @@ export interface UsuarioTenant {
   ciudades_tenant: CiudadAsignada[]
   cobertura_bounds: { north: number; south: number; east: number; west: number } | null
   usar_despachadores: 'Sí' | 'No'
-  modo_prueba: boolean
 }
 
 interface ResetPasswordPayload {

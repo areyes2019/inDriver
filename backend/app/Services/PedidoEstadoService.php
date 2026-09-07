@@ -8,7 +8,6 @@ use App\Events\Tenant\PedidoCanceladoParaConductor;
 use App\Events\Tenant\PedidoEntregado;
 use App\Events\Tenant\PedidoEstadoCambiado;
 use App\Events\Tenant\PedidoYaTomado;
-use App\Jobs\AvanzarEstadoSimulado;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\VentaViajeConductor;
@@ -24,13 +23,6 @@ use Illuminate\Validation\ValidationException;
 class PedidoEstadoService
 {
     public const ESTADOS_FINALES = ['ENTREGADO', 'CANCELADO', 'RECHAZADO'];
-
-    /**
-     * Lo que tarda el conductor virtual en recoger el paquete y en cerrar la entrega (spec
-     * tenant/025). Fijo a propósito: la simulación busca probar el flujo, no parecerse a los
-     * tiempos reales.
-     */
-    private const SEGUNDOS_DE_PAUSA = 3;
 
     /**
      * Mapa de transiciones válidas: desde cada estado, a qué estados se puede pasar.
@@ -70,7 +62,6 @@ class PedidoEstadoService
         private readonly OfertaPedidoService $ofertas,
         private readonly TrackingService $tracking,
         private readonly CambioEnvioService $cambios,
-        private readonly SimuladorRutaService $simulador,
     ) {}
 
     /**
@@ -106,43 +97,7 @@ class PedidoEstadoService
             $this->tracking->calcularResumenRuta($pedido);
         }
 
-        if ($pedido->es_prueba) {
-            $this->simularSiguientePaso($pedido, $nuevoEstado);
-        }
-
         $this->notificarConductores($pedido, $nuevoEstado, $estadoAnterior);
-    }
-
-    /**
-     * La cadena de la simulación del modo prueba (spec tenant/025). No es un guion que corra de
-     * principio a fin: cada vez que el pedido *entra* en un estado, aquí se programa el paso
-     * siguiente. Los dos hitos de llegada salen de recorrer un tramo; los dos intermedios, de una
-     * pausa.
-     *
-     * Que la cadena cuelgue del estado y no de un temporizador propio es lo que hace que el botón de
-     * hito y el simulador sean la misma cosa (RN-04): si el conductor adelanta un hito a mano, el
-     * paso siguiente se programa igual desde aquí, y el recorrido que estaba en curso se apaga solo
-     * al ver que el pedido ya no está en el estado que él creía.
-     */
-    private function simularSiguientePaso(Pedido $pedido, string $nuevoEstado): void
-    {
-        $tenant = tenant();
-
-        if ($tenant === null) {
-            return;
-        }
-
-        // Con retraso, nunca inmediato (RN-05): `transicionar()` avisa antes de que el llamador
-        // persista el pedido, y un job sin retraso leería el estado anterior de la base.
-        match ($nuevoEstado) {
-            'TOMADO' => $this->simulador->iniciarAcercamiento($pedido),
-            'ARRIBADO' => AvanzarEstadoSimulado::dispatch($tenant, $pedido->id_pedido, 'ARRIBADO', 'EN_CAMINO')
-                ->delay(now()->addSeconds(self::SEGUNDOS_DE_PAUSA)),
-            'EN_CAMINO' => $this->simulador->iniciarEntrega($pedido),
-            'ARRIBADO_A_ENTREGA' => AvanzarEstadoSimulado::dispatch($tenant, $pedido->id_pedido, 'ARRIBADO_A_ENTREGA', 'ENTREGADO')
-                ->delay(now()->addSeconds(self::SEGUNDOS_DE_PAUSA)),
-            default => null,
-        };
     }
 
     /**
@@ -174,8 +129,8 @@ class PedidoEstadoService
             return;
         }
 
-        // spec tenant/025: la app solo conocía el estado que ella misma provocaba, así que un cambio
-        // hecho del lado del servidor (el simulador del modo prueba, o el Panel) era invisible.
+        // La app solo conoce el estado que ella misma provoca, así que sin este aviso un cambio
+        // hecho del lado del servidor (desde el Panel) sería invisible para el conductor.
         if ($pedido->id_conductor !== null) {
             PedidoEstadoCambiado::dispatch($pedido->id_pedido, $pedido->id_conductor, $nuevoEstado, $slug);
         }
@@ -231,17 +186,9 @@ class PedidoEstadoService
     /**
      * Descuenta 1 viaje del saldo prepagado del conductor, o calcula la comisión del pedido, según
      * la modalidad de cobro configurada para el tenant (spec 015).
-     *
-     * Un pedido `es_prueba` con un conductor real (no uno virtual del Panel, que ya tiene crédito
-     * "ilimitado") nunca debe tocar su saldo real: spec "PWA agnóstica a LIVE/TEST", sección
-     * "Seguridad" — el modo TEST no debe afectar viajes prepagados ni comisiones reales.
      */
     private function liquidarConductor(Pedido $pedido): void
     {
-        if ($pedido->es_prueba) {
-            return;
-        }
-
         $modalidad = ConfiguracionTenant::obtener(ConfiguracionTenant::MODALIDAD, 'Prepago');
 
         if ($modalidad === 'Comision') {

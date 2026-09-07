@@ -100,7 +100,7 @@ configuración cacheada es la causa habitual de "cambié el `.env` y no pasó na
 | --- | --- | --- |
 | `conductor:apagar-inactivos` | minuto | Un conductor que cerró la app sigue "en línea" para siempre y se le siguen ofreciendo envíos (spec `tenant/019`, RN-04) |
 | `pedidos:publicar-agendados` | minuto | Un envío agendado nunca se le ofrece a nadie (spec `tenant/024`, RN-02) |
-| `queue:work --max-time=55` | minuto | Las ofertas no expiran ni se reofertan, el aviso de "sin confirmar" no sale y el conductor virtual del modo TEST no se mueve (spec `tenant/024`, RN-06) |
+| `queue:work --max-time=55` | minuto | Las ofertas no expiran ni se reofertan y el aviso de "sin confirmar" no sale (spec `tenant/024`, RN-06) |
 | `conductor:purgar-posiciones-antiguas` | día | Las posiciones históricas crecen sin tope (spec `tenant/021`, RN-08) |
 
 A diferencia del hosting compartido de antes, aquí sí hay `crontab` real. Como `root` (o el usuario
@@ -114,8 +114,8 @@ Esa única línea dispara las cuatro: `schedule:run` decide cuáles tocan en ese
 
 ### Por qué el worker de colas vive dentro del `schedule`
 
-Los tres jobs diferidos del sistema (`ExpirarOfertaPedido`, `AvisarSinConfirmar`,
-`SimularSiguientePunto`) necesitan un `queue:work` corriendo. En vez de meter supervisor/systemd y
+Los dos jobs diferidos del sistema (`ExpirarOfertaPedido` y `AvisarSinConfirmar`) necesitan un
+`queue:work` corriendo. En vez de meter supervisor/systemd y
 un proceso permanente que haya que reiniciar en cada despliegue, el propio `schedule` levanta un
 worker de 55 segundos por minuto, en segundo plano y sin solaparse. El costo es un hueco de unos 5
 segundos al final de cada minuto; la ganancia es que no hay ningún proceso nuevo que vigilar.

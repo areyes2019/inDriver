@@ -24,7 +24,6 @@ interface ConductorActivo {
   id_conductor: number
   nombre: string
   disponibilidad: string
-  es_prueba: boolean
   latitud: number | null
   longitud: number | null
   pedido_asignado: PedidoAsignado | null
@@ -48,7 +47,7 @@ async function cargarYDibujar() {
 
     const posicion = { lat: conductor.latitud, lng: conductor.longitud }
     mapService.addMarker(CONTAINER_ID, String(conductor.id_conductor), posicion, {
-      title: conductor.es_prueba ? `${conductor.nombre} (prueba)` : conductor.nombre,
+      title: conductor.nombre,
     })
 
     const pedido = conductor.pedido_asignado

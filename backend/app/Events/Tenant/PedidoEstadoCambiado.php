@@ -13,13 +13,10 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
 
 /**
- * Un pedido con conductor asignado cambió de estado (spec tenant/025). Hasta ahora la app solo
- * conocía el estado que ella misma provocaba —lo tomaba de la respuesta de su propia petición—, así
- * que cualquier cambio hecho del lado del servidor era invisible: el simulador del modo prueba podía
- * llevar el viaje hasta `ENTREGADO` mientras el conductor seguía viendo `TOMADO` en pantalla.
- *
- * Se emite para todos los pedidos con conductor, no solo los de prueba: un cambio hecho desde el
- * Panel tiene el mismo problema.
+ * Un pedido con conductor asignado cambió de estado. La app solo conoce el estado que ella misma
+ * provoca —lo toma de la respuesta de su propia petición—, así que sin este evento un cambio hecho
+ * del lado del servidor (por ejemplo desde el Panel) sería invisible: el viaje podría llegar a
+ * `ENTREGADO` mientras el conductor sigue viendo `TOMADO` en pantalla.
  *
  * Va dirigido a una persona, así que lleva `id_conductor` para que el cliente descarte lo ajeno
  * (spec tenant/018, RN-09). No es crítico (RN-05): solo socket, sin respaldo de push — si se pierde,

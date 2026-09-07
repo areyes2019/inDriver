@@ -25,9 +25,8 @@ Deja funcionando:
 - Los avisos del protocolo de tiempo real (spec `tenant/018`) salen de verdad, en el acto, en vez de
   quedarse encolados para siempre.
 - La lista "Viajes en turno" del Panel se corrige sola por socket, sin recargar la página.
-- Los jobs diferidos del sistema (expiración y reoferta de ofertas, aviso de "sin confirmar",
-  conductor virtual del modo TEST) corren también en producción, sin agregar ningún proceso
-  supervisado.
+- Los jobs diferidos del sistema (expiración y reoferta de ofertas, aviso de "sin confirmar")
+  corren también en producción, sin agregar ningún proceso supervisado.
 - Documentación de qué backend y qué tenant usa cada build de `panda_express`.
 
 **No** incluye:
@@ -154,10 +153,9 @@ alguien recargue — el mismo comportamiento que hoy, no uno peor.
 
 ### El worker de colas vive dentro del `schedule`, no bajo supervisor
 
-Quedan tres jobs diferidos que no son sustituibles por un barrido periódico sin perder precisión:
-`ExpirarOfertaPedido` (cierra la ventana de 45s de la spec `tenant/020` y reoferta),
-`AvisarSinConfirmar` (los 60s del ACK de la spec `tenant/022`) y `SimularSiguientePunto` (el
-conductor virtual del modo TEST). Los tres necesitan un `queue:work`.
+Quedan dos jobs diferidos que no son sustituibles por un barrido periódico sin perder precisión:
+`ExpirarOfertaPedido` (cierra la ventana de 45s de la spec `tenant/020` y reoferta) y
+`AvisarSinConfirmar` (los 60s del ACK de la spec `tenant/022`). Ambos necesitan un `queue:work`.
 
 En producción no había ninguno, y además faltaba `DB_QUEUE_CONNECTION`: sin esa variable,
 `database.default` durante una petición de tenant apunta a la conexión `tenant` (Stancl), así que el
@@ -229,6 +227,6 @@ vivo. Un job que venza ahí se atiende en el siguiente arranque, unos segundos d
 8. El worker de colas se acota a 55 segundos por minuto en vez de correr permanente: se prefiere un
    hueco de ~5 segundos por minuto antes que un proceso supervisado que mantener. Si algún día el
    volumen lo exige, la salida es supervisor/systemd, no acortar el hueco a mano.
-9. Reactivar la cola despierta dos comportamientos que llevaban tiempo escritos pero dormidos en
-   producción: el aviso de "sin confirmar" de la spec `tenant/022` y el conductor virtual del modo
-   TEST. Es intencional — es lo que sus specs ya describen.
+9. Reactivar la cola despierta un comportamiento que llevaba tiempo escrito pero dormido en
+   producción: el aviso de "sin confirmar" de la spec `tenant/022`. Es intencional — es lo que su
+   spec ya describe.

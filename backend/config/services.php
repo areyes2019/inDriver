@@ -43,11 +43,4 @@ return [
         'credentials_path' => env('FIREBASE_CREDENTIALS_PATH'),
     ],
 
-    // Misma key que ya usa el frontend (VITE_GOOGLE_MAPS_API_KEY) para dibujar rutas en el
-    // navegador — aquí se usa server-side para calcular el recorrido del modo TEST
-    // (SimuladorRutaService), sin exponerla en ninguna respuesta de la API.
-    'google_maps' => [
-        'key' => env('GOOGLE_MAPS_API_KEY'),
-    ],
-
 ];

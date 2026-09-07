@@ -32,19 +32,12 @@ class TrackingService
      * conductor en la misma operación, y difunde al Panel.
      *
      * @param  array<string, mixed>  $datos
-     * @param  bool  $desdeSimulador  spec "PWA agnóstica a LIVE/TEST": true solo cuando llama
-     *                                `SimularSiguientePunto` (el generador de posición del modo
-     *                                TEST). panda_express nunca sabe que existe este parámetro —
-     *                                siempre manda su GPS real y siempre recibe 204. Si el pedido
-     *                                es `es_prueba` y quien llama NO es el simulador, el dato del
-     *                                teléfono se descarta en silencio: la posición real no debe
-     *                                pisar la que ya está generando el backend.
      *
      * @throws ValidationException con `DELIVERY_NOT_ACTIVE` si el conductor no tiene un envío en
      *                             curso ahora mismo (RN-01): estar en línea sin envío no genera
      *                             tracking.
      */
-    public function registrarPosicion(Conductor $conductor, array $datos, bool $desdeSimulador = false): ?ConductorPosicion
+    public function registrarPosicion(Conductor $conductor, array $datos): ?ConductorPosicion
     {
         $pedido = $this->pedidoActivo($conductor);
 
@@ -52,10 +45,6 @@ class TrackingService
             throw ValidationException::withMessages([
                 'pedido' => ['DELIVERY_NOT_ACTIVE'],
             ]);
-        }
-
-        if ($pedido->es_prueba && ! $desdeSimulador) {
-            return null;
         }
 
         $this->actualizarPosicionActual($conductor, (float) $datos['latitud'], (float) $datos['longitud']);

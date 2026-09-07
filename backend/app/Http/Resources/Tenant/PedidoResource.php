@@ -49,7 +49,6 @@ class PedidoResource extends JsonResource
             'id_vehiculo' => $this->id_vehiculo,
             'vehiculo_placa' => $this->vehiculo?->placa,
             'estado' => $this->estado,
-            'es_prueba' => $this->es_prueba,
             'fecha_publicacion' => $this->fecha_publicacion,
             'fecha_asignacion' => $this->fecha_asignacion,
             'fecha_entrega' => $this->fecha_entrega,

@@ -32,7 +32,6 @@ class ConductorActivoResource extends JsonResource
             // siempre, sin mirar la modalidad del tenant, para que el Panel no tenga que pedir
             // `/configuracion` antes de pintar la lista (spec tenant/023).
             'saldo_viajes' => (int) $this->viajes_vendidos - (int) $this->viajes_consumidos,
-            'es_prueba' => $this->es_prueba,
             'latitud' => $this->estadoActual?->ultima_latitud !== null ? (float) $this->estadoActual->ultima_latitud : null,
             'longitud' => $this->estadoActual?->ultima_longitud !== null ? (float) $this->estadoActual->ultima_longitud : null,
             'pedido_asignado' => $pedido ? [

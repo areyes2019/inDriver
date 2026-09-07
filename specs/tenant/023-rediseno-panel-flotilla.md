@@ -202,13 +202,6 @@ una pantalla real. No encaja aquí sin cambios: le falta la línea del saldo, su
 ítem. Ampliarlo con props opcionales para un único consumidor produciría una pieza compartida con
 más opciones que usos. `ConductoresActivos.vue` escribe su propio `<li>`, igual que ya hacía.
 
-### Conductores de prueba
-
-`ConductorActivoResource` expone `es_prueba`, pero en esta etapa **toda** la operación es ficticia y
-todos los conductores lo son, así que distinguirlos no aportaría nada. La píldora "N en línea"
-cuenta todos los conductores de la lista y ningún ítem lleva marca de prueba. Queda como decisión
-explícita a revisar cuando haya conductores reales conviviendo con los de prueba.
-
 ## Hallazgo (fuera de alcance, documentado)
 
 En modalidad `Comision`, `PedidoEstadoService::liquidarConductor()`
