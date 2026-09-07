@@ -9,6 +9,8 @@ use App\Http\Controllers\Tenant\VentaViajeConductorController;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConfiguracionTenant;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -66,18 +68,41 @@ class DisponibilidadService
         return VentaViajeConductorController::saldoConductor($conductor) > 0;
     }
 
+    /**
+     * Las dos representaciones de "en línea" se escriben en una sola transacción: media escritura
+     * (una tabla sí, la otra no) es justo la desincronización que el Panel y la App ven como
+     * "dice en línea de un lado y fuera de servicio del otro".
+     *
+     * El aviso al Panel va después del commit y nunca puede tumbar el cambio de estado: si el
+     * socket falla (Reverb apagado, cola sin tabla), el conductor igual quedó conectado y solo se
+     * pierde el refresco en vivo — se registra en el log y la petición responde 200.
+     */
     private function guardar(Conductor $conductor, string $estado): ConductorEstado
     {
-        $conductorEstado = ConductorEstado::firstOrNew(['id_conductor' => $conductor->id_conductor]);
-        $conductorEstado->estado = $estado;
-        $conductorEstado->{$estado === 'ONLINE' ? 'ultima_conexion' : 'ultima_desconexion'} = now();
-        $conductorEstado->save();
-
         $disponibilidad = $estado === 'ONLINE' ? 'DISPONIBLE' : 'FUERA_DE_SERVICIO';
-        $conductor->update(['disponibilidad' => $disponibilidad]);
+
+        $conductorEstado = DB::transaction(function () use ($conductor, $estado, $disponibilidad) {
+            $conductorEstado = ConductorEstado::firstOrNew(['id_conductor' => $conductor->id_conductor]);
+            $conductorEstado->estado = $estado;
+            $conductorEstado->{$estado === 'ONLINE' ? 'ultima_conexion' : 'ultima_desconexion'} = now();
+            $conductorEstado->save();
+
+            $conductor->update(['disponibilidad' => $disponibilidad]);
+
+            return $conductorEstado;
+        });
 
         if ($slug = tenant()?->slug) {
-            ConductorDisponibilidadCambiada::dispatch($conductor->id_conductor, $disponibilidad, $slug);
+            try {
+                ConductorDisponibilidadCambiada::dispatch($conductor->id_conductor, $disponibilidad, $slug);
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo avisar al Panel del cambio de disponibilidad.', [
+                    'id_conductor' => $conductor->id_conductor,
+                    'disponibilidad' => $disponibilidad,
+                    'tenant' => $slug,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         return $conductorEstado;

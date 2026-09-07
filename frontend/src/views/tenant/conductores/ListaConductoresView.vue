@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import http from '@/lib/http'
+import realtimeService from '@/services/realtime'
 import TenantLayout from '@/layouts/TenantLayout.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiBadge from '@/components/ui/UiBadge.vue'
@@ -248,10 +249,38 @@ async function onCambiarDespachador(conductor: Conductor, idDespachador: string)
   }
 }
 
+// --- Disponibilidad en vivo (spec tenant/019) ---
+
+interface DisponibilidadCambiadaPayload {
+  id_conductor: number
+  disponibilidad: string
+  event_id: string
+}
+
+/**
+ * El conductor se conectó o se desconectó desde su app. Sin esto la columna DISPONIBILIDAD solo
+ * cambiaba al recargar la página, y la lista se quedaba mostrando FUERA_DE_SERVICIO mientras el
+ * conductor ya estaba en línea. Se parchea la fila en memoria en vez de recargar la página de
+ * resultados: así no se pierde el filtro de búsqueda ni la página en la que está el AdminCliente.
+ */
+function onDisponibilidadCambiada(payload: DisponibilidadCambiadaPayload) {
+  const conductor = conductores.value.find((c) => c.id_conductor === payload.id_conductor)
+  if (conductor) conductor.disponibilidad = payload.disponibilidad
+}
+
 onMounted(() => {
   fetchConductores()
   fetchModalidad()
   fetchDespachadoresActivos()
+  realtimeService
+    .subscribe(slug.value)
+    ?.bind('conductor.disponibilidad-cambiada', onDisponibilidadCambiada)
+})
+
+onUnmounted(() => {
+  realtimeService
+    .subscribe(slug.value)
+    ?.unbind('conductor.disponibilidad-cambiada', onDisponibilidadCambiada)
 })
 </script>
 
