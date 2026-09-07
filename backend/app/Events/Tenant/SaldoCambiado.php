@@ -8,7 +8,7 @@ use App\Models\Tenant\MovimientoSaldo;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
@@ -18,8 +18,12 @@ use Illuminate\Support\Str;
  * BALANCE_CREDITED). Un solo evento sirve para los 4 tipos de movimiento; el conductor decide en
  * la App qué icono mostrar según `tipo`. Es un evento "crítico" (spec tenant/018, RN-04): además
  * del socket, se manda por push vía `EnviarPushSiEsCritico`.
+ *
+ * `ShouldBroadcastNow` y no `ShouldBroadcast`: no hay ningún `queue:work` corriendo, así que en
+ * cola el aviso se quedaría esperando en `jobs` y el conductor nunca vería la acreditación en
+ * pantalla (el push de respaldo sí sale, porque `EnviarPushSiEsCritico` corre síncrono).
  */
-class SaldoCambiado implements ShouldBroadcast
+class SaldoCambiado implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 

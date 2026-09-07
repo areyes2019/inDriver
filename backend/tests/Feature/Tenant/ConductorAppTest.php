@@ -180,6 +180,23 @@ it('logs in a Conductor and returns a bearer token', function () {
     expect($response->json('usuario.rol'))->toBe('Conductor');
 });
 
+it('exposes the id_conductor on login and on /me so the App can filter its own events', function () {
+    $tenant = conductorAppTenant();
+    $datos = conductorAppCrear($tenant);
+
+    $login = $this->postJson('/api/v1/t/cafe-luna/conductor/login', [
+        'email' => 'beto@cafeluna.com',
+        'password' => 'Password123!',
+    ])->assertOk();
+
+    expect($login->json('usuario.id_conductor'))->toBe($datos['conductor']->id_conductor);
+
+    $this->withToken($login->json('token'))
+        ->getJson('/api/v1/t/cafe-luna/conductor/me')
+        ->assertOk()
+        ->assertJsonPath('id_conductor', $datos['conductor']->id_conductor);
+});
+
 it('rejects conductor routes without a token', function () {
     conductorAppTenant();
 

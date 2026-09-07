@@ -42,7 +42,7 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $usuario->createToken('panda-express')->plainTextToken,
-            'usuario' => (new UsuarioResource($usuario))->resolve(),
+            'usuario' => $this->usuarioConConductor($usuario),
         ]);
     }
 
@@ -61,6 +61,22 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json(new UsuarioResource($request->user('conductor-token')));
+        return response()->json($this->usuarioConConductor($request->user('conductor-token')));
+    }
+
+    /**
+     * `UsuarioResource` más el `id_conductor`. El canal de tiempo real es uno por tenant (spec
+     * tenant/018), así que la App recibe también los eventos de sus compañeros y necesita este id
+     * para quedarse solo con los suyos — por ejemplo, para no anunciar como propia la acreditación
+     * de saldo de otro conductor. No se agrega a `UsuarioResource` porque ese recurso también
+     * sirve listados del Panel, donde cargar la relación por fila sería una consulta por usuario.
+     *
+     * @return array<string, mixed>
+     */
+    private function usuarioConConductor(Usuario $usuario): array
+    {
+        return (new UsuarioResource($usuario))->resolve() + [
+            'id_conductor' => $usuario->conductor?->id_conductor,
+        ];
     }
 }
