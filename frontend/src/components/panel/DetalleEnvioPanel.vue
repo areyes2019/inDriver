@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import http from '@/lib/http'
 import UiConfirmDialog from '@/components/ui/UiConfirmDialog.vue'
-import type { ViajeEnTurno } from '@/components/panel/ServiciosEnTurno.vue'
+import type { ViajeEnTurno } from '@/stores/panel'
 
 const props = defineProps<{ viaje: ViajeEnTurno | null }>()
 
@@ -18,6 +18,28 @@ const cancelando = ref(false)
 const errorCancelar = ref(false)
 
 const formatoImporte = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' })
+
+/**
+ * spec tenant/027, RN-26: el detalle sigue al envío en vivo. Si termina mientras está abierto, no
+ * se cierra solo —eso le arrancaría la pantalla de las manos a quien la está leyendo—: muestra en
+ * qué acabó y deja de ofrecer cancelar, porque ya no hay nada que cancelar.
+ */
+const ESTADOS_FINALES: Record<string, { texto: string; clase: string }> = {
+  ENTREGADO: { texto: 'Entregado', clase: 'bg-success-bg text-success-text' },
+  CANCELADO: { texto: 'Cancelado', clase: 'bg-red-100 text-red-700' },
+  RECHAZADO: { texto: 'Rechazado', clase: 'bg-red-100 text-red-700' },
+}
+
+const ETIQUETAS_ESTADO: Record<string, string> = {
+  PENDIENTE: 'Por asignar',
+  PUBLICADO: 'Buscando conductor',
+  TOMADO: 'Asignado',
+  ARRIBADO: 'En recogida',
+  EN_CAMINO: 'En camino',
+  ARRIBADO_A_ENTREGA: 'En entrega',
+}
+
+const cerrado = computed(() => (props.viaje ? (ESTADOS_FINALES[props.viaje.estado] ?? null) : null))
 
 function importeFormateado(importe: string | number | null): string {
   if (importe === null || importe === '') return '—'
@@ -154,6 +176,29 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         </div>
       </section>
 
+      <!-- En qué va el envío ahora mismo: cambia solo, sin cerrar ni recargar el panel (RN-26). -->
+      <section class="border-t border-default px-5 py-4">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-sm text-body">Estado</span>
+          <span
+            v-if="cerrado"
+            class="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+            :class="cerrado.clase"
+          >
+            {{ cerrado.texto }}
+          </span>
+          <span v-else class="text-sm font-semibold text-heading">
+            {{ ETIQUETAS_ESTADO[viaje.estado] ?? viaje.estado }}
+          </span>
+        </div>
+        <div v-if="viaje.conductor_nombre" class="mt-2 flex items-center justify-between gap-2">
+          <span class="text-sm text-body">Conductor</span>
+          <span class="truncate text-sm font-semibold text-heading">
+            {{ viaje.conductor_nombre }}
+          </span>
+        </div>
+      </section>
+
       <section class="border-t border-default px-5 py-4">
         <div class="flex items-center justify-between">
           <span class="text-sm text-body">Envío</span>
@@ -163,7 +208,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         </div>
       </section>
 
-      <section class="px-5 pb-6">
+      <section v-if="!cerrado" class="px-5 pb-6">
         <button
           type="button"
           :disabled="cancelando"

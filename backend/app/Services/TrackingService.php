@@ -122,7 +122,25 @@ class TrackingService
         $pedido->resumen_ruta = $this->simplificar($puntos);
     }
 
-    private function pedidoActivo(Conductor $conductor): ?Pedido
+    /**
+     * El conductor sigue vivo aunque su posición no se guarde (spec tenant/025, RN-11).
+     *
+     * En TEST el GPS real se descarta, pero el teléfono sigue reportando: descartar también la
+     * señal de vida haría que `conductor:apagar-inactivos` lo apagara a los 10 minutos en mitad de
+     * un envío simulado. Lo único que no se toca es la posición, que la manda el simulador.
+     */
+    public function registrarLatido(Conductor $conductor): void
+    {
+        ConductorEstado::where('id_conductor', $conductor->id_conductor)
+            ->update(['ultima_actualizacion' => now()]);
+    }
+
+    /**
+     * Público desde la spec tenant/025: `Conductor\UbicacionController` necesita preguntar si el
+     * envío en curso es TEST para descartar el GPS real (RN-11), y duplicar esta consulta allá
+     * sería peor.
+     */
+    public function pedidoActivo(Conductor $conductor): ?Pedido
     {
         return $conductor->pedidos()->whereNotIn('estado', PedidoEstadoService::ESTADOS_FINALES)->first();
     }

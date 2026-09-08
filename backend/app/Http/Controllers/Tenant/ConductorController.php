@@ -13,7 +13,6 @@ use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\Vehiculo;
-use App\Services\PedidoEstadoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -62,24 +61,16 @@ class ConductorController extends Controller
      */
     public function activos(): AnonymousResourceCollection
     {
+        // Las relaciones, el pedido activo y las dos subconsultas del saldo viven en
+        // `Conductor::scopeConDatosDePanel` desde la spec tenant/027: el evento
+        // `conductor.disponibilidad-cambiada` arma la misma fila para insertarla en el Panel sin
+        // recargar, y las dos tienen que salir idénticas. Va al final de la cadena porque su
+        // `select('conductores.*')` borraría los agregados si se encadenara antes.
         $conductores = Conductor::query()
-            ->with([
-                'usuario', 'vehiculo', 'estadoActual',
-                'pedidos' => fn ($q) => $q->whereNotIn('estado', PedidoEstadoService::ESTADOS_FINALES),
-            ])
             ->whereHas('estadoActual', fn ($q) => $q->where('estado', 'ONLINE'))
             ->join('usuarios', 'usuarios.id_usuario', '=', 'conductores.id_usuario')
             ->orderBy('usuarios.nombre')
-            ->select('conductores.*')
-            // Mismos alias y misma fórmula que `index()` (spec tenant/015): dos subconsultas, no un
-            // `GET /conductores/{id}/saldo-viajes` por fila. Conviven con el `with('pedidos')`
-            // acotado de arriba porque `withCount` arma su propia subconsulta.
-            //
-            // Van DESPUÉS del `select('conductores.*')` a propósito: `withSum`/`withCount` agregan
-            // sus columnas con `addSelect`, y un `select()` posterior las borraría — el saldo
-            // llegaría siempre en 0.
-            ->withSum('ventasViajes as viajes_vendidos', 'cantidad_viajes')
-            ->withCount(['pedidos as viajes_consumidos' => fn ($q) => $q->where('prepago_descontado', true)])
+            ->conDatosDePanel()
             ->get();
 
         return ConductorActivoResource::collection($conductores);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Events\Tenant\ConductorColaReactivada;
 use App\Events\Tenant\PedidoDisponible;
 use App\Events\Tenant\PedidoRequiereAsignacionManual;
 use App\Jobs\ExpirarOfertaPedido;
@@ -86,6 +87,137 @@ class OfertaPedidoService
         }
 
         $this->ofertar($pedido);
+    }
+
+    /**
+     * Un conductor acaba de quedar libre —entregó, le cancelaron, o se conectó— y hay pedidos
+     * esperando: se le ofrecen todos de golpe (spec tenant/026, RN-01 a RN-09).
+     *
+     * Sin esto su bandeja queda vacía después de entregar: mientras estuvo ocupado no era elegible
+     * (RN-06 de tenant/020), así que la cola se ofreció a otros o agotó sus rondas, y nadie vuelve
+     * a mirarlo cuando se libera.
+     *
+     * @return int cuántos pedidos se le reactivaron
+     */
+    public function reactivarColaPara(Conductor $conductor): int
+    {
+        if (! $this->puedeRecibirOfertas($conductor)) {
+            return 0;
+        }
+
+        $pedidos = $this->pedidosEnCola();
+
+        if ($pedidos->isEmpty()) {
+            return 0;
+        }
+
+        // RN-06: lo que rechazó explícitamente no se le vuelve a ofrecer. `PERDIDA` y `EXPIRADA`
+        // sí, porque ninguna de las dos fue una decisión suya.
+        $rechazados = PedidoOferta::whereIn('id_pedido', $pedidos->pluck('id_pedido'))
+            ->where('id_conductor', $conductor->id_conductor)
+            ->where('estado', 'RECHAZADA')
+            ->pluck('id_pedido')
+            ->all();
+
+        $reactivados = 0;
+
+        foreach ($pedidos as $pedido) {
+            if (in_array($pedido->id_pedido, $rechazados, true)) {
+                continue;
+            }
+
+            if ($pedido->estado === 'PENDIENTE') {
+                $this->rescatarDeAsignacionManual($pedido);
+            } else {
+                $this->ofertarSoloA($pedido, $conductor);
+            }
+
+            $reactivados++;
+        }
+
+        // RN-09: un solo aviso con el total. Tres pedidos en cola no pueden ser tres sonidos, tres
+        // vibraciones y tres notificaciones del navegador para el mismo hecho.
+        if ($reactivados > 0 && $slug = tenant()?->slug) {
+            ConductorColaReactivada::dispatch($conductor->id_conductor, $reactivados, $slug);
+        }
+
+        return $reactivados;
+    }
+
+    /**
+     * RN-07: solo trabaja quien está en línea, sin pedido activo y con saldo. Se relee de base
+     * porque el llamador típico es el observador de `pedidos`, que trae el conductor tal como
+     * estaba antes de la entrega.
+     */
+    private function puedeRecibirOfertas(Conductor $conductor): bool
+    {
+        $conductor->refresh();
+
+        return $conductor->disponibilidad === 'DISPONIBLE'
+            && ! $conductor->tienePedidoActivo()
+            && app(DisponibilidadService::class)->tieneSaldoDisponible($conductor);
+    }
+
+    /**
+     * Lo que está esperando conductor (RN-03): lo `PUBLICADO` sin dueño, más lo que cayó a
+     * `PENDIENTE` por agotar sus rondas. Un `PENDIENTE` que nunca se publicó queda fuera: es un
+     * borrador del despachador, y publicarlo solo porque apareció un conductor sería decidir por él
+     * —de ahí el `whereNotNull('fecha_publicacion')`—.
+     *
+     * Orden por antigüedad del pedido (RN-08): el que lleva más tiempo esperando, primero.
+     *
+     * @return Collection<int, Pedido>
+     */
+    private function pedidosEnCola(): Collection
+    {
+        return Pedido::whereNull('id_conductor')
+            ->where(function ($q) {
+                $q->where('estado', 'PUBLICADO')
+                    ->orWhere(fn ($q2) => $q2->where('estado', 'PENDIENTE')->whereNotNull('fecha_publicacion'));
+            })
+            ->orderBy('created_at')
+            ->get();
+    }
+
+    /**
+     * RN-04: vuelve a `PUBLICADO` con el contador de rondas en cero. `veces_ofertado` mide rondas
+     * fallidas *habiendo conductores disponibles*; las que se gastaron con el tenant vacío no
+     * cuentan, y sin reiniciarlo el pedido volvería a caer a asignación manual en la ronda
+     * siguiente.
+     *
+     * Se persiste el cero ANTES de transicionar porque `ofertar()` —que corre dentro de la
+     * transición— incrementa el contador con un UPDATE directo: dejarlo solo en memoria haría que
+     * el incremento partiera del valor viejo de la base.
+     */
+    private function rescatarDeAsignacionManual(Pedido $pedido): void
+    {
+        $pedido->update(['veces_ofertado' => 0]);
+
+        app(PedidoEstadoService::class)->transicionar($pedido, 'PUBLICADO');
+        $pedido->save();
+    }
+
+    /**
+     * Abre la oferta de un pedido ya publicado para un solo conductor, con su propia ventana de 45s
+     * (RN-05).
+     *
+     * No se reusa `ofertar()` a propósito: eso sería una ronda nueva para todos —reiniciaría la
+     * ventana de quienes ya la tenían corriendo y quemaría uno de los 3 intentos del pedido—
+     * cuando lo que pasó es mucho menor: un conductor se sumó tarde a la ronda en curso.
+     */
+    private function ofertarSoloA(Pedido $pedido, Conductor $conductor): void
+    {
+        $ahora = now();
+        $expiraEn = $ahora->copy()->addSeconds(self::VENTANA_SEGUNDOS);
+
+        PedidoOferta::updateOrCreate(
+            ['id_pedido' => $pedido->id_pedido, 'id_conductor' => $conductor->id_conductor],
+            ['estado' => 'PENDIENTE', 'ofrecida_en' => $ahora, 'expira_en' => $expiraEn, 'respondida_en' => null],
+        );
+
+        if (tenant()) {
+            ExpirarOfertaPedido::dispatch(tenant(), $pedido->id_pedido)->delay($expiraEn);
+        }
     }
 
     /**

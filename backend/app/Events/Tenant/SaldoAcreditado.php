@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Events\Tenant;
 
+use App\Support\DatosDeEventoPanel;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -56,6 +57,10 @@ class SaldoAcreditado implements ShouldBroadcastNow
         return [
             'id_conductor' => $this->idConductor,
             'viajes_acreditados' => $this->viajesAcreditados,
+            // spec tenant/027: el saldo resultante, no solo el delta. El Panel escribe el número
+            // que recibe en vez de sumarle al que tenía, así que un evento repetido o perdido no
+            // puede dejar la cifra corrida.
+            'saldo_viajes' => DatosDeEventoPanel::saldoDeConductor($this->idConductor),
             'event_id' => $this->eventId,
         ];
     }

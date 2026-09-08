@@ -55,6 +55,11 @@ class MapService {
     return this.provider.drawRoute(containerId, routeId, points, options)
   }
 
+  /** Borra la línea de un solo conductor sin tocar las de los demás (spec tenant/026, RN-21). */
+  clearRoute(containerId: string, routeId: string): void {
+    this.provider.clearRoute(containerId, routeId)
+  }
+
   clearRoutes(containerId: string): void {
     this.provider.clearRoutes(containerId)
   }

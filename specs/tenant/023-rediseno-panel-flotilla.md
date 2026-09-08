@@ -161,6 +161,15 @@ Todos disparan la misma `cargarConductores()` ya existente, igual que hace `Mapa
 evento: los payloads traen `id_pedido`, no el conductor ni su saldo recalculado, y la lista es
 corta.
 
+> **Reemplazado por `tenant/027-panel-reactivo-sin-recargas.md`.** La decisión de recargar la lista
+> completa en cada evento resultó insostenible: con `ConductoresActivos`, `MapaConductores` y
+> `ServiciosEnTurno` recargando por su cuenta contra un limitador de 20 peticiones por minuto, un
+> viaje que se toma y se entrega producía 429 y dejaba los dos paneles en "No se pudo cargar". El
+> motivo que aquí se daba —"los payloads traen `id_pedido`, no el conductor ni su saldo"— la 027 lo
+> resuelve por el otro lado: enriquece los payloads con el saldo y el conductor completos, y el
+> Panel actualiza el ítem en memoria sin pedir nada. La tabla de eventos de arriba sigue siendo
+> correcta en **qué** eventos afectan al panel; lo que cambia es que ya no recargan, aplican.
+
 El toast "X está en línea" se sigue mostrando **solo** desde `conductor.disponibilidad-cambiada` con
 `DISPONIBLE`, como hoy; los eventos nuevos recargan en silencio.
 
@@ -398,7 +407,8 @@ dinero— pero queda registrado porque contradice lo que sugiere `tenant/022`.
 21. Hace falta un evento de tiempo real al entregar un pedido, que hoy no existe, para que el badge
     calculado y el saldo no queden desactualizados.
 22. El panel recarga la lista completa ante cada evento, en vez de actualizar el ítem afectado en
-    memoria.
+    memoria. — **Deuda pagada en `tenant/027-panel-reactivo-sin-recargas.md`**, que era la causa de
+    los 429 y del parpadeo de los dos paneles.
 23. Se replica el marcado del avatar en el propio componente en vez de ampliar `UiPersonListItem`
     para un único consumidor.
 24. `TenantLayout` gana una prop `anchoCompleto` que solo activa `PanelView`; las demás pantallas no

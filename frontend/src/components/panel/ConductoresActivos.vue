@@ -1,30 +1,19 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { nextTick, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
-import http from '@/lib/http'
 import UiBadge from '@/components/ui/UiBadge.vue'
-import realtimeService from '@/services/realtime'
+import UiEstadoConexion from '@/components/ui/UiEstadoConexion.vue'
+import { usePanelStore, type ConductorActivo } from '@/stores/panel'
+import { useOrdenEstable } from '@/composables/useOrdenEstable'
 
-interface PedidoAsignado {
-  id_pedido: number
-}
-
-interface ConductorActivo {
-  id_conductor: number
-  nombre: string
-  disponibilidad: 'DISPONIBLE' | 'OCUPADO' | 'DESCANSO' | 'FUERA_DE_SERVICIO'
-  placa: string | null
-  marca: string | null
-  saldo_viajes: number
-  pedido_asignado: PedidoAsignado | null
-}
-
-interface DisponibilidadCambiadaPayload {
-  id_conductor: number
-  disponibilidad: 'DISPONIBLE' | 'FUERA_DE_SERVICIO'
-  event_id: string
-}
+/**
+ * Flotilla en línea (specs tenant/014, tenant/023, tenant/027).
+ *
+ * Desde la spec tenant/027 no pide datos ni escucha el canal: lee de `usePanelStore`. Antes
+ * recargaba la lista entera con cinco eventos distintos —a la vez que `MapaConductores` hacía lo
+ * mismo por su cuenta contra el mismo endpoint—, lo que agotaba el limitador y dejaba el panel en
+ * "No se pudo cargar" justo cuando más se movía la operación.
+ */
 
 interface Toast {
   id: string
@@ -33,32 +22,21 @@ interface Toast {
 
 const emit = defineEmits<{ 'colapso-terminado': [] }>()
 
-const route = useRoute()
-const slug = route.params.slug as string
+const panel = usePanelStore()
 
-const conductores = ref<ConductorActivo[]>([])
-const cargando = ref(false)
-const error = ref(false)
 const toasts = ref<Toast[]>([])
 // Estado local a propósito (spec tenant/023): ahora que el mapa ocupa la pantalla completa y ya no
 // calcula márgenes según el ancho de este panel, nadie más necesita saber si está colapsado.
 const colapsado = ref(false)
 
-const enLinea = computed(() => conductores.value.length)
-
-async function cargarConductores() {
-  cargando.value = true
-  error.value = false
-
-  try {
-    const { data } = await http.get(`/t/${slug}/conductores/activos`)
-    conductores.value = data.data as ConductorActivo[]
-  } catch {
-    error.value = true
-  } finally {
-    cargando.value = false
-  }
-}
+const {
+  elementos: conductores,
+  congelar,
+  descongelar,
+} = useOrdenEstable(
+  () => panel.conductoresOrdenados,
+  (conductor) => conductor.id_conductor,
+)
 
 function inicial(nombre: string): string {
   return nombre.trim().charAt(0).toUpperCase()
@@ -98,6 +76,15 @@ function mostrarToast(texto: string) {
   }, 4000)
 }
 
+// El aviso de "se puso en línea" (spec tenant/019) sigue siendo cosa de la vista: el store solo
+// anuncia quién entró y aquí se decide cómo se ve.
+watch(
+  () => panel.ultimaConexionDeConductor,
+  (conexion) => {
+    if (conexion) mostrarToast(`${conexion.nombre} está en línea`)
+  },
+)
+
 function sinAnimacion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
@@ -117,47 +104,6 @@ function onTransitionEnd(event: TransitionEvent) {
     emit('colapso-terminado')
   }
 }
-
-/**
- * Se puso en línea o se desconectó (spec tenant/019): recarga la lista para que el Panel refleje
- * el cambio sin recargar la página, y avisa con un toast solo cuando se conecta.
- */
-async function onDisponibilidadCambiada(payload: DisponibilidadCambiadaPayload) {
-  await cargarConductores()
-
-  if (payload.disponibilidad === 'DISPONIBLE') {
-    const conductor = conductores.value.find((c) => c.id_conductor === payload.id_conductor)
-    mostrarToast(conductor ? `${conductor.nombre} está en línea` : 'Un conductor está en línea')
-  }
-}
-
-// spec tenant/023: con el badge calculado por pedido asignado y el saldo de viajes a la vista, la
-// lista tiene cuatro fuentes de cambio además de las conexiones. Todas recargan en silencio; el
-// toast sigue saliendo solo desde `conductor.disponibilidad-cambiada`.
-const EVENTOS_RECARGA = [
-  'pedido.tomado',
-  'pedido.cancelado',
-  'pedido.entregado',
-  'saldo.acreditado',
-] as const
-
-onMounted(() => {
-  cargarConductores()
-
-  const channel = realtimeService.subscribe(slug)
-  channel?.bind('conductor.disponibilidad-cambiada', onDisponibilidadCambiada)
-  for (const evento of EVENTOS_RECARGA) {
-    channel?.bind(evento, cargarConductores)
-  }
-})
-
-onUnmounted(() => {
-  const channel = realtimeService.subscribe(slug)
-  channel?.unbind('conductor.disponibilidad-cambiada', onDisponibilidadCambiada)
-  for (const evento of EVENTOS_RECARGA) {
-    channel?.unbind(evento, cargarConductores)
-  }
-})
 </script>
 
 <template>
@@ -197,34 +143,53 @@ onUnmounted(() => {
       <div class="flex min-w-0 items-center gap-2">
         <Icon icon="flat-color-icons:automotive" width="18" height="18" aria-hidden="true" />
         <h2 class="truncate text-xs font-semibold uppercase tracking-wide text-body">Flotilla</h2>
+        <UiEstadoConexion punto :estado="panel.conexion" :desincronizado="panel.desincronizado" />
       </div>
-      <span
-        class="shrink-0 rounded-full border border-success-text/20 bg-success-bg px-2.5 py-1 text-xs font-semibold text-success-text"
-      >
-        {{ enLinea }} en línea
-      </span>
+      <!-- RN-24: el contador cambia con una transición en vez de saltar de un número a otro. -->
+      <Transition name="contador" mode="out-in">
+        <span
+          :key="panel.enLinea"
+          class="shrink-0 rounded-full border border-success-text/20 bg-success-bg px-2.5 py-1 text-xs font-semibold text-success-text"
+        >
+          {{ panel.enLinea }} en línea
+        </span>
+      </Transition>
     </header>
 
-    <div class="flex-1 overflow-y-auto px-4">
-      <p v-if="cargando" class="py-4 text-sm text-body">Cargando...</p>
-      <div v-else-if="error" class="flex flex-col items-start gap-2 py-4">
-        <p class="text-sm text-body">No se pudo cargar la lista de conductores.</p>
-        <button
-          type="button"
-          class="text-sm font-semibold text-heading underline"
-          @click="cargarConductores"
+    <UiEstadoConexion
+      :estado="panel.conexion"
+      :desincronizado="panel.desincronizado"
+      @actualizar="panel.sincronizar()"
+    />
+
+    <div class="flex-1 overflow-y-auto px-4" @pointerenter="congelar" @pointerleave="descongelar">
+      <!-- RN-16: esqueleto solo mientras no hay nada; después la lista ya no se vacía nunca. -->
+      <ul v-if="!panel.hayDatos" class="flex flex-col" aria-hidden="true">
+        <li
+          v-for="n in 3"
+          :key="n"
+          class="flex animate-pulse items-start gap-3 border-b border-default py-3"
         >
-          Reintentar
-        </button>
-      </div>
+          <span class="h-9 w-9 shrink-0 rounded-full bg-slate-200"></span>
+          <div class="flex-1 space-y-2">
+            <div class="h-3 w-2/3 rounded bg-slate-200"></div>
+            <div class="h-3 w-1/2 rounded bg-slate-100"></div>
+          </div>
+        </li>
+      </ul>
+
       <p v-else-if="conductores.length === 0" class="py-4 text-sm text-body">
         No hay conductores activos
       </p>
-      <ul v-else class="flex flex-col">
+
+      <TransitionGroup v-else tag="ul" name="lista" class="flex flex-col">
         <li
           v-for="conductor in conductores"
           :key="conductor.id_conductor"
-          class="flex items-start gap-3 border-b border-default py-3 last:border-b-0"
+          class="flex items-start gap-3 border-b border-default py-3 transition-colors duration-300 last:border-b-0"
+          :class="
+            panel.estaResaltado(`conductor:${conductor.id_conductor}`) ? 'bg-accent-soft' : ''
+          "
         >
           <span
             class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent"
@@ -241,7 +206,7 @@ onUnmounted(() => {
           </div>
           <UiBadge :text="badge(conductor).texto" :color="badge(conductor).color" />
         </li>
-      </ul>
+      </TransitionGroup>
     </div>
   </aside>
 
@@ -254,12 +219,75 @@ onUnmounted(() => {
     class="pointer-events-none fixed bottom-4 z-40 flex flex-col gap-2 transition-[right] duration-[400ms] ease-in-out"
     :class="colapsado ? 'right-4' : 'right-[calc(20%+1rem)]'"
   >
-    <div
-      v-for="toast in toasts"
-      :key="toast.id"
-      class="pointer-events-auto rounded bg-heading px-4 py-2 text-sm text-white shadow-lg"
-    >
-      {{ toast.texto }}
-    </div>
+    <TransitionGroup name="lista">
+      <div
+        v-for="toast in toasts"
+        :key="toast.id"
+        class="pointer-events-auto rounded bg-heading px-4 py-2 text-sm text-white shadow-lg"
+      >
+        {{ toast.texto }}
+      </div>
+    </TransitionGroup>
   </div>
 </template>
+
+<style scoped>
+/* RN-21: entrada, salida y reacomodo animados, con la misma gramática que "Viajes en turno". */
+.lista-enter-active,
+.lista-leave-active,
+.lista-move {
+  transition:
+    opacity 200ms ease,
+    transform 300ms ease;
+}
+
+.lista-enter-from {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
+.lista-leave-to {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
+.lista-leave-active {
+  position: absolute;
+  width: calc(100% - 2rem);
+}
+
+.contador-enter-active,
+.contador-leave-active {
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.contador-enter-from {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.contador-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+/* RN-27: se respeta la preferencia de movimiento reducido del sistema operativo. */
+@media (prefers-reduced-motion: reduce) {
+  .lista-enter-active,
+  .lista-leave-active,
+  .lista-move,
+  .contador-enter-active,
+  .contador-leave-active {
+    transition: none;
+  }
+
+  .lista-enter-from,
+  .lista-leave-to,
+  .contador-enter-from,
+  .contador-leave-to {
+    transform: none;
+  }
+}
+</style>

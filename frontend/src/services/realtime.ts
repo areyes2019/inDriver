@@ -14,10 +14,19 @@ import http from '@/lib/http'
 
 let currentSlug = ''
 
+/**
+ * Cómo está el socket ahora mismo (spec tenant/027, RN-20). El Panel lo pinta y, sobre todo, lo usa
+ * para decidir cuándo reconciliar: al volver de 'caido' a 'vivo' se pide el estado real una vez
+ * (RN-11 b), y mientras esté 'caido' corre el sondeo de respaldo (RN-14).
+ */
+export type EstadoConexion = 'conectando' | 'vivo' | 'caido'
+
 class RealtimeService {
   private pusher: Pusher | null = null
   private channel: Channel | null = null
   private connected = false
+  private estado: EstadoConexion = 'conectando'
+  private observadores = new Set<(estado: EstadoConexion) => void>()
 
   /**
    * Inicializa la conexión a Reverb (singleton). Si falta la config, falla en silencio — el Panel
@@ -32,6 +41,9 @@ class RealtimeService {
 
     if (!key || !host) {
       console.warn('[Realtime] Reverb no configurado — tiempo real desactivado en el Panel.')
+      // Sin socket no hay avisos, así que el Panel tiene que enterarse para encender su sondeo de
+      // respaldo (spec tenant/027, RN-14) en vez de quedarse esperando eventos que no van a llegar.
+      this.cambiarEstado('caido')
       return
     }
 
@@ -64,20 +76,56 @@ class RealtimeService {
     } catch (err) {
       console.error('[Realtime] No se pudo inicializar Reverb en el Panel:', err)
       this.pusher = null
+      this.cambiarEstado('caido')
       return
     }
 
     this.pusher.connection.bind('connected', () => {
       this.connected = true
+      this.cambiarEstado('vivo')
     })
 
-    this.pusher.connection.bind('disconnected', () => {
-      this.connected = false
+    this.pusher.connection.bind('connecting', () => {
+      this.cambiarEstado('conectando')
     })
+
+    // `unavailable` y `failed` son caídas igual que `disconnected`: pusher-js sigue reintentando por
+    // su cuenta, pero mientras tanto el Panel está viendo datos que pueden estar viejos y tiene que
+    // decirlo (spec tenant/027, RN-20).
+    for (const evento of ['disconnected', 'unavailable', 'failed'] as const) {
+      this.pusher.connection.bind(evento, () => {
+        this.connected = false
+        this.cambiarEstado('caido')
+      })
+    }
   }
 
   get isConnected(): boolean {
     return this.connected && this.pusher !== null
+  }
+
+  get estadoConexion(): EstadoConexion {
+    return this.estado
+  }
+
+  /**
+   * Avisa cada vez que cambia el estado del socket, y de entrada con el estado actual para que
+   * quien se suscriba no tenga que esperar al primer cambio. Devuelve la función para darse de baja.
+   */
+  alCambiarEstado(observador: (estado: EstadoConexion) => void): () => void {
+    this.observadores.add(observador)
+    observador(this.estado)
+
+    return () => {
+      this.observadores.delete(observador)
+    }
+  }
+
+  private cambiarEstado(estado: EstadoConexion) {
+    if (this.estado === estado) return
+
+    this.estado = estado
+    for (const observador of this.observadores) observador(estado)
   }
 
   /**
@@ -114,6 +162,7 @@ class RealtimeService {
       this.pusher = null
     }
     this.connected = false
+    this.cambiarEstado('conectando')
   }
 }
 

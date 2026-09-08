@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Events\Tenant;
 
+use App\Support\DatosDeEventoPanel;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -57,6 +58,13 @@ class ConductorDisponibilidadCambiada implements ShouldBroadcastNow
         return [
             'id_conductor' => $this->idConductor,
             'disponibilidad' => $this->disponibilidad,
+            // spec tenant/027: la fila completa de la flotilla, la misma que devuelve
+            // `GET /conductores/activos`. Con solo el id, el Panel no podía insertar a quien se
+            // acababa de conectar —le faltaban nombre, vehículo, saldo, color y posición— y su
+            // única salida era recargar la lista. Al desconectarse va `null`: solo hay que quitarlo.
+            'conductor' => $this->disponibilidad === 'FUERA_DE_SERVICIO'
+                ? null
+                : DatosDeEventoPanel::conductorActivo($this->idConductor),
             'event_id' => $this->eventId,
         ];
     }

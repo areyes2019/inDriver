@@ -44,6 +44,10 @@ Deja funcionando:
 - Actualización en tiempo real (websockets/polling) — la lista se carga al entrar a `/panel`, igual
   que "Viajes en turno" antes de tener su propio disparador de recarga (que aquí tampoco aplica: no
   hay un evento equivalente a "agendar un envío" para conductores).
+  > **Superado.** `tenant/023` le dio recarga por evento y
+  > `tenant/027-panel-reactivo-sin-recargas.md` la convirtió en actualización en vivo, fila por fila,
+  > sin recargar la lista. El estado de carga/error de esta spec también dejó de aplicar: manda la
+  > 027 (RN-16 a RN-20).
 - Click, filtros, búsqueda o acciones sobre los ítems (cambiar la disponibilidad de un conductor
   desde este panel, ver su pedido asignado, etc.).
 - Resaltar en el mapa al conductor seleccionado en la lista, ni viceversa.

@@ -11,10 +11,17 @@ export interface MapInitOptions {
 export interface MarkerOptions {
   icon?: string
   title?: string
+  /** Color del conductor (spec tenant/026, RN-18): el marcador va del mismo color que su línea. */
+  color?: string
 }
+
+/** Trazo de la polilínea (spec tenant/026, RN-14/RN-15): guiones camino a la recogida, sólido camino a la entrega. */
+export type EstiloRuta = 'GUIONES' | 'SOLIDO'
 
 export interface RouteOptions {
   color?: string
+  /** Default: `SOLIDO`. */
+  estilo?: EstiloRuta
   /** Si es true, dibujar la ruta no mueve el centro/zoom del mapa (default: false). */
   preserveViewport?: boolean
 }

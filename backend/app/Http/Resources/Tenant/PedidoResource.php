@@ -49,6 +49,9 @@ class PedidoResource extends JsonResource
             'id_vehiculo' => $this->id_vehiculo,
             'vehiculo_placa' => $this->vehiculo?->placa,
             'estado' => $this->estado,
+            // spec tenant/025: el Panel lo usa para el chip "TEST". La app del conductor recibe
+            // este mismo resource y lo ignora — no conoce el campo ni cambia por él (RN-16).
+            'ambiente' => $this->ambiente,
             'fecha_publicacion' => $this->fecha_publicacion,
             'fecha_asignacion' => $this->fecha_asignacion,
             'fecha_entrega' => $this->fecha_entrega,

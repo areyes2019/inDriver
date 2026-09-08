@@ -11,6 +11,7 @@ use App\Models\Tenant\CompraPaquete;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\VentaViajeConductor;
+use App\Support\SaldoViajes;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -103,9 +104,6 @@ class VentaViajeConductorController extends Controller
 
     public static function saldoConductor(Conductor $conductor): int
     {
-        $vendidos = VentaViajeConductor::where('id_conductor', $conductor->id_conductor)->sum('cantidad_viajes');
-        $consumidos = $conductor->pedidos()->where('prepago_descontado', true)->count();
-
-        return (int) $vendidos - $consumidos;
+        return SaldoViajes::para($conductor);
     }
 }

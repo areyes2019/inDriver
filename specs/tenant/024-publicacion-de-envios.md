@@ -113,6 +113,15 @@ evita que el Panel invente un estado que el servidor no tiene.
 No se agrega sondeo periódico: si el socket está caído, la lista se queda como estaba hasta que
 alguien recargue — el mismo comportamiento que hoy, no uno peor.
 
+> **Reemplazado por `tenant/027-panel-reactivo-sin-recargas.md`.** "Se recarga la lista completa en
+> vez de fusionar el payload del evento fila por fila" fue exactamente lo que rompió el Panel en
+> operación real: la lista se armaba paginando `GET /pedidos` **entero** (sin filtro de estado), así
+> que cada evento costaba varias peticiones, y con tres componentes haciendo lo mismo el limitador de
+> 20/min devolvía 429 y borraba la lista. La 027 conserva la idea de una sola fuente de verdad —pero
+> la pone en un store compartido en vez de en una petición por evento— y sí fusiona el payload fila
+> por fila. También agrega el sondeo de respaldo que aquí se descartaba, acotado a mientras el socket
+> esté caído (027, RN-14). Los cinco eventos listados arriba siguen siendo los correctos.
+
 ## Reglas de negocio
 
 - **RN-01**: Un pedido `lo_antes_posible` se publica en la misma petición que lo crea.

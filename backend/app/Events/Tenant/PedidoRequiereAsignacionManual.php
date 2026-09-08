@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Events\Tenant;
 
+use App\Support\DatosDeEventoPanel;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -47,6 +48,12 @@ class PedidoRequiereAsignacionManual implements ShouldBroadcastNow
      */
     public function broadcastWith(): array
     {
-        return ['id_pedido' => $this->idPedido, 'event_id' => $this->eventId];
+        // spec tenant/027: el envío vuelve a PENDIENTE y se queda sin conductor. El Panel lo aplica
+        // sobre la fila que ya tiene en pantalla en vez de recargar la lista.
+        return [
+            'id_pedido' => $this->idPedido,
+            ...DatosDeEventoPanel::delPedido($this->idPedido),
+            'event_id' => $this->eventId,
+        ];
     }
 }

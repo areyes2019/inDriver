@@ -68,7 +68,11 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
     Route::post('/conductor/login', [ConductorAuthController::class, 'login'])
         ->middleware('throttle:tenant-login');
 
-    Route::middleware('auth:usuario')->group(function () {
+    // `ambiente.panel` (spec tenant/025, RN-05) va solo aquí: enciende el filtro por ambiente para
+    // el Panel. La app del conductor (grupo `auth:conductor-token`, más abajo), el comando
+    // `simulacion:avanzar` y los jobs diferidos no pasan por este middleware y por eso siguen
+    // viendo todos los envíos, sin excepciones escritas en ningún lado.
+    Route::middleware(['auth:usuario', 'ambiente.panel'])->group(function () {
         Route::post('/logout', [TenantAuthController::class, 'logout']);
         Route::get('/me', [TenantAuthController::class, 'me']);
         Route::middleware('throttle:tenant-usuarios')->post('/cambiar-password', [TenantAuthController::class, 'changePassword']);
@@ -82,8 +86,15 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
         // para que "activos" no se interprete como un id de conductor. Va en el grupo de
         // AdminCliente+Despachador (mismo que /pedidos), no en el de AdminCliente exclusivo donde
         // vive el resto de ConductorController.
-        Route::middleware(['throttle:tenant-usuarios', 'rol.tenant:AdminCliente,Despachador'])
-            ->get('/conductores/activos', [ConductorController::class, 'activos']);
+        // Las dos lecturas que alimentan el `/panel` van en `tenant-panel-lectura` y no en
+        // `tenant-usuarios` (spec tenant/027): el bucket de 20/min está pensado para escrituras de
+        // CRUD hechas a mano, y una pantalla de operación que se reconstruye sola no cabe ahí.
+        Route::middleware(['throttle:tenant-panel-lectura', 'rol.tenant:AdminCliente,Despachador'])
+            ->group(function () {
+                Route::get('/conductores/activos', [ConductorController::class, 'activos']);
+                // Antes que GET /pedidos/{pedido}, o "en-turno" se tomaría por un id.
+                Route::get('/pedidos/en-turno', [PedidoController::class, 'enTurno']);
+            });
 
         Route::middleware(['throttle:tenant-usuarios', 'rol.tenant:AdminCliente'])->group(function () {
             Route::get('/usuarios', [UsuarioController::class, 'index']);
@@ -118,6 +129,9 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::delete('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'destroy']);
 
             Route::put('/configuracion', [ConfiguracionController::class, 'update']);
+            // spec tenant/025, RN-02: el interruptor TEST/LIVE de la cabecera. Solo AdminCliente;
+            // el Despachador lo ve por GET /configuracion y no puede moverlo.
+            Route::put('/configuracion/ambiente', [ConfiguracionController::class, 'ambiente']);
             Route::get('/zonas-cobertura', [ZonaCoberturaController::class, 'index']);
             Route::post('/zonas-cobertura', [ZonaCoberturaController::class, 'store']);
             Route::get('/zonas-cobertura/{zona}', [ZonaCoberturaController::class, 'show']);

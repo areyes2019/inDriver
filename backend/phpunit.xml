@@ -31,6 +31,10 @@
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
+        <!-- spec tenant/025, RN-09: la suite verifica los 60 km/h del spec, no la velocidad que
+             cada quien haya subido en su .env para no esperar el viaje en tiempo real. -->
+        <env name="SIMULACION_VELOCIDAD_KMH" value="60"/>
+        <env name="SIMULACION_PASO_SEGUNDOS" value="2"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

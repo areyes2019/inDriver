@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Events\Tenant;
 
+use App\Support\DatosDeEventoPanel;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -47,6 +48,16 @@ class PedidoYaTomado implements ShouldBroadcastNow
      */
     public function broadcastWith(): array
     {
-        return ['id_pedido' => $this->idPedido, 'event_id' => $this->eventId];
+        // Desde la spec tenant/027 la carga trae la fila resuelta —estado, a quién quedó asignada,
+        // su línea en el mapa y el saldo ya descontado del conductor—: con solo el id, el Panel no
+        // tenía más remedio que recargar "Viajes en turno" y la flotilla entera.
+        $datos = DatosDeEventoPanel::delPedido($this->idPedido);
+
+        return [
+            'id_pedido' => $this->idPedido,
+            ...$datos,
+            'saldo_viajes' => DatosDeEventoPanel::saldoDeConductor($datos['id_conductor'] ?? null),
+            'event_id' => $this->eventId,
+        ];
     }
 }

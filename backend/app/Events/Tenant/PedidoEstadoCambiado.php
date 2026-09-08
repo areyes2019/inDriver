@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Events\Tenant;
 
+use App\Support\DatosDeEventoPanel;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -55,10 +56,17 @@ class PedidoEstadoCambiado implements ShouldBroadcastNow
      */
     public function broadcastWith(): array
     {
+        $datos = DatosDeEventoPanel::delPedido($this->idPedido);
+
         return [
             'id_pedido' => $this->idPedido,
             'id_conductor' => $this->idConductor,
             'estado' => $this->estado,
+            // spec tenant/027: `seguimiento` viaja con el evento para que el mapa del Panel cambie
+            // de hito sin volver a pedir `/conductores/activos`, y `ambiente` para que un envío de
+            // un ambiente no se cuele en el Panel del otro (RN-28).
+            'seguimiento' => $datos['seguimiento'] ?? null,
+            'ambiente' => $datos['ambiente'] ?? null,
             'event_id' => $this->eventId,
         ];
     }

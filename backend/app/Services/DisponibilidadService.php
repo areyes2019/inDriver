@@ -35,7 +35,14 @@ class DisponibilidadService
             ]);
         }
 
-        return $this->guardar($conductor, 'ONLINE');
+        $conductorEstado = $this->guardar($conductor, 'ONLINE');
+
+        // Conectarse también es "quedar libre" (spec tenant/026, RN-01): si mientras estuvo
+        // desconectado se acumularon pedidos, los ve al instante y no con la cara vacía de "No
+        // tienes viajes" hasta que alguien publique uno nuevo.
+        $this->reactivarCola($conductor);
+
+        return $conductorEstado;
     }
 
     /**
@@ -56,8 +63,12 @@ class DisponibilidadService
     /**
      * Modalidad `Comision`: saldo en dinero (SPEC-023). Modalidad `Prepago`: viajes disponibles
      * (spec tenant/013) — son los dos modelos de cobro que ya coexisten en el tenant.
+     *
+     * Público porque `OfertaPedidoService` decide con esto mismo si un conductor recién liberado
+     * puede recibir la cola (spec tenant/026, RN-07): "puede trabajar" tiene que significar
+     * exactamente lo mismo al conectarse que al terminar una entrega.
      */
-    private function tieneSaldoDisponible(Conductor $conductor): bool
+    public function tieneSaldoDisponible(Conductor $conductor): bool
     {
         $modalidad = ConfiguracionTenant::obtener(ConfiguracionTenant::MODALIDAD, 'Prepago');
 
@@ -85,6 +96,15 @@ class DisponibilidadService
             $conductorEstado = ConductorEstado::firstOrNew(['id_conductor' => $conductor->id_conductor]);
             $conductorEstado->estado = $estado;
             $conductorEstado->{$estado === 'ONLINE' ? 'ultima_conexion' : 'ultima_desconexion'} = now();
+
+            // Conectarse ES una señal de vida (spec tenant/019, RN-04). Sin esto, un conductor que
+            // vuelve después de horas arrastra el `ultima_actualizacion` de su sesión anterior, y
+            // `conductor:apagar-inactivos` —que corre cada minuto— lo apaga al minuto siguiente de
+            // haberse conectado, sin que él haya hecho nada mal.
+            if ($estado === 'ONLINE') {
+                $conductorEstado->ultima_actualizacion = now();
+            }
+
             $conductorEstado->save();
 
             $conductor->update(['disponibilidad' => $disponibilidad]);
@@ -106,5 +126,22 @@ class DisponibilidadService
         }
 
         return $conductorEstado;
+    }
+
+    /**
+     * Nunca puede tumbar la conexión (mismo criterio que el aviso al Panel de `guardar()`): si la
+     * reoferta falla, el conductor igual quedó en línea y su sondeo de 10s le traerá la cola unos
+     * segundos después.
+     */
+    private function reactivarCola(Conductor $conductor): void
+    {
+        try {
+            app(OfertaPedidoService::class)->reactivarColaPara($conductor);
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo reactivar la cola del conductor al conectarse.', [
+                'id_conductor' => $conductor->id_conductor,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

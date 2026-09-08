@@ -51,6 +51,34 @@ class PedidoController extends Controller
         return PedidoResource::collection($query->paginate(15));
     }
 
+    /**
+     * Los envíos vivos del tenant, para el panel "Viajes en turno" (spec tenant/027).
+     *
+     * Sin paginar y filtrado en SQL, a propósito. Antes el Panel armaba esta misma lista
+     * recorriendo **todas** las páginas de `index()` —historial completo, entregados y cancelados
+     * incluidos— y descartando en el navegador lo que no estaba en turno; con eso, cada evento de
+     * tiempo real costaba varias peticiones y el limitador acababa devolviendo 429 (RN-01, RN-03).
+     *
+     * Son los envíos abiertos de una operación, decenas como mucho: paginarlos es justo el error
+     * que esta ruta corrige.
+     */
+    public function enTurno(): AnonymousResourceCollection
+    {
+        $pedidos = Pedido::query()
+            ->with(['cliente', 'despachador.usuario', 'conductor.usuario', 'vehiculo'])
+            ->whereIn('estado', PedidoEstadoService::ESTADOS_EN_TURNO)
+            // El mismo orden que pinta el Panel: primero los "lo antes posible", después los
+            // agendados por hora. MySQL ordena los nulos primero en ascendente, que es lo que hacía
+            // el comparador del navegador con `hora_desde ?? ''`.
+            ->orderByDesc('lo_antes_posible')
+            ->orderBy('hora_desde')
+            ->orderByDesc('id_pedido')
+            ->get();
+
+        return PedidoResource::collection($pedidos)
+            ->additional(['meta' => ['snapshot_en' => Carbon::now()->toIso8601String()]]);
+    }
+
     public function show(Pedido $pedido): JsonResponse
     {
         $pedido->load(['cliente', 'despachador.usuario', 'conductor.usuario', 'vehiculo']);
@@ -64,15 +92,27 @@ class PedidoController extends Controller
         $this->validarTarifasConfiguradas();
         $data = $this->validarDatos($request);
 
-        $pedido = DB::transaction(function () use ($data) {
-            $siguienteId = (int) (Pedido::max('id_pedido') ?? 0) + 1;
+        // spec tenant/025, RN-03: el envío sella aquí el ambiente del interruptor y no vuelve a
+        // cambiarlo nunca. Va fuera del `create()` de arriba a propósito: `ambiente` no está en el
+        // `#[Fillable]` del modelo, para que ningún `update()` ni `fill()` pueda moverlo después.
+        $ambiente = ConfiguracionTenant::obtener(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_LIVE);
+
+        $pedido = DB::transaction(function () use ($data, $ambiente) {
+            // `withoutGlobalScopes()`: el número de envío es correlativo del tenant entero, no del
+            // ambiente. Sin esto, el primer envío TEST reciclaría el PED-000001 de un envío LIVE.
+            $siguienteId = (int) (Pedido::withoutGlobalScopes()->max('id_pedido') ?? 0) + 1;
             $numeroPedido = 'PED-'.str_pad((string) $siguienteId, 6, '0', STR_PAD_LEFT);
 
-            return Pedido::create([
+            $pedido = Pedido::create([
                 ...$data,
                 'numero_pedido' => $numeroPedido,
                 'estado' => 'PENDIENTE',
             ]);
+
+            $pedido->ambiente = $ambiente;
+            $pedido->save();
+
+            return $pedido;
         });
 
         $pedido->load(['cliente', 'despachador.usuario', 'conductor.usuario', 'vehiculo']);

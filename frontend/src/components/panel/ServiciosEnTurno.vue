@@ -1,91 +1,34 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
 import { Icon } from '@iconify/vue'
-import http from '@/lib/http'
-import realtimeService from '@/services/realtime'
+import { usePanelStore, type ViajeEnTurno } from '@/stores/panel'
+import { useOrdenEstable } from '@/composables/useOrdenEstable'
+import UiEstadoConexion from '@/components/ui/UiEstadoConexion.vue'
 
-export interface ViajeEnTurno {
-  id_pedido: number
-  numero_pedido: string
-  direccion_recogida: string
-  direccion_entrega: string
-  estado: 'PENDIENTE' | 'PUBLICADO' | 'TOMADO' | 'ARRIBADO' | 'EN_CAMINO' | 'ARRIBADO_A_ENTREGA'
-  lo_antes_posible: boolean
-  fecha_servicio: string | null
-  hora_desde: string | null
-  nombre_solicitante: string | null
-  telefono_solicitante: string | null
-  importe_envio: string | number | null
-}
-
-interface PedidoApiItem extends Omit<ViajeEnTurno, 'estado'> {
-  estado: string
-}
-
-const ESTADOS_EN_TURNO = new Set([
-  'PENDIENTE',
-  'PUBLICADO',
-  'TOMADO',
-  'ARRIBADO',
-  'EN_CAMINO',
-  'ARRIBADO_A_ENTREGA',
-])
+/**
+ * Lista de envíos vivos del tenant (specs tenant/008, tenant/012, tenant/024, tenant/027).
+ *
+ * Desde la spec tenant/027 este componente no pide datos ni escucha el canal: los lee de
+ * `usePanelStore`, que es el único que habla con el servidor. Antes recorría **todas** las páginas
+ * de `GET /pedidos` en cada evento de tiempo real —historial completo incluido— y vaciaba la lista
+ * mientras tanto; de ahí el parpadeo y el 429 que la dejaba en "No se pudo cargar".
+ */
 
 withDefaults(defineProps<{ seleccionadoId?: number | null }>(), { seleccionadoId: null })
 
 const emit = defineEmits<{ seleccionar: [viaje: ViajeEnTurno] }>()
 
-const route = useRoute()
-const slug = route.params.slug as string
+const panel = usePanelStore()
 
-const viajesRaw = ref<ViajeEnTurno[]>([])
-const cargando = ref(false)
-const error = ref(false)
-let controller: AbortController | null = null
-
-async function cargarViajes() {
-  controller?.abort()
-  const currentController = new AbortController()
-  controller = currentController
-
-  cargando.value = true
-  error.value = false
-
-  try {
-    const acumulado: PedidoApiItem[] = []
-    let page = 1
-    let lastPage = 1
-
-    do {
-      const { data } = await http.get(`/t/${slug}/pedidos`, {
-        params: { page },
-        signal: currentController.signal,
-      })
-      acumulado.push(...(data.data as PedidoApiItem[]))
-      lastPage = data.meta?.last_page ?? 1
-      page += 1
-    } while (page <= lastPage)
-
-    viajesRaw.value = acumulado.filter((pedido) =>
-      ESTADOS_EN_TURNO.has(pedido.estado),
-    ) as ViajeEnTurno[]
-  } catch {
-    if (currentController.signal.aborted) return
-    error.value = true
-  } finally {
-    if (!currentController.signal.aborted) cargando.value = false
-  }
-}
-
-const viajes = computed(() => {
-  const loAntesPosible = viajesRaw.value.filter((viaje) => viaje.lo_antes_posible)
-  const conHora = viajesRaw.value
-    .filter((viaje) => !viaje.lo_antes_posible)
-    .slice()
-    .sort((a, b) => (a.hora_desde ?? '').localeCompare(b.hora_desde ?? ''))
-  return [...loAntesPosible, ...conHora]
-})
+// RN-25: el orden se congela mientras el puntero está encima, para que ninguna fila se mueva justo
+// debajo del clic. El contenido de cada fila sí sigue actualizándose.
+const {
+  elementos: viajes,
+  congelar,
+  descongelar,
+} = useOrdenEstable(
+  () => panel.viajesOrdenados,
+  (viaje) => viaje.id_pedido,
+)
 
 // El backend manda `fecha_servicio` ('YYYY-MM-DD') y `hora_desde` por separado; la etiqueta
 // "sáb 5 de sept 09:41 a.m." se compone aquí (spec tenant/008). Se acepta la abreviatura de mes que
@@ -120,69 +63,58 @@ function etiquetaFecha(viaje: ViajeEnTurno): string {
   return `${partes.weekday} ${partes.day} de ${partes.month} ${formatoHora.format(fecha)}`
 }
 
-// spec tenant/024: la lista deja de depender de que alguien recargue la página. Todo lo que saca
-// un viaje de la lista o le cambia el estado visible llega por el canal del tenant (spec
-// tenant/018) y dispara una recarga silenciosa — incluido `pedido.disponible`, que es como el
-// despachador ve que su envío recién creado ya se le ofreció a la flotilla.
-const EVENTOS_RECARGA = [
-  'pedido.disponible',
-  'pedido.tomado',
-  // El viaje camina por sus estados desde el servidor o desde la app del propio conductor; sin
-  // esto el Panel los mostraría congelados.
-  'pedido.estado-cambiado',
-  'pedido.cancelado',
-  'pedido.entregado',
-  'pedido.requiere-asignacion-manual',
-] as const
-
-onMounted(() => {
-  cargarViajes()
-
-  const channel = realtimeService.subscribe(slug)
-  for (const evento of EVENTOS_RECARGA) {
-    channel?.bind(evento, cargarViajes)
-  }
-})
-
-onUnmounted(() => {
-  controller?.abort()
-
-  const channel = realtimeService.subscribe(slug)
-  for (const evento of EVENTOS_RECARGA) {
-    channel?.unbind(evento, cargarViajes)
-  }
-})
-
-defineExpose({ recargar: cargarViajes })
+/** El estado que el despachador ve en la tarjeta mientras el envío camina. */
+const ETIQUETAS_ESTADO: Record<string, string> = {
+  PENDIENTE: 'Por asignar',
+  PUBLICADO: 'Buscando conductor',
+  TOMADO: 'Asignado',
+  ARRIBADO: 'En recogida',
+  EN_CAMINO: 'En camino',
+  ARRIBADO_A_ENTREGA: 'En entrega',
+}
 </script>
 
 <template>
   <aside
     class="fixed left-0 top-[4.25rem] z-30 flex h-[calc(100vh-4.25rem)] w-[20%] flex-col bg-white shadow-xl"
   >
-    <header class="border-b border-default bg-white px-5 py-4">
+    <header class="flex items-center gap-2 border-b border-default bg-white px-5 py-4">
       <h2 class="text-base font-semibold text-heading">Viajes en turno</h2>
+      <UiEstadoConexion punto :estado="panel.conexion" :desincronizado="panel.desincronizado" />
     </header>
 
-    <div class="flex-1 overflow-y-auto bg-slate-50 p-4">
-      <p v-if="cargando" class="text-sm text-body">Cargando...</p>
-      <div v-else-if="error" class="flex flex-col items-start gap-2">
-        <p class="text-sm text-body">No se pudo cargar la lista de viajes.</p>
-        <button
-          type="button"
-          class="text-sm font-semibold text-heading underline"
-          @click="cargarViajes"
-        >
-          Reintentar
-        </button>
-      </div>
+    <UiEstadoConexion
+      :estado="panel.conexion"
+      :desincronizado="panel.desincronizado"
+      @actualizar="panel.sincronizar()"
+    />
+
+    <div
+      class="flex-1 overflow-y-auto bg-slate-50 p-4"
+      @pointerenter="congelar"
+      @pointerleave="descongelar"
+    >
+      <!-- RN-16: el esqueleto es solo de la primera carga. Después la lista ya nunca se vacía. -->
+      <ul v-if="!panel.hayDatos" class="flex flex-col gap-3" aria-hidden="true">
+        <li v-for="n in 3" :key="n" class="animate-pulse rounded-lg bg-white p-3 shadow-md">
+          <div class="h-3 w-2/3 rounded bg-slate-200"></div>
+          <div class="mt-3 h-3 w-full rounded bg-slate-100"></div>
+          <div class="mt-2 h-3 w-4/5 rounded bg-slate-100"></div>
+        </li>
+      </ul>
+
       <p v-else-if="viajes.length === 0" class="text-sm text-body">No hay viajes en turno</p>
-      <ul v-else class="flex flex-col gap-3">
+
+      <TransitionGroup v-else tag="ul" name="lista" class="flex flex-col gap-3">
         <li v-for="viaje in viajes" :key="viaje.id_pedido">
           <button
             type="button"
-            class="w-full rounded-lg border-l-4 border-accent bg-white p-3 text-left shadow-md transition-shadow hover:shadow-hover focus:outline-none focus:ring-2 focus:ring-accent"
-            :class="viaje.id_pedido === seleccionadoId ? 'ring-2 ring-accent' : ''"
+            class="w-full rounded-lg border-l-4 border-accent bg-white p-3 text-left shadow-md transition-all duration-300 hover:shadow-hover focus:outline-none focus:ring-2 focus:ring-accent"
+            :class="[
+              viaje.id_pedido === seleccionadoId ? 'ring-2 ring-accent' : '',
+              panel.estaResaltado(`viaje:${viaje.id_pedido}`) ? 'bg-accent-soft' : '',
+              panel.estaSaliendo(viaje.id_pedido) ? 'border-emerald-500 opacity-60' : '',
+            ]"
             @click="emit('seleccionar', viaje)"
           >
             <div class="flex items-center justify-between gap-2">
@@ -211,9 +143,71 @@ defineExpose({ recargar: cargarViajes })
               <span class="h-2 w-2 shrink-0 rounded-full bg-red-500" aria-hidden="true"></span>
               <p class="truncate text-sm text-heading">{{ viaje.direccion_entrega }}</p>
             </div>
+
+            <!--
+              RN-23: el viaje entregado se despide en vez de evaporarse. El resto del tiempo la línea
+              dice en qué va y quién lo trae, que es lo que antes obligaba a abrir el detalle.
+            -->
+            <p
+              v-if="panel.estaSaliendo(viaje.id_pedido)"
+              class="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-600"
+            >
+              <Icon icon="mdi:check-circle" width="14" height="14" aria-hidden="true" />
+              Entregado
+            </p>
+            <p
+              v-else-if="ETIQUETAS_ESTADO[viaje.estado]"
+              class="mt-2 truncate text-xs text-body/70"
+            >
+              {{ ETIQUETAS_ESTADO[viaje.estado] }}
+              <span v-if="viaje.conductor_nombre"> · {{ viaje.conductor_nombre }}</span>
+            </p>
           </button>
         </li>
-      </ul>
+      </TransitionGroup>
     </div>
   </aside>
 </template>
+
+<style scoped>
+/*
+  RN-21: entrada, salida y reacomodo animados. `lista-leave-active` se saca del flujo para que las
+  filas de abajo suban con la transición de `move` en vez de dar un salto cuando el hueco se cierra.
+*/
+.lista-enter-active,
+.lista-leave-active,
+.lista-move {
+  transition:
+    opacity 200ms ease,
+    transform 300ms ease;
+}
+
+.lista-enter-from {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+.lista-leave-to {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
+.lista-leave-active {
+  position: absolute;
+  width: calc(100% - 2rem);
+}
+
+/* RN-27: con movimiento reducido no hay desplazamientos; el cambio simplemente ocurre. */
+@media (prefers-reduced-motion: reduce) {
+  .lista-enter-active,
+  .lista-leave-active,
+  .lista-move {
+    transition: none;
+  }
+
+  .lista-enter-from,
+  .lista-leave-to {
+    transform: none;
+  }
+}
+</style>

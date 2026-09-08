@@ -17,6 +17,15 @@ Schedule::command('conductor:purgar-posiciones-antiguas')->daily();
 // spec tenant/024: los pedidos agendados se publican 15 minutos antes de su horario.
 Schedule::command('pedidos:publicar-agendados')->everyMinute();
 
+// spec tenant/025: mueve los envíos TEST por su ruta. Vive 55s por minuto escribiendo un punto
+// cada 2s, igual que el worker de colas y por el mismo motivo (no hay supervisor). `runInBackground`
+// es obligatorio: en primer plano bloquearía al resto de tareas del minuto. Perderse una corrida no
+// rompe nada — el avance se calcula por reloj y la siguiente se pone al día sola.
+Schedule::command('simulacion:avanzar')
+    ->everyMinute()
+    ->withoutOverlapping(2)
+    ->runInBackground();
+
 // spec tenant/024: el worker de colas, sin supervisor. Los jobs con `delay()` del sistema
 // (ExpirarOfertaPedido, AvisarSinConfirmar) no tienen otra forma de correr en producción, donde no
 // hay ningún proceso permanente vigilado — solo este `schedule:run`.

@@ -36,11 +36,16 @@ class PedidoController extends Controller
      */
     public function disponibles(Request $request): AnonymousResourceCollection
     {
-        $ofertas = PedidoOferta::where('id_conductor', $this->conductorActual($request)->id_conductor)
-            ->where('estado', 'PENDIENTE')
-            ->where('expira_en', '>', now())
+        $ofertas = PedidoOferta::where('pedido_ofertas.id_conductor', $this->conductorActual($request)->id_conductor)
+            ->where('pedido_ofertas.estado', 'PENDIENTE')
+            ->where('pedido_ofertas.expira_en', '>', now())
             ->with('pedido')
-            ->orderBy('ofrecida_en')
+            // Por antigüedad del PEDIDO, no de la oferta (spec tenant/026, RN-08): cuando un
+            // conductor queda libre se le ofrece toda la cola de golpe y las ofertas nacen en el
+            // mismo instante, así que `ofrecida_en` no diría nada sobre quién lleva más esperando.
+            ->join('pedidos', 'pedidos.id_pedido', '=', 'pedido_ofertas.id_pedido')
+            ->orderBy('pedidos.created_at')
+            ->select('pedido_ofertas.*')
             ->get();
 
         return PedidoOfertaResource::collection($ofertas);

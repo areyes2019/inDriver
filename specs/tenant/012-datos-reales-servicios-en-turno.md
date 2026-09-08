@@ -13,9 +13,15 @@ reales (indicador de carga y mensaje de error).
 
 > **Nota posterior:** el diseño de las tarjetas y la interacción del panel **sí cambiaron después**,
 > en `tenant/008-servicios.md` (nuevo estilo de tarjeta, tarjeta clickeable, panel de detalle y
-> cancelación). Esta spec sigue siendo la referencia de **cómo se cargan los datos** (paginación
-> completa, carga, error, `AbortController`, recarga tras agendar); para **qué se muestra y cómo se
-> ve**, manda la 008.
+> cancelación). Para **qué se muestra y cómo se ve**, manda la 008.
+
+> **Reemplazada en su parte de carga de datos por `tenant/027-panel-reactivo-sin-recargas.md`.**
+> Todo lo que esta spec define sobre **cómo se cargan los datos** dejó de aplicar: la paginación
+> completa de `GET /pedidos`, el `AbortController`, el indicador de carga en cada recarga, el estado
+> de error que sustituye la lista y el `recargar()` expuesto con `defineExpose`. La 027 los sustituye
+> por `GET /pedidos/en-turno` (una sola petición, filtrada en el servidor), un store único y
+> actualización por evento sin recargas. Esta spec queda como registro histórico de por qué existía
+> ese mecanismo, no como referencia vigente.
 
 ## Objetivo / Alcance
 

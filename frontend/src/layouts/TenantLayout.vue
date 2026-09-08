@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import UiAmbienteSwitch from '@/components/ui/UiAmbienteSwitch.vue'
 import UiNavbar from '@/components/ui/UiNavbar.vue'
+import { useAmbienteStore } from '@/stores/ambiente'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
 
 const props = withDefaults(
@@ -27,12 +29,25 @@ const emit = defineEmits<{
 const route = useRoute()
 const router = useRouter()
 const auth = useTenantAuthStore()
+const ambientes = useAmbienteStore()
 
 const slug = computed(() => route.params.slug as string)
 const enPanel = computed(() => route.name === 'tenant-panel')
 const esDespachador = computed(() => auth.usuario?.rol === 'Despachador')
 const esAdminCliente = computed(() => auth.usuario?.rol === 'AdminCliente')
 const usaDespachadores = computed(() => auth.usuario?.usar_despachadores === 'Sí')
+
+// spec tenant/025: el indicador de ambiente acompaña a toda pantalla del tenant, así que se carga
+// en cuanto hay sesión y slug, sin que cada vista tenga que pedirlo.
+watch(
+  [slug, () => auth.usuario],
+  ([slugActual, usuario]) => {
+    if (slugActual && usuario && !ambientes.cargado) {
+      ambientes.cargar(slugActual)
+    }
+  },
+  { immediate: true },
+)
 // El rol "operativo" (el que crea pedidos y ve el Panel) depende de la configuración del tenant,
 // no solo del rol: Despachador cuando el tenant usa despachadores, AdminCliente cuando no
 // (spec tenant/011) — nunca ambos a la vez.
@@ -101,8 +116,20 @@ function onClickConfiguracion() {
 
 <template>
   <div class="min-h-screen bg-black/[0.03]">
+    <!--
+      spec tenant/025: en TEST, una banda a lo ancho de la ventana. El interruptor de la cabecera
+      es discreto por diseño, y confundir la pantalla de pruebas con la de operación real es
+      justamente lo que no puede pasar: los envíos de prueba descuentan saldo de verdad.
+    -->
+    <div
+      v-if="ambientes.esTest"
+      class="fixed inset-x-0 top-0 z-50 bg-amber-400 py-0.5 text-center text-xs font-semibold uppercase tracking-wider text-amber-950"
+    >
+      Modo prueba — los envíos que crees aquí son simulados
+    </div>
     <UiNavbar logo-text="inDriver" :items="items" @click-configuracion="onClickConfiguracion">
       <template #actions>
+        <UiAmbienteSwitch :slug="slug" :editable="esAdminCliente" />
         <button
           v-if="mostrarNuevaEntrega"
           ref="botonNuevaEntregaRef"

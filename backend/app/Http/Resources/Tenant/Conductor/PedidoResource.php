@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\Tenant\Conductor;
 
 use App\Models\Tenant\Pedido;
+use App\Support\SeguimientoEnvio;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -41,6 +42,9 @@ class PedidoResource extends JsonResource
             'estado' => $this->estado,
             'fecha_asignacion' => $this->fecha_asignacion,
             'fecha_entrega' => $this->fecha_entrega,
+            // Qué línea dibujar y cómo (spec tenant/026): lo decide el servidor, para que la app y
+            // el Panel no lo deduzcan cada uno por su cuenta del estado y terminen desfasados.
+            'seguimiento' => SeguimientoEnvio::para($this->resource),
         ];
     }
 }

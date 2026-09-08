@@ -11,6 +11,7 @@ use App\Events\Tenant\PedidoYaTomado;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\VentaViajeConductor;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -23,6 +24,23 @@ use Illuminate\Validation\ValidationException;
 class PedidoEstadoService
 {
     public const ESTADOS_FINALES = ['ENTREGADO', 'CANCELADO', 'RECHAZADO'];
+
+    /**
+     * Los envíos vivos: lo que el Panel llama "Viajes en turno". Es el complemento exacto de
+     * `ESTADOS_FINALES`.
+     *
+     * Vive aquí desde la spec tenant/027 porque el filtro pasó al servidor: antes lo repetía
+     * `ServiciosEnTurno.vue` con su propio `Set`, después de traerse el historial completo del
+     * tenant y descartarlo en el navegador.
+     */
+    public const ESTADOS_EN_TURNO = [
+        'PENDIENTE',
+        'PUBLICADO',
+        'TOMADO',
+        'ARRIBADO',
+        'EN_CAMINO',
+        'ARRIBADO_A_ENTREGA',
+    ];
 
     /**
      * Mapa de transiciones válidas: desde cada estado, a qué estados se puede pasar.
@@ -97,7 +115,44 @@ class PedidoEstadoService
             $this->tracking->calcularResumenRuta($pedido);
         }
 
+        $this->abrirTramoSimulado($pedido, $nuevoEstado);
+
         $this->notificarConductores($pedido, $nuevoEstado, $estadoAnterior);
+    }
+
+    /**
+     * Único punto de contacto entre la máquina de estados y el modo TEST (spec tenant/025, RN-07).
+     * En LIVE no hace absolutamente nada.
+     *
+     * Los dos momentos son los que en LIVE arrancan un desplazamiento real: aceptar el envío
+     * (empieza a manejar hacia la recogida) y recoger el paquete (empieza a manejar hacia la
+     * entrega). `EN_CAMINO` y `ENTREGADO` los sigue apretando el conductor en su app; lo que el
+     * servidor suple son los dos hitos de *llegada*, que en TEST la geocerca nunca dispararía
+     * porque el teléfono está quieto en otra parte.
+     *
+     * Envuelto en `try/catch` por el mismo criterio que el resto de efectos de `transicionar()`:
+     * que Google no conteste no puede impedirle a un conductor aceptar un viaje.
+     */
+    private function abrirTramoSimulado(Pedido $pedido, string $nuevoEstado): void
+    {
+        if (! $pedido->esTest() || ! in_array($nuevoEstado, ['TOMADO', 'EN_CAMINO'], true)) {
+            return;
+        }
+
+        try {
+            $simulaciones = app(SimulacionEnvioService::class);
+
+            match ($nuevoEstado) {
+                'TOMADO' => $simulaciones->iniciarAcercamiento($pedido),
+                'EN_CAMINO' => $simulaciones->iniciarEntrega($pedido),
+            };
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo abrir el tramo simulado del envío', [
+                'id_pedido' => $pedido->id_pedido,
+                'estado' => $nuevoEstado,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

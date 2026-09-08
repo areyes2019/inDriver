@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Events\Tenant;
 
+use App\Support\DatosDeEventoPanel;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -55,8 +56,14 @@ class PedidoCanceladoParaConductor implements ShouldBroadcastNow
      */
     public function broadcastWith(): array
     {
+        $datos = DatosDeEventoPanel::delPedido($this->idPedido);
+
         return [
             'id_pedido' => $this->idPedido,
+            // spec tenant/027: el Panel saca la fila y libera al conductor con lo que llega aquí,
+            // sin recargar ninguna de las dos listas.
+            ...$datos,
+            'saldo_viajes' => DatosDeEventoPanel::saldoDeConductor($datos['id_conductor'] ?? null),
             'cancelado_por' => $this->canceladoPor,
             'motivo' => $this->motivo,
             'compensation_eligible' => $this->compensationEligible,

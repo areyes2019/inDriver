@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AplicarAmbientePanel;
 use App\Http\Middleware\AsegurarRolTenant;
 use App\Http\Middleware\IdentificarTenantPorSlug;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
@@ -26,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'tenant.slug' => IdentificarTenantPorSlug::class,
             'rol.tenant' => AsegurarRolTenant::class,
+            'ambiente.panel' => AplicarAmbientePanel::class,
         ]);
 
         // Laravel siempre corre los middleware de tipo "auth" muy temprano (lista de prioridad

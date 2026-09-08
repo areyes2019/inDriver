@@ -2,6 +2,7 @@ import { importLibrary, setOptions } from '@googlemaps/js-api-loader'
 import BaseProvider from './BaseProvider'
 import type {
   AddressSuggestion,
+  EstiloRuta,
   FitTarget,
   LatLngBoundsLike,
   LatLngLike,
@@ -117,6 +118,9 @@ export default class GoogleProvider extends BaseProvider {
       position,
       title: options.title,
       label: options.icon,
+      // Sin color, el pin rojo por defecto de Google. Con color, un punto del color del conductor
+      // (spec tenant/026, RN-18) para poder ligarlo de un vistazo con su polilínea.
+      icon: options.color ? this.puntoDeColor(options.color) : undefined,
     })
     instance.markers.set(markerId, marker)
   }
@@ -150,6 +154,7 @@ export default class GoogleProvider extends BaseProvider {
     const origin = points[0] as LatLngLike
     const destination = points[points.length - 1] as LatLngLike
     const color = options.color ?? '#6366F1'
+    const trazo = this.opcionesDeTrazo(color, options.estilo)
 
     try {
       const response = await instance.directionsService.route({
@@ -162,7 +167,7 @@ export default class GoogleProvider extends BaseProvider {
         map: instance.map,
         suppressMarkers: true,
         preserveViewport: options.preserveViewport ?? false,
-        polylineOptions: { strokeColor: color, strokeWeight: 5 },
+        polylineOptions: trazo,
       })
       renderer.setDirections(response)
       instance.routes.set(routeId, renderer)
@@ -178,16 +183,64 @@ export default class GoogleProvider extends BaseProvider {
         path: (route?.overview_path ?? []).map((point) => ({ lat: point.lat(), lng: point.lng() })),
       }
     } catch {
+      // RN-20: si Directions no contesta, recta entre los extremos con el MISMO color y el mismo
+      // estilo — degradar el trazo escondería que la ruta es aproximada.
       const polyline = new google.maps.Polyline({
         map: instance.map,
         path: points,
         geodesic: true,
-        strokeColor: color,
-        strokeWeight: 5,
+        ...trazo,
       })
       instance.routes.set(routeId, polyline)
       return null
     }
+  }
+
+  /**
+   * Google no tiene una propiedad "línea punteada": un trazo discontinuo se hace con la línea
+   * invisible (`strokeOpacity: 0`) y un símbolo repetido encima. De ahí que `GUIONES` no sea un
+   * parámetro más, sino otra forma de armar las opciones.
+   */
+  private opcionesDeTrazo(color: string, estilo?: EstiloRuta): google.maps.PolylineOptions {
+    if (estilo !== 'GUIONES') {
+      return { strokeColor: color, strokeWeight: 5 }
+    }
+
+    return {
+      strokeColor: color,
+      strokeOpacity: 0,
+      icons: [
+        {
+          icon: {
+            path: 'M 0,-1 0,1',
+            strokeColor: color,
+            strokeOpacity: 1,
+            strokeWeight: 4,
+            scale: 3,
+          },
+          offset: '0',
+          repeat: '14px',
+        },
+      ],
+    }
+  }
+
+  private puntoDeColor(color: string): google.maps.Symbol {
+    return {
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: 8,
+      fillColor: color,
+      fillOpacity: 1,
+      strokeColor: '#FFFFFF',
+      strokeWeight: 2,
+    }
+  }
+
+  clearRoute(containerId: string, routeId: string): void {
+    const instance = this.instances.get(containerId)
+    if (!instance) return
+    instance.routes.get(routeId)?.setMap(null)
+    instance.routes.delete(routeId)
   }
 
   clearRoutes(containerId: string): void {

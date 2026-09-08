@@ -41,11 +41,15 @@ class SyncController extends Controller
 
         // Ofertas propias vigentes (spec tenant/020), no "todo lo PUBLICADO del tenant": mismo
         // criterio que `PedidoController::disponibles()`.
-        $ofertas = PedidoOferta::where('id_conductor', $conductor->id_conductor)
-            ->where('estado', 'PENDIENTE')
-            ->where('expira_en', '>', now())
+        $ofertas = PedidoOferta::where('pedido_ofertas.id_conductor', $conductor->id_conductor)
+            ->where('pedido_ofertas.estado', 'PENDIENTE')
+            ->where('pedido_ofertas.expira_en', '>', now())
             ->with('pedido')
-            ->orderBy('ofrecida_en')
+            // Por antigüedad del pedido (spec tenant/026, RN-08), igual que `disponibles()`: al
+            // reconectar el conductor tiene que ver la misma lista, en el mismo orden.
+            ->join('pedidos', 'pedidos.id_pedido', '=', 'pedido_ofertas.id_pedido')
+            ->orderBy('pedidos.created_at')
+            ->select('pedido_ofertas.*')
             ->get();
 
         $modalidad = ConfiguracionTenant::obtener(ConfiguracionTenant::MODALIDAD, 'Prepago');
