@@ -58,8 +58,8 @@ function cerrarNuevaEntrega() {
   layoutRef.value?.focusNuevaEntrega()
 }
 
-// Ya no hay que recargar nada: el envío recién agendado entra a la lista por `pedido.disponible`
-// (spec tenant/024) y el cancelado sale por `pedido.cancelado`.
+// Ya no hay que recargar nada: el envío recién agendado entra a la lista por `pedido.creado`
+// —que sale siempre, se publique o no— y el cancelado sale por `pedido.cancelado`.
 function onAgendado() {
   cerrarNuevaEntrega()
 }

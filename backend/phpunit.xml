@@ -30,6 +30,11 @@
         <env name="FIREBASE_CREDENTIALS_PATH" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
+        <!-- Integracion GPS apagada por defecto (spec tenant/028): sin esto, un .env de desarrollo
+             con GPS_SERVICE_URL hace que la suite publique avisos en el Redis real y contamine el
+             buzon de quien este probando el servicio al lado. Las pruebas que si necesitan el buzon
+             lo encienden ellas con config(). -->
+        <env name="GPS_SERVICE_URL" value=""/>
         <env name="SESSION_DRIVER" value="array"/>
         <!-- spec tenant/025, RN-09: la suite verifica los 60 km/h del spec, no la velocidad que
              cada quien haya subido en su .env para no esperar el viaje en tiempo real. -->

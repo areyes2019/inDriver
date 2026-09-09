@@ -103,17 +103,48 @@ function trackingPedido(array $overrides = []): Pedido
     ], $overrides));
 }
 
-it('does not record a position when the conductor has no active pedido', function () {
+it('does not record history when the conductor has no active pedido', function () {
     $tenant = trackingTenant();
     $datos = trackingConductor($tenant);
     $token = trackingToken();
 
     $this->withToken($token)
         ->postJson('/api/v1/t/cafe-luna/conductor/ubicacion', ['latitud' => 19.43, 'longitud' => -99.13])
-        ->assertUnprocessable()
-        ->assertJsonValidationErrors(['pedido']);
+        ->assertNoContent();
+
+    // RN-01: estar en línea sin envío no genera tracking. Tampoco se inventa un `conductor_estado`
+    // para quien nunca se conectó.
+    tenancy()->initialize($tenant);
+    expect(ConductorPosicion::count())->toBe(0);
+    expect(ConductorEstado::count())->toBe(0);
+    tenancy()->end();
+});
+
+it('remembers the last known position of an online conductor without a pedido', function () {
+    $tenant = trackingTenant();
+    $datos = trackingConductor($tenant);
 
     tenancy()->initialize($tenant);
+    ConductorEstado::create([
+        'id_conductor' => $datos['conductor']->id_conductor,
+        'estado' => 'ONLINE',
+        'ultima_actualizacion' => now()->subMinutes(5),
+    ]);
+    tenancy()->end();
+
+    $token = trackingToken();
+
+    $this->withToken($token)
+        ->postJson('/api/v1/t/cafe-luna/conductor/ubicacion', ['latitud' => 19.43, 'longitud' => -99.13])
+        ->assertNoContent();
+
+    // Sin esto un conductor que nunca hizo un envío no tiene posición, y en TEST no la tiene
+    // nunca (spec tenant/025, RN-11): el tramo de acercamiento simulado medía cero metros y el
+    // conductor se veía estático en el mapa del Panel.
+    tenancy()->initialize($tenant);
+    $estado = ConductorEstado::where('id_conductor', $datos['conductor']->id_conductor)->first();
+    expect((float) $estado->ultima_latitud)->toBe(19.43);
+    expect((float) $estado->ultima_longitud)->toBe(-99.13);
     expect(ConductorPosicion::count())->toBe(0);
     tenancy()->end();
 });

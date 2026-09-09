@@ -69,6 +69,21 @@ class Pedido extends Model
 
     protected $primaryKey = 'id_pedido';
 
+    /**
+     * Avisos de tiempo real que no pueden salir hasta que la fila esté escrita (spec tenant/027).
+     *
+     * `PedidoEstadoService::transicionar()` no guarda —el llamador decide cuándo— y las cargas de
+     * esos eventos se arman releyendo el pedido de la base (`DatosDeEventoPanel`), así que
+     * dispararlos ahí mismo mandaba el estado **anterior**: el Panel recibía `pedido.tomado` con
+     * `id_conductor` nulo y `seguimiento` nulo, y por eso no dibujaba la línea del tramo H1.
+     *
+     * Los llena `PedidoEstadoService` y los vacía `PedidoObserver::saved()`. Si el llamador nunca
+     * guarda —una transición que aborta— no se manda nada, que es justo lo correcto.
+     *
+     * @var array<int, \Closure>
+     */
+    public array $avisosDiferidos = [];
+
     protected function casts(): array
     {
         return [

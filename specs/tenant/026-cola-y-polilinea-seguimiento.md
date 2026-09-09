@@ -240,6 +240,7 @@ registra como `warning` (RN-02).
 | 3 | Rescate de los pedidos en asignación manual | Filtro de RN-03 dentro de `reactivarColaPara()`, con la transición `PENDIENTE → PUBLICADO` que ya existe |
 | 4 | Color estable por conductor sin guardarlo | Helper compartido en el backend (`PALETA[id % 10]`), expuesto en los Resources |
 | 5 | Soporte de línea punteada | `GoogleProvider.drawRoute()` acepta `estilo`; los guiones se hacen con `strokeOpacity: 0` más `icons[]` repetidos, que es como Google dibuja trazos discontinuos |
+| 5b | La polilínea se dibuja a mano, no con `DirectionsRenderer` | `DirectionsRenderer` solo traslada a su línea las propiedades de trazo —color, opacidad, grosor— y descarta `icons`, así que con él el tramo H1 quedaba en la línea base invisible y sin los símbolos encima: no se veía nada. `GoogleProvider.drawRoute()` crea su propia `google.maps.Polyline` sobre el `overview_path` que devuelve Directions —igual que la rama de respaldo de RN-20 y que `panda_express`, que por eso sí pintaban los guiones— y el encuadre que hacía el renderer con `preserveViewport: false` pasa a un `map.fitBounds(route.bounds)` explícito |
 | 6 | Adelantar el cambio de línea a `ARRIBADO` | Consecuencia directa de RN-11: al derivarlo el servidor, las dos apps cambian a la vez |
 | 7 | Un solo lugar que decida qué línea dibujar | El bloque `seguimiento` de §4, calculado en el backend y consumido igual por el Panel y por `panda_express` |
 
@@ -257,12 +258,17 @@ registra como `warning` (RN-02).
 **Panel (`frontend`)**
 
 - `src/services/maps/types.ts` y `GoogleProvider.ts` — opción `estilo` en `drawRoute`, color en el
-  marcador.
+  marcador, y la ruta trazada con `Polyline` propia en lugar de `DirectionsRenderer` (§9, adición 5b).
 - `src/components/panel/MapaConductores.vue` — dibuja según `seguimiento` en vez de deducir el
   destino a partir del estado.
 
 **App del conductor (`panda_express`)**
 
 - `src/composables/useMapController.js` — deja de decidir la fase por su cuenta; lee `seguimiento`.
+  Además recuerda la orden que le toca pintar y la redibuja cuando el mapa termina de inicializarse
+  —`Dashboard.vue` restaura el viaje activo **antes** de crear el mapa, así que el primer trazado se
+  descartaba y el conductor se quedaba sin la línea de H1 hasta el siguiente cambio de estado— y
+  rehace el tramo H1 con la cadencia de RN-14 conforme llega la posición del GPS, que hasta ahora
+  solo movía el marcador de la moto.
 - `src/services/maps/MapService.js` — trazo punteado y color por conductor.
 - `src/views/Dashboard.vue` — watcher del evento de cola reactivada.

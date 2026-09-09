@@ -35,9 +35,11 @@ tenant.
   la base del tenant recién migrada antes de insertar en su tabla `usuarios`, y la cierra al
   terminar. No se usa el job genérico `SeedDatabase` de `stancl/tenancy` (además de estar comentado
   hoy) porque necesita datos dinámicos capturados en el formulario, no un seeder estático.
-- La contraseña se genera con la función de Laravel para contraseñas aleatorias seguras
-  (`Str::password()`), y se guarda hasheada (`Hash::make()`) — igual que cualquier contraseña del
-  sistema.
+- La contraseña se genera con `App\Support\PasswordGenerada` (letras, números y un solo símbolo,
+  sin diagonales), y se guarda hasheada (`Hash::make()`) — igual que cualquier contraseña del
+  sistema. No se usa `Str::password()` directo porque su juego de símbolos incluye `\`, que el
+  Markdown del correo de credenciales se come: el usuario recibe una contraseña distinta de la
+  guardada y no puede entrar.
 - El correo con las credenciales reutiliza el mismo mecanismo SMTP/Mailpit ya configurado en
   `004-auth-admin-central.md` (Mailpit en local, SMTP de Hostinger en producción, sin cambiar
   código entre ambos).

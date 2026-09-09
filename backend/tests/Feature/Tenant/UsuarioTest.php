@@ -7,8 +7,10 @@ use App\Models\Tenant\Usuario;
 use App\Notifications\CredencialesUsuarioTenant;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Markdown;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 
 uses(RefreshDatabase::class);
@@ -114,6 +116,41 @@ it('creates a usuario with a generated password and sends the credentials email'
     Notification::assertSentOnDemand(
         CredencialesUsuarioTenant::class,
         fn ($notification, $channels, $notifiable) => $notifiable->routes['mail'] === 'pedro@cafeluna.com',
+    );
+});
+
+// El correo de credenciales renderiza sus líneas como Markdown. Si la contraseña generada trae un
+// carácter que el parser interpreta, el usuario recibe una contraseña distinta de la guardada y no
+// puede entrar, aunque el alta haya funcionado.
+it('emails a password that still matches the stored hash after the markdown rendering', function () {
+    Notification::fake();
+    $tenant = usuarioTenant();
+    $admin = usuarioEnTenant($tenant);
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/usuarios', [
+            'nombre' => 'Pedro',
+            'apellido_paterno' => 'Ruiz',
+            'email' => 'pedro@cafeluna.com',
+            'rol' => 'Conductor',
+        ])
+        ->assertCreated();
+
+    tenancy()->initialize($tenant);
+    $creado = Usuario::where('email', 'pedro@cafeluna.com')->firstOrFail();
+    tenancy()->end();
+
+    Notification::assertSentOnDemand(
+        CredencialesUsuarioTenant::class,
+        function ($notification, $channels, $notifiable) use ($creado) {
+            $linea = collect($notification->toMail($notifiable)->introLines)
+                ->first(fn ($l) => str_contains($l, 'Contrase'));
+
+            // La contraseña tal como la lee el usuario en su bandeja, no la variable interna.
+            preg_match('#<code>(.*)</code>#', Markdown::parse($linea)->toHtml(), $coincidencias);
+
+            return Hash::check($coincidencias[1] ?? '', $creado->password);
+        },
     );
 });
 

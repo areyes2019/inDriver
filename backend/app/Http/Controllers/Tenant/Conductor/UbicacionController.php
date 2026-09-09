@@ -16,8 +16,9 @@ class UbicacionController extends Controller
     public function __construct(private readonly TrackingService $tracking) {}
 
     /**
-     * Flujo normal, en vivo (spec tenant/021): solo se guarda si el conductor tiene un envío en
-     * curso ahora mismo (RN-01) — estar en línea sin envío no genera tracking.
+     * Flujo normal, en vivo (spec tenant/021): el recorrido solo se guarda si el conductor tiene
+     * un envío en curso ahora mismo (RN-01) — estar en línea sin envío no genera tracking. Sin
+     * envío se conserva únicamente su última posición conocida, que no es historia ni se difunde.
      */
     public function actualizar(Request $request): JsonResponse
     {
@@ -31,12 +32,24 @@ class UbicacionController extends Controller
         ]);
 
         $conductor = $request->user('conductor-token')->conductor;
+        $activo = $this->tracking->pedidoActivo($conductor);
+
+        // En línea pero sin envío: RN-01 se respeta —no se guarda historia ni se difunde al
+        // Panel—, pero sí se recuerda dónde quedó. Antes esto respondía 422 DELIVERY_NOT_ACTIVE y
+        // la posición se tiraba, con lo que un conductor que nunca había hecho un envío no tenía
+        // ninguna: en TEST eso dejaba el tramo de acercamiento en cero metros (spec tenant/025,
+        // RN-08) y el conductor se veía estático en el mapa del Panel todo el viaje.
+        if ($activo === null) {
+            $this->tracking->registrarPosicionSinEnvio($conductor, (float) $data['latitud'], (float) $data['longitud']);
+
+            return response()->json(status: 204);
+        }
 
         // spec tenant/025, RN-11: en un envío TEST manda el simulador. El teléfono sigue mandando
         // su GPS aunque el conductor esté sentado en su casa, y dos fuentes escribiendo la misma
         // posición se pisan. Esta es la única diferencia entre TEST y LIVE en todo el tracking: el
         // simulador escribe por el mismo `registrarPosicion()` de siempre.
-        if ($this->tracking->pedidoActivo($conductor)?->esTest()) {
+        if ($activo->esTest()) {
             // Se descarta la posición, no al conductor: sin este latido el teléfono dejaría de dar
             // señales de vida y `conductor:apagar-inactivos` lo apagaría a los 10 minutos, en mitad
             // del envío simulado.

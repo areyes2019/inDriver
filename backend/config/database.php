@@ -179,6 +179,28 @@ return [
             'backoff_cap' => env('REDIS_BACKOFF_CAP', 1000),
         ],
 
+        /*
+         * Claves compartidas con el microservicio GPS (spec tenant/028).
+         *
+         * `prefix` vacío no es un descuido: el prefijo global de arriba lo antepone Laravel al
+         * escribir y al leer, así que es invisible desde PHP pero deja las claves reales con un
+         * nombre que el servicio en Go no conoce. Los dos lados tienen que ver exactamente
+         * `tenant:{slug}:conductores:geo`, y por eso esta conexión escribe sin prefijo.
+         */
+        'gps' => [
+            'url' => env('REDIS_URL'),
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'username' => env('REDIS_USERNAME'),
+            'password' => env('REDIS_PASSWORD'),
+            'port' => env('REDIS_PORT', '6379'),
+            'database' => env('REDIS_DB', '0'),
+            'prefix' => '',
+            'max_retries' => env('REDIS_MAX_RETRIES', 3),
+            'backoff_algorithm' => env('REDIS_BACKOFF_ALGORITHM', 'decorrelated_jitter'),
+            'backoff_base' => env('REDIS_BACKOFF_BASE', 100),
+            'backoff_cap' => env('REDIS_BACKOFF_CAP', 1000),
+        ],
+
     ],
 
 ];

@@ -21,6 +21,17 @@ detalle y cancelación del viaje. La mecánica de carga de datos reales (paginac
 de carga y error, `AbortController`, recarga tras agendar) vive en
 `tenant/012-datos-reales-servicios-en-turno.md` y no se repite aquí.
 
+> **Reemplazada en su parte de "lista única" por `tenant/027-panel-reactivo-sin-recargas.md` (v1.1).**
+> Lo que esta spec define sobre **cómo se agrupan** las tarjetas dejó de aplicar: la lista dejó de ser
+> una sola y pasó a dos secciones —"Viajes pendientes" (`PENDIENTE`, `PUBLICADO`) y "Viajes en curso"
+> (`TOMADO`, `ARRIBADO`, `EN_CAMINO`, `ARRIBADO_A_ENTREGA`)— con encabezado, contador y estado vacío
+> propios, y un viaje cruza de la primera a la segunda solo, en el acto, cuando un conductor lo toma.
+> El orden que define esta spec sigue vigente, pero **dentro de cada sección** (SPEC-027, RN-37), y el
+> vacío "No hay viajes en turno" queda solo para cuando las dos están vacías (RN-32).
+>
+> Para **qué se muestra en cada tarjeta y cómo se ve**, sigue mandando esta spec: la 027 cambia el
+> agrupamiento, no el diseño de la tarjeta.
+
 Deja funcionando:
 
 - Panel con título "Viajes en turno", pegado al borde izquierdo real de la ventana del navegador,

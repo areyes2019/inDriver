@@ -11,6 +11,7 @@ use App\Events\Tenant\PedidoYaTomado;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\VentaViajeConductor;
+use App\Services\Gps\BuzonGps;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -80,6 +81,7 @@ class PedidoEstadoService
         private readonly OfertaPedidoService $ofertas,
         private readonly TrackingService $tracking,
         private readonly CambioEnvioService $cambios,
+        private readonly BuzonGps $gps,
     ) {}
 
     /**
@@ -117,7 +119,42 @@ class PedidoEstadoService
 
         $this->abrirTramoSimulado($pedido, $nuevoEstado);
 
+        $this->avisarServicioGps($pedido, $nuevoEstado);
+
         $this->notificarConductores($pedido, $nuevoEstado, $estadoAnterior);
+    }
+
+    /**
+     * Le dice al microservicio GPS cuándo empieza y cuándo termina un envío (spec tenant/028,
+     * §6.3). Es la única forma que tiene el servicio de saber si debe guardar la posición de un
+     * conductor (RN-02): no pregunta a Laravel en cada ping, se lo dijimos aquí.
+     *
+     * Va por `diferir()` como el resto de avisos (spec tenant/027): `transicionar()` no guarda, y
+     * mandar el aviso antes de que la fila exista abriría el rastreo de un envío que todavía puede
+     * no llegar a persistirse.
+     */
+    private function avisarServicioGps(Pedido $pedido, string $nuevoEstado): void
+    {
+        $slug = tenant()?->slug;
+        $idConductor = $pedido->id_conductor;
+
+        if ($slug === null || $idConductor === null) {
+            return;
+        }
+
+        $idPedido = $pedido->id_pedido;
+
+        // TOMADO es el primer estado en el que el conductor se pone en movimiento; los tres
+        // estados finales son el complemento exacto (`ESTADOS_FINALES`).
+        if ($nuevoEstado === 'TOMADO') {
+            $this->diferir($pedido, fn () => $this->gps->envioIniciado($slug, $idConductor, $idPedido));
+
+            return;
+        }
+
+        if (in_array($nuevoEstado, self::ESTADOS_FINALES, true)) {
+            $this->diferir($pedido, fn () => $this->gps->envioTerminado($slug, $idConductor, $idPedido));
+        }
     }
 
     /**
@@ -184,19 +221,42 @@ class PedidoEstadoService
             return;
         }
 
+        $idPedido = $pedido->id_pedido;
+        $idConductor = $pedido->id_conductor;
+
         // La app solo conoce el estado que ella misma provoca, así que sin este aviso un cambio
         // hecho del lado del servidor (desde el Panel) sería invisible para el conductor.
-        if ($pedido->id_conductor !== null) {
-            PedidoEstadoCambiado::dispatch($pedido->id_pedido, $pedido->id_conductor, $nuevoEstado, $slug);
+        if ($idConductor !== null) {
+            $this->diferir($pedido, fn () => PedidoEstadoCambiado::dispatch($idPedido, $idConductor, $nuevoEstado, $slug));
         }
 
         match (true) {
-            $nuevoEstado === 'TOMADO' => PedidoYaTomado::dispatch($pedido->id_pedido, $slug),
+            $nuevoEstado === 'TOMADO' => $this->diferir($pedido, fn () => PedidoYaTomado::dispatch($idPedido, $slug)),
             // spec tenant/023: el Panel calcula "Disponible"/"Ocupado" por pedido asignado, así que
             // necesita enterarse del cierre igual que se entera de la toma y de la cancelación.
-            $nuevoEstado === 'ENTREGADO' => PedidoEntregado::dispatch($pedido->id_pedido, $slug),
+            $nuevoEstado === 'ENTREGADO' => $this->diferir($pedido, fn () => PedidoEntregado::dispatch($idPedido, $slug)),
             default => null,
         };
+    }
+
+    /**
+     * Deja el aviso en cola hasta que el pedido se guarde (spec tenant/027).
+     *
+     * Estos eventos arman su carga releyendo el pedido de la base (`DatosDeEventoPanel`), y
+     * `transicionar()` no guarda —deja que el llamador decida cuándo—, así que mandarlos aquí
+     * significaba mandar el estado anterior: `pedido.tomado` salía con el `estado` todavía en
+     * `PUBLICADO`, `id_conductor` nulo y, en consecuencia, `seguimiento` nulo —con lo que el mapa
+     * del Panel se quedaba sin la línea en guiones del tramo H1—. `PedidoObserver::saved()` los
+     * vacía ya con la fila escrita, y como el observador es `afterCommit`, también después de
+     * confirmar la transacción cuando el llamador abrió una.
+     *
+     * `ofertar()` no pasa por aquí a propósito: sus eventos llevan el modelo en memoria, no un id
+     * que haya que releer, y `Tenant\PedidoController::publicar()` depende de que las ofertas
+     * existan antes de persistir.
+     */
+    private function diferir(Pedido $pedido, \Closure $aviso): void
+    {
+        $pedido->avisosDiferidos[] = $aviso;
     }
 
     /**
@@ -225,7 +285,9 @@ class PedidoEstadoService
             null,
         );
 
-        PedidoCanceladoParaConductor::dispatch(
+        // Diferido como el resto (ver `diferir()`): su carga también se arma releyendo el pedido,
+        // así que aquí salía con el estado de antes de cancelar.
+        $argumentos = [
             $pedido->id_pedido,
             $slug,
             $pedido->id_conductor,
@@ -233,7 +295,9 @@ class PedidoEstadoService
             $pedido->motivo_cancelacion,
             $llevaPaquete,
             $llevaPaquete ? 'RETURN_TO_PICKUP' : 'STOP',
-        );
+        ];
+
+        $this->diferir($pedido, fn () => PedidoCanceladoParaConductor::dispatch(...$argumentos));
 
         $this->cambios->requiereConfirmacion($pedido);
     }

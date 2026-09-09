@@ -33,7 +33,11 @@ class CredencialesUsuarioTenant extends Notification
             ->greeting('¡Bienvenido!')
             ->line("Ya se creó tu acceso al panel de {$this->nombreComercial}. Puedes ingresar con estas credenciales:")
             ->line("Correo: {$this->email}")
-            ->line("Contraseña: {$this->password}")
+            // La contraseña va dentro de un code span de Markdown: las líneas de un
+            // `MailMessage` se renderizan como Markdown, y fuera de un code span el parser se
+            // come caracteres de escape y deja al usuario con una contraseña que no es la
+            // guardada (ver App\Support\PasswordGenerada).
+            ->line("Contraseña: `{$this->password}`")
             ->action('Ir al panel', $url)
             ->line('Te recomendamos cambiarla después de tu primer ingreso.');
     }

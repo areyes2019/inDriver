@@ -69,6 +69,31 @@ class TrackingService
     }
 
     /**
+     * El conductor está en línea pero sin envío en curso.
+     *
+     * RN-01 sigue valiendo tal cual: **no** se guarda historia en `conductor_posiciones` ni se
+     * difunde nada al Panel —estar en línea no genera tracking—. Lo único que se conserva es
+     * dónde quedó parado, que es otra cosa: sin ello su posición no existe hasta que el primer
+     * envío escribe una, y en TEST no existe **nunca**, porque ahí el GPS real se descarta
+     * siempre (spec tenant/025, RN-11). Ese hueco es lo que dejaba al simulador sin origen: el
+     * tramo de acercamiento arrancaba en el punto de recogida mismo (RN-08), medía cero metros y
+     * el conductor aparecía clavado ahí sin recorrer nada.
+     *
+     * Se escribe con `update()` y solo sobre un conductor ONLINE: si la fila no existe —nunca se
+     * conectó— no se inventa ninguna, igual que en `registrarLatido()`.
+     */
+    public function registrarPosicionSinEnvio(Conductor $conductor, float $latitud, float $longitud): void
+    {
+        ConductorEstado::where('id_conductor', $conductor->id_conductor)
+            ->where('estado', 'ONLINE')
+            ->update([
+                'ultima_latitud' => $latitud,
+                'ultima_longitud' => $longitud,
+                'ultima_actualizacion' => now(),
+            ]);
+    }
+
+    /**
      * Respaldo por lotes tras reconectar (RN-05): se guardan como historia, sin difundir al Panel
      * (RN-07) — ya no son la posición actual, son puntos que ya pasaron.
      *

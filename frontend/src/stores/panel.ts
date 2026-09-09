@@ -531,6 +531,13 @@ export const usePanelStore = defineStore('panel', () => {
     })
   }
 
+  /** La fila llega resuelta del servidor: se escribe encima de la que hubiera, sin vaciar nada. */
+  function insertarViaje(payload: ViajeEnTurno) {
+    const actual = viajes.value.get(payload.id_pedido)
+    viajes.value.set(payload.id_pedido, actual ? { ...actual, ...payload } : payload)
+    resaltar(`viaje:${payload.id_pedido}`)
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Un reductor por evento (RN-07)
   // ---------------------------------------------------------------------------------------------
@@ -545,13 +552,21 @@ export const usePanelStore = defineStore('panel', () => {
   }
 
   const REDUCTORES: Record<string, (payload: never) => void> = {
+    /**
+     * El envío acaba de darse de alta. Es el único aviso que llega siempre: `pedido.disponible`
+     * depende de que el envío se publique y de que haya conductores elegibles en ese momento, así
+     * que un agendado —o uno creado con la flotilla desconectada— no producía ninguno y la fila no
+     * aparecía hasta recargar la página.
+     */
+    'pedido.creado': (payload: ViajeEnTurno & EventoBase) => {
+      if (ignorar(payload)) return
+      insertarViaje(payload)
+    },
+
     /** Trae el `PedidoResource` completo: la fila se inserta tal cual. */
     'pedido.disponible': (payload: ViajeEnTurno & EventoBase) => {
       if (ignorar(payload)) return
-
-      const actual = viajes.value.get(payload.id_pedido)
-      viajes.value.set(payload.id_pedido, actual ? { ...actual, ...payload } : payload)
-      resaltar(`viaje:${payload.id_pedido}`)
+      insertarViaje(payload)
     },
 
     'pedido.tomado': (payload: EventoPedido) => {

@@ -1,0 +1,58 @@
+# Microservicio GPS (spec tenant/028) como unidad de systemd.
+#
+# Producción NO usa contenedores: el Dockerfile de gps-service/ es solo para desarrollo y para las
+# pruebas de carga. Aquí corre el binario compilado, detrás de nginx.
+#
+# Instalación:
+#
+#     scp deploy/vps/gps-service.service root@vps:/etc/systemd/system/gps-service.service
+#     systemctl daemon-reload
+#     systemctl enable --now gps-service
+#     systemctl status gps-service
+#
+# El binario y su archivo de entorno se suben aparte (ver gps-service/README.md).
+
+[Unit]
+Description=Servicio GPS (ingesta de posiciones y cercanía)
+Documentation=file:///var/www/delivery.prosello.com.mx/specs/tenant/028-microservicio-gps.md
+After=network-online.target redis-server.service
+Wants=network-online.target
+# Redis es la memoria del servicio, pero no un requisito duro para arrancar: el servicio levanta
+# igual y reconecta solo cuando Redis vuelve (SPEC-028, §7.7).
+After=redis-server.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+
+# Secretos y parámetros. Con permisos 600 y dueño root: contiene GPS_TOKEN_SECRET.
+EnvironmentFile=/etc/gps-service.env
+
+ExecStart=/usr/local/bin/gps-service
+
+# El apagado ordenado suelta la última tanda de recorrido antes de salir (§7.4). 20 s le sobran; el
+# propio servicio se da 15.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+Restart=always
+RestartSec=2
+
+# Endurecimiento: el servicio no necesita nada del disco salvo su binario.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=512M
+
+# Bitácora en JSON a journald.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gps-service
+
+[Install]
+WantedBy=multi-user.target

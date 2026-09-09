@@ -77,7 +77,9 @@ concepto distinto (cobertura operativa, no encuadre de mapa).
   cualquier `fitBounds()` previo. Pasaba inadvertido porque el centro por defecto ya era CDMX. Se
   agregó `RouteOptions.preserveViewport` (default `false`, sin cambiar el comportamiento de
   `UiVistaPreviaRuta.vue`, que sí depende de que la ruta autoencuadre) y `MapaConductores.vue` lo
-  pasa en `true` en sus llamadas a `drawRoute`.
+  pasa en `true` en sus llamadas a `drawRoute`. **Desde SPEC-026 (§9, adición 5b) ya no hay
+  `DirectionsRenderer`**: la ruta se dibuja con una `Polyline` propia y `preserveViewport` se respeta
+  con un `map.fitBounds(route.bounds)` explícito. El contrato de la opción no cambia.
 - **`CiudadResource` expone también `place_id`** (no solo `id_ciudad`/`nombre`/`lat`/`lng`/`bounds`
   como se pensó originalmente): la pantalla de ADMIN_CENTRAL lo necesita para reconstruir el
   arreglo completo de ciudades de un AdminCliente al agregar una nueva antes de guardar (`sync`

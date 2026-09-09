@@ -102,6 +102,7 @@ El evento que sale al Panel no lleva `accuracy_m` ni `speed_kmh`. El mapa no los
 ## 6. Reglas de negocio
 
 - **RN-01:** La App emite posición **solo** con un envío en `ASSIGNED` o `IN_TRANSIT`. Estar en línea sin envío no genera tracking.
+- **RN-01b:** Un conductor en línea **sin** envío sí conserva su última posición conocida (`conductor_estado`), y solo esa: ni historia de recorrido ni difusión al Panel. Sin ella, quien nunca hizo un envío no tiene posición —y en TEST no la tendría nunca, porque ahí el GPS real se descarta siempre—, con lo que el tramo de acercamiento simulado de SPEC-025 medía cero metros. Si el conductor está fuera de línea, la lectura se descarta sin crear nada.
 - **RN-02:** Frecuencia: cada 15 segundos, o antes si el repartidor se movió más de 50 metros desde el último envío. Detenido más de 2 minutos, baja a un envío por minuto.
 - **RN-03:** Se descarta en la App, sin enviar, toda lectura con `accuracy_m` mayor a 100 o con velocidad implícita superior a 150 km/h respecto al punto anterior.
 - **RN-04:** El servidor guarda en `delivery_tracks` y actualiza `couriers.last_lat/lng/last_seen_at` en la misma operación. Ese `last_seen_at` es el que alimenta el timeout de SPEC-019.
@@ -114,7 +115,7 @@ El evento que sale al Panel no lleva `accuracy_m` ni `speed_kmh`. El mapa no los
 
 | Código | HTTP | Cuándo |
 |---|---|---|
-| `DELIVERY_NOT_ACTIVE` | 409 | El envío ya se entregó o canceló |
+| `DELIVERY_NOT_ACTIVE` | 409 | El envío ya se entregó o canceló. `POST /conductor/ubicacion` no lo devuelve: sin envío en curso responde 204 aplicando RN-01b |
 | `DELIVERY_NOT_ASSIGNED` | 403 | El envío no es de ese repartidor |
 | `BATCH_TOO_LARGE` | 422 | Lote con más de 200 puntos |
 

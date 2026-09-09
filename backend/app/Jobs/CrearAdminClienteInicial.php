@@ -7,6 +7,7 @@ namespace App\Jobs;
 use App\Models\Tenant as TenantModel;
 use App\Models\Tenant\Usuario;
 use App\Notifications\CredencialesAdminCliente;
+use App\Support\PasswordGenerada;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -14,7 +15,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Str;
 
 class CrearAdminClienteInicial implements ShouldQueue
 {
@@ -32,7 +32,7 @@ class CrearAdminClienteInicial implements ShouldQueue
         try {
             tenancy()->initialize($this->tenant);
 
-            $password = Str::password(16);
+            $password = PasswordGenerada::generar();
 
             $usuario = Usuario::create([
                 'nombre' => $this->nombre,

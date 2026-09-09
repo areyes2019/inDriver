@@ -1,0 +1,43 @@
+# Worker que aplica lo que el microservicio GPS deja en el buzón (spec tenant/028, §6.4):
+# difunde la posición al Panel por Reverb y guarda el recorrido en MySQL.
+#
+# Va en su propia unidad, separado de gps-service: son los dos lados del desacople. Que este worker
+# se caiga no detiene la ingesta de posiciones — los avisos se acumulan en el buzón y se aplican
+# cuando vuelve (§7.7).
+#
+#     scp deploy/vps/gps-buzon.service root@vps:/etc/systemd/system/gps-buzon.service
+#     systemctl daemon-reload
+#     systemctl enable --now gps-buzon
+#     journalctl -u gps-buzon -f
+
+[Unit]
+Description=Worker del buzon GPS (posicion al Panel y recorrido a MySQL)
+Documentation=file:///var/www/delivery.prosello.com.mx/specs/tenant/028-microservicio-gps.md
+After=network-online.target redis-server.service mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/delivery.prosello.com.mx/backend
+
+ExecStart=/usr/bin/php artisan gps:consumir-buzon
+
+# El worker atiende SIGTERM: termina la vuelta en curso en vez de morir a media escritura, y lo que
+# no alcanzó a confirmar lo recoge el siguiente arranque.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gps-buzon
+
+[Install]
+WantedBy=multi-user.target

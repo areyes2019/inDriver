@@ -43,20 +43,44 @@ say "Comprobando conexión con $SSH_ALIAS"
 remote true >/dev/null 2>&1 || die "no se pudo conectar a '$SSH_ALIAS'. Prueba a mano: ssh $SSH_ALIAS"
 ok "conectado"
 
-say "Instalando paquetes (nginx, PHP 8.3-FPM, MySQL, certbot, herramientas)"
+say "Instalando paquetes (nginx, PHP 8.3-FPM, MySQL, Redis, certbot, herramientas)"
 remote "DEBIAN_FRONTEND=noninteractive bash -s" <<'FIN_PAQUETES'
 set -euo pipefail
 apt-get update -qq
 apt-get -y -qq upgrade
+# redis-server y php8.3-redis son del microservicio GPS (spec tenant/028): Redis es la memoria
+# compartida entre Laravel y el servicio, y php8.3-redis es el cliente con el que Laravel escribe
+# en ella. Sin ellos la plataforma arranca igual, con la integracion GPS apagada.
 apt-get -y -qq install \
     nginx \
     php8.3-fpm php8.3-cli php8.3-mysql php8.3-mbstring php8.3-xml \
-    php8.3-curl php8.3-zip php8.3-bcmath \
+    php8.3-curl php8.3-zip php8.3-bcmath php8.3-redis \
     mysql-server \
+    redis-server \
     certbot python3-certbot-nginx \
     unzip curl ufw
 FIN_PAQUETES
 ok "paquetes instalados"
+
+say "Configurando Redis (persistencia y limite de memoria)"
+remote "bash -s" <<'FIN_REDIS'
+set -euo pipefail
+# AOF para que las posiciones activas sobrevivan a un reinicio del servidor, y un tope de memoria
+# con expulsion de lo que ya caduco: sin el tope, un pico de trafico GPS puede competir con MySQL
+# por la RAM del VPS (spec tenant/028, adicion tecnica 9).
+cat > /etc/redis/redis-gps.conf <<'FIN_CONF'
+appendonly yes
+appendfsync everysec
+maxmemory 512mb
+maxmemory-policy volatile-ttl
+FIN_CONF
+if ! grep -q 'redis-gps.conf' /etc/redis/redis.conf; then
+    echo 'include /etc/redis/redis-gps.conf' >> /etc/redis/redis.conf
+fi
+systemctl enable --now redis-server
+systemctl restart redis-server
+FIN_REDIS
+ok "redis configurado"
 
 say "Instalando Composer"
 remote "bash -s" <<'FIN_COMPOSER'

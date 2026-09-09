@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Events\Tenant\PedidoCreado;
 use App\Models\Tenant as TenantCentral;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
@@ -18,6 +19,12 @@ use Illuminate\Support\Facades\DB;
  * Siembra envíos ya publicados, para no llenar el formulario del Panel una y otra vez cuando lo que
  * se quiere probar son varios conductores a la vez.
  *
+ * Los envíos salen indistinguibles de los capturados a mano: direcciones reales de Celaya con sus
+ * coordenadas, nombre y teléfono de solicitante creíbles, y el importe calculado con las tarifas
+ * del tenant. Es la diferencia con la versión anterior, que sorteaba puntos al azar alrededor de
+ * un centro y los rotulaba "Recogida de prueba 3": servían para probar el mapa, pero no para ver
+ * el Panel como lo ve un despachador.
+ *
  * Pasa por `PedidoEstadoService::transicionar()` en vez de escribir el estado a mano: publicar es
  * lo que crea el pool de ofertas (spec tenant/020) y dispara los avisos. Un `INSERT` directo en
  * `pedidos` deja el envío invisible para las apps de conductor.
@@ -28,15 +35,56 @@ use Illuminate\Support\Facades\DB;
     {cantidad=5 : Cuántos envíos crear}
     {--tenant= : Slug del tenant; obligatorio si hay más de uno activo}
     {--ambiente= : live|test; por omisión, el interruptor del tenant}
-    {--centro= : "lat,lng" del centro de la zona; por omisión se deduce de los datos existentes}
-    {--radio=4 : Radio en km dentro del cual caen recogida y entrega}
+    {--centro= : "lat,lng"; con esto los puntos se sortean al azar alrededor y se deja de usar el callejero de Celaya}
+    {--radio=4 : Radio en km del sorteo. Solo tiene efecto junto con --centro}
     {--sin-publicar : Dejarlos en PENDIENTE en vez de publicarlos}
     {--force : Permitir la siembra en producción}')]
-#[Description('Crea N envíos publicados de golpe, sin pasar por el formulario')]
+#[Description('Crea N envíos publicados de golpe, con direcciones reales de Celaya')]
 class SembrarPedidos extends Command
 {
-    /** Último recurso si el tenant todavía no tiene ni un envío ni un conductor con posición. */
-    private const CENTRO_POR_DEFECTO = ['lat' => 19.4326, 'lng' => -99.1332];
+    /**
+     * Callejero de Celaya, Gto. Cada punto es una dirección que existe, con las coordenadas que
+     * devuelve Google para ella —no un sorteo alrededor de un centro—, para que el mapa del Panel
+     * muestre calles reconocibles y las rutas simuladas del modo TEST recorran avenidas de verdad.
+     *
+     * @var array<int, array{direccion: string, lat: float, lng: float}>
+     */
+    private const DIRECCIONES_CELAYA = [
+        ['direccion' => 'Jardín Principal, Álvaro Obregón Sur s/n, Centro, 38000 Celaya, Gto.', 'lat' => 20.5214843, 'lng' => -100.8144210],
+        ['direccion' => 'Templo de San Francisco, Perfecto I. Aranda s/n, Centro, 38000 Celaya, Gto.', 'lat' => 20.5225603, 'lng' => -100.8120624],
+        ['direccion' => 'Bola de Agua, Independencia s/n, Centro, 38000 Celaya, Gto.', 'lat' => 20.5219539, 'lng' => -100.8124112],
+        ['direccion' => 'Blvd. Adolfo López Mateos s/n, Centro, 38000 Celaya, Gto.', 'lat' => 20.5196132, 'lng' => -100.8141387],
+        ['direccion' => 'Mercado Morelos, Morelos s/n, Centro, 38000 Celaya, Gto.', 'lat' => 20.5212838, 'lng' => -100.8117359],
+        ['direccion' => 'Hospital General de Celaya, Juan B. Castelazo s/n, Valle del Real, 38020 Celaya, Gto.', 'lat' => 20.5255541, 'lng' => -100.8466975],
+        ['direccion' => 'Central de Autobuses, Antonio Plaza s/n, El Vergel, 38078 Celaya, Gto.', 'lat' => 20.5138698, 'lng' => -100.8071187],
+        ['direccion' => 'Universidad de Celaya, Carretera Panamericana km 269, Rancho Pinto, 38080 Celaya, Gto.', 'lat' => 20.5189910, 'lng' => -100.7859661],
+        ['direccion' => 'Instituto Tecnológico de Celaya, Antonio García Cubas 600, Fovissste, 38010 Celaya, Gto.', 'lat' => 20.5360708, 'lng' => -100.8188007],
+        ['direccion' => 'Estadio Miguel Alemán, Av. Irrigación s/n, Deportiva, 38010 Celaya, Gto.', 'lat' => 20.5358458, 'lng' => -100.8177560],
+        ['direccion' => 'Walmart Celaya, Carr. Villagrán - Salamanca 758, 38064 Celaya, Gto.', 'lat' => 20.5197364, 'lng' => -100.8390428],
+        ['direccion' => 'Soriana Los Sauces, 12 de Octubre 200, Los Sauces, 38027 Celaya, Gto.', 'lat' => 20.5323317, 'lng' => -100.8370360],
+        ['direccion' => 'Cruz Roja Celaya, Av. Constituyentes s/n, Rosa Linda, 38060 Celaya, Gto.', 'lat' => 20.5180616, 'lng' => -100.8386777],
+        ['direccion' => 'Parque Bicentenario, Av. Bicentenario s/n, San Isidro de Trojes, 38080 Celaya, Gto.', 'lat' => 20.5113987, 'lng' => -100.7781602],
+        ['direccion' => 'Alameda de Celaya, Celaya, Gto.', 'lat' => 20.5292071, 'lng' => -100.8080506],
+        ['direccion' => 'Parque Xochipilli, 38010 Celaya, Gto.', 'lat' => 20.5383258, 'lng' => -100.8283000],
+    ];
+
+    /** Quien pide el envío. Nombres corrientes, para que la lista del Panel no se lea como un test. */
+    private const SOLICITANTES = [
+        'María Fernanda Ramírez', 'José Luis Hernández', 'Guadalupe Martínez', 'Ricardo Olvera',
+        'Ana Karen Zavala', 'Miguel Ángel Cruz', 'Verónica Aguilar', 'Jorge Alberto Pérez',
+        'Claudia Ibarra', 'Fernando Rangel', 'Laura Elena Vázquez', 'Sergio Mendoza',
+        'Alejandra Trejo', 'Óscar Gutiérrez', 'Patricia Solís', 'Iván Cervantes',
+    ];
+
+    /** Las tres del formulario del Panel (`Tenant\PedidoController::validarDatos`). */
+    private const MODALIDADES_PAGO = [
+        'REMITENTE_PAGA_ENVIO',
+        'RECEPTOR_PAGA_ENVIO',
+        'RECEPTOR_PAGA_ENVIO_PRODUCTOS',
+    ];
+
+    /** Pares recogida-entrega ya usados en esta corrida, para no repetir el mismo trayecto. */
+    private array $paresUsados = [];
 
     public function __construct(private readonly PedidoEstadoService $estados)
     {
@@ -72,9 +120,12 @@ class SembrarPedidos extends Command
             }
 
             $ambiente = $this->resolverAmbiente();
-            $centro = $this->resolverCentro();
+            $centro = $this->centroDelSorteo();
+            $origen = $centro === null
+                ? 'callejero de Celaya'
+                : "sorteo alrededor de {$centro['lat']},{$centro['lng']} (radio {$radioKm} km)";
 
-            $this->line("Tenant <info>{$tenant->slug}</info> · ambiente <info>{$ambiente}</info> · centro {$centro['lat']},{$centro['lng']}");
+            $this->line("Tenant <info>{$tenant->slug}</info> · ambiente <info>{$ambiente}</info> · {$origen}");
 
             $filas = [];
 
@@ -85,16 +136,21 @@ class SembrarPedidos extends Command
                     $this->publicar($pedido);
                 }
 
+                // El mismo aviso que da el alta desde el Panel (spec tenant/027, RN-05): sin él
+                // los envíos sembrados no aparecen en "Viajes en turno" hasta que alguien recargue.
+                PedidoCreado::dispatch($pedido->id_pedido, $tenant->slug);
+
                 $filas[] = [
                     $pedido->numero_pedido,
                     $pedido->estado,
                     number_format((float) $pedido->importe_envio, 2),
-                    "{$pedido->latitud_recogida},{$pedido->longitud_recogida}",
-                    "{$pedido->latitud_entrega},{$pedido->longitud_entrega}",
+                    $pedido->nombre_solicitante,
+                    $this->resumir($pedido->direccion_recogida),
+                    $this->resumir($pedido->direccion_entrega),
                 ];
             }
 
-            $this->table(['Envío', 'Estado', 'Importe', 'Recogida', 'Entrega'], $filas);
+            $this->table(['Envío', 'Estado', 'Importe', 'Solicitante', 'Recogida', 'Entrega'], $filas);
         } finally {
             tenancy()->end();
         }
@@ -136,41 +192,29 @@ class SembrarPedidos extends Command
     }
 
     /**
-     * El centro sale de los datos del propio tenant, para que los envíos caigan donde ya se está
-     * probando: primero la última recogida capturada a mano, luego el último conductor que reportó
-     * posición.
+     * `null` —el caso normal— significa "usa el callejero de Celaya". Solo con `--centro` explícito
+     * se vuelve al sorteo al azar de la versión anterior, que es la salida para un tenant de otra
+     * ciudad: ahí ninguna dirección del catálogo tendría sentido.
      *
-     * @return array{lat: float, lng: float}
+     * @return array{lat: float, lng: float}|null
      */
-    private function resolverCentro(): array
+    private function centroDelSorteo(): ?array
     {
         $opcion = $this->option('centro');
 
-        if (is_string($opcion) && str_contains($opcion, ',')) {
-            [$lat, $lng] = array_map('trim', explode(',', $opcion, 2));
-
-            return ['lat' => (float) $lat, 'lng' => (float) $lng];
+        if (! is_string($opcion) || ! str_contains($opcion, ',')) {
+            return null;
         }
 
-        $ultimo = Pedido::withoutGlobalScopes()
-            ->whereNotNull('latitud_recogida')
-            ->orderByDesc('id_pedido')
-            ->first(['latitud_recogida', 'longitud_recogida']);
+        [$lat, $lng] = array_map('trim', explode(',', $opcion, 2));
 
-        if ($ultimo !== null) {
-            return ['lat' => (float) $ultimo->latitud_recogida, 'lng' => (float) $ultimo->longitud_recogida];
-        }
+        return ['lat' => (float) $lat, 'lng' => (float) $lng];
+    }
 
-        $conductor = DB::table('conductor_estado')
-            ->whereNotNull('ultima_latitud')
-            ->orderByDesc('updated_at')
-            ->first();
-
-        if ($conductor !== null) {
-            return ['lat' => (float) $conductor->ultima_latitud, 'lng' => (float) $conductor->ultima_longitud];
-        }
-
-        return self::CENTRO_POR_DEFECTO;
+    /** La dirección completa no cabe en la tabla de la consola; el Panel sí la guarda entera. */
+    private function resumir(string $direccion): string
+    {
+        return str_contains($direccion, ',') ? strstr($direccion, ',', true) : $direccion;
     }
 
     /**
@@ -194,17 +238,27 @@ class SembrarPedidos extends Command
     }
 
     /**
-     * @param  array{lat: float, lng: float}  $centro
+     * @param  array{lat: float, lng: float}|null  $centro
      * @param  array{banderazo: float, km_incluidos: float, km_adicional: float}  $tarifas
      */
-    private function crear(string $ambiente, array $centro, float $radioKm, array $tarifas, int $indice): Pedido
+    private function crear(string $ambiente, ?array $centro, float $radioKm, array $tarifas, int $indice): Pedido
     {
-        $recogida = $this->puntoCercano($centro, $radioKm);
-        $entrega = $this->puntoCercano($centro, $radioKm);
+        [$recogida, $entrega] = $centro === null
+            ? $this->parDeDirecciones()
+            : $this->parSorteado($centro, $radioKm, $indice);
+
         $km = $this->distanciaKm($recogida, $entrega);
         $importe = $tarifas['banderazo'] + (max(0.0, $km - $tarifas['km_incluidos']) * $tarifas['km_adicional']);
 
-        return DB::transaction(function () use ($ambiente, $recogida, $entrega, $importe, $indice) {
+        // Igual que el formulario del Panel: `importe_cobro` solo tiene sentido cuando el receptor
+        // paga los productos; en las otras dos modalidades queda en cero
+        // (`Tenant\PedidoController::validarDatos`).
+        $modalidad = self::MODALIDADES_PAGO[array_rand(self::MODALIDADES_PAGO)];
+        $cobro = $modalidad === 'RECEPTOR_PAGA_ENVIO_PRODUCTOS' ? (float) mt_rand(120, 950) : 0.0;
+
+        $solicitante = self::SOLICITANTES[array_rand(self::SOLICITANTES)];
+
+        return DB::transaction(function () use ($ambiente, $recogida, $entrega, $importe, $modalidad, $cobro, $solicitante) {
             // Mismo criterio que `Tenant\PedidoController@store`: el correlativo es del tenant
             // entero y no del ambiente, y `ambiente` se sella fuera del `create()` porque no está
             // en el `#[Fillable]` del modelo.
@@ -212,19 +266,19 @@ class SembrarPedidos extends Command
 
             $pedido = Pedido::create([
                 'numero_pedido' => 'PED-'.str_pad((string) $siguienteId, 6, '0', STR_PAD_LEFT),
-                'nombre_solicitante' => "Siembra {$indice}",
-                'telefono_solicitante' => '5500'.str_pad((string) $indice, 6, '0', STR_PAD_LEFT),
-                'direccion_recogida' => "Recogida de prueba {$indice}",
+                'nombre_solicitante' => $solicitante,
+                'telefono_solicitante' => $this->telefono(),
+                'direccion_recogida' => $recogida['direccion'],
                 'latitud_recogida' => $recogida['lat'],
                 'longitud_recogida' => $recogida['lng'],
-                'direccion_entrega' => "Entrega de prueba {$indice}",
+                'direccion_entrega' => $entrega['direccion'],
                 'latitud_entrega' => $entrega['lat'],
                 'longitud_entrega' => $entrega['lng'],
                 'fecha_servicio' => now()->toDateString(),
                 'lo_antes_posible' => true,
-                'modalidad_pago' => 'REMITENTE_PAGA_ENVIO',
+                'modalidad_pago' => $modalidad,
                 'importe_envio' => round($importe, 2),
-                'importe_cobro' => 0,
+                'importe_cobro' => $cobro,
                 'estado' => 'PENDIENTE',
             ]);
 
@@ -233,6 +287,66 @@ class SembrarPedidos extends Command
 
             return $pedido;
         });
+    }
+
+    /** Un envío de 200 metros no lo captura nadie: dos puntos más cerca que esto no hacen pareja. */
+    private const DISTANCIA_MINIMA_KM = 1.0;
+
+    /**
+     * Dos direcciones distintas del callejero, sin repetir un trayecto ya sembrado en esta corrida.
+     * Con más envíos que combinaciones el catálogo se agota y se acepta la repetición: es preferible
+     * a quedarse dando vueltas.
+     *
+     * @return array{0: array{direccion: string, lat: float, lng: float}, 1: array{direccion: string, lat: float, lng: float}}
+     */
+    private function parDeDirecciones(): array
+    {
+        $total = count(self::DIRECCIONES_CELAYA);
+
+        for ($intento = 0; $intento < 60; $intento++) {
+            $i = random_int(0, $total - 1);
+            $j = random_int(0, $total - 1);
+
+            if ($i === $j || in_array("{$i}-{$j}", $this->paresUsados, true)) {
+                continue;
+            }
+
+            if ($this->distanciaKm(self::DIRECCIONES_CELAYA[$i], self::DIRECCIONES_CELAYA[$j]) < self::DISTANCIA_MINIMA_KM) {
+                continue;
+            }
+
+            $this->paresUsados[] = "{$i}-{$j}";
+
+            return [self::DIRECCIONES_CELAYA[$i], self::DIRECCIONES_CELAYA[$j]];
+        }
+
+        $i = random_int(0, $total - 1);
+        $j = ($i + random_int(1, $total - 1)) % $total;
+
+        return [self::DIRECCIONES_CELAYA[$i], self::DIRECCIONES_CELAYA[$j]];
+    }
+
+    /**
+     * El modo `--centro`: puntos al azar y direcciones rotuladas, para un tenant fuera de Celaya.
+     *
+     * @param  array{lat: float, lng: float}  $centro
+     * @return array{0: array{direccion: string, lat: float, lng: float}, 1: array{direccion: string, lat: float, lng: float}}
+     */
+    private function parSorteado(array $centro, float $radioKm, int $indice): array
+    {
+        $recogida = $this->puntoCercano($centro, $radioKm);
+        $entrega = $this->puntoCercano($centro, $radioKm);
+
+        return [
+            ['direccion' => "Recogida de prueba {$indice}", ...$recogida],
+            ['direccion' => "Entrega de prueba {$indice}", ...$entrega],
+        ];
+    }
+
+    /** Teléfono de Celaya: lada 461 y siete dígitos, como los que teclea un despachador. */
+    private function telefono(): string
+    {
+        return '461'.str_pad((string) random_int(1000000, 9999999), 7, '0', STR_PAD_LEFT);
     }
 
     /**

@@ -209,8 +209,11 @@ que en LIVE: son acciones humanas, no llegadas geográficas.
 - **RN-07**: En TEST, la simulación arranca en dos momentos: al pasar a `TOMADO` (tramo de
   acercamiento, desde la última posición conocida del conductor hasta la recogida) y al pasar a
   `EN_CAMINO` (tramo de entrega, de la recogida a la entrega).
-- **RN-08**: Si el conductor nunca reportó posición, el tramo de acercamiento arranca en el punto de
-  recogida mismo: dura un instante y `ARRIBADO` cae de inmediato.
+- **RN-08**: La "última posición conocida" de RN-07 es la que el teléfono reporta mientras el
+  conductor está en línea sin envío (SPEC-021, RN-01b). Si aun así no hay ninguna —nunca mandó una
+  lectura—, el tramo de acercamiento arranca en el punto de recogida mismo: dura un instante y
+  `ARRIBADO` cae de inmediato. Es el último recurso, no el caso normal: antes de RN-01b lo era
+  siempre, porque en TEST el GPS real se descarta (RN-11) y la posición no llegaba a existir.
 - **RN-09**: La velocidad simulada es 60 km/h constante (16.667 m/s). No hay tráfico, semáforos ni
   paradas. Se escribe un punto cada 2 segundos, unos 33 metros.
 - **RN-10**: Las coordenadas simuladas entran por `TrackingService::registrarPosicion()`, el mismo

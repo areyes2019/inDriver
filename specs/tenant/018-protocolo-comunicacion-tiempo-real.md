@@ -209,6 +209,16 @@ conductores, y a duplicar la autorización. El costo real del filtro es una comp
 - **RN-09**: Los eventos dirigidos a una persona llevan `id_conductor`. El cliente descarta primero
   los que no son suyos y solo después aplica el descarte por `event_id` (RN-06). Un conductor nunca ve
   en pantalla algo que le pasó a otro.
+- **RN-10**: El envío en curso no puede depender solo del socket. `panda_express` relee
+  `GET /conductor/pedidos/activo` cada 10 s: si el servidor ya no devuelve ninguno, el envío se
+  cerró desde el Panel y la app lo trata igual que `pedido.cancelado`; si devuelve otro estado, lo
+  reemplaza. Sin esta red, una cancelación con Reverb apagado —el caso de producción hoy— dejaba al
+  conductor con el viaje en pantalla para siempre. El sondeo de pedidos *disponibles* no cubre esto:
+  mira otra lista.
+- **RN-11**: La autorización del canal privado lee el token del conductor **en cada intento**, no
+  al arrancar la app. `services/realtime.js` conecta antes del login, así que un encabezado fijo
+  congelaba un token vacío, `/conductor/broadcasting/auth` respondía 401 y la app se quedaba sorda
+  toda la sesión. Una suscripción rechazada se reintenta con la misma espera creciente de RN-07.
 
 ## Backend (Laravel)
 

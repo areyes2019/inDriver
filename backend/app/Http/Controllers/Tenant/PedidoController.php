@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Tenant;
 
+use App\Events\Tenant\PedidoCreado;
 use App\Events\Tenant\PedidoReprogramado;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Tenant\PedidoResource;
@@ -130,6 +131,17 @@ class PedidoController extends Controller
         // Los agendados los publica `pedidos:publicar-agendados` 15 minutos antes de su horario.
         if ($pedido->lo_antes_posible) {
             $this->publicar($pedido);
+        }
+
+        // spec tenant/027, RN-05: el alta se anuncia por el canal para que la fila entre sola a
+        // "Viajes en turno". No basta con `pedido.disponible`: ese solo sale si el envío se publica
+        // y además hay conductores elegibles en ese momento, así que un agendado —o uno creado con
+        // la flotilla desconectada— obligaba a recargar la página para verlo.
+        //
+        // Va después de `publicar()` para que la carga lleve el estado con el que quedó el envío y
+        // no el PENDIENTE intermedio del `create()`.
+        if ($slug = tenant()?->slug) {
+            PedidoCreado::dispatch($pedido->id_pedido, $slug);
         }
 
         return response()->json(new PedidoResource($pedido), 201);

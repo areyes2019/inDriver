@@ -9,6 +9,7 @@ use App\Http\Controllers\Tenant\VentaViajeConductorController;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConfiguracionTenant;
+use App\Services\Gps\PermisoGpsService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -22,7 +23,10 @@ use Illuminate\Validation\ValidationException;
  */
 class DisponibilidadService
 {
-    public function __construct(private readonly SaldoService $saldos) {}
+    public function __construct(
+        private readonly SaldoService $saldos,
+        private readonly PermisoGpsService $permisosGps,
+    ) {}
 
     /**
      * @throws ValidationException con `INSUFFICIENT_BALANCE` si el saldo no alcanza (RN-02).
@@ -111,6 +115,13 @@ class DisponibilidadService
 
             return $conductorEstado;
         });
+
+        // spec tenant/028, RN-10: apagarse invalida los permisos GPS vivos del conductor. Cubre
+        // también el cierre de sesión, que fuerza esta misma desconexión. Va después del commit y
+        // no puede tumbarla: `BuzonGps` se traga sus propios fallos.
+        if ($estado === 'OFFLINE') {
+            $this->permisosGps->cancelar($conductor);
+        }
 
         if ($slug = tenant()?->slug) {
             try {

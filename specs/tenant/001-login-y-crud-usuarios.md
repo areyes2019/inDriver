@@ -133,7 +133,8 @@ siempre arma `/admin/reset-password/{token}`. Se cambia para que distinga por ti
 - **Listar**: búsqueda por `nombre`/`email`, paginado — mismo patrón que
   `TenantController@index` (spec 007/008).
 - **Crear**: el AdminCliente captura nombre/apellidos/teléfono/email/rol; la contraseña **no** la
-  escribe — se genera aleatoria (`Str::password()`), se guarda hasheada, y se envía por correo,
+  escribe — se genera aleatoria (`App\Support\PasswordGenerada`: letras, números y un solo
+  símbolo, sin diagonales), se guarda hasheada, y se envía por correo,
   igual mecanismo que `010-alta-admin-cliente-tenant.md` usa para el primer AdminCliente. Se
   reutiliza el mismo mecanismo de correo pero con una notificación nueva y más genérica,
   `App\Notifications\CredencialesUsuarioTenant` (en vez de reutilizar

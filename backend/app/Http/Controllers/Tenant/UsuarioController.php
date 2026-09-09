@@ -11,13 +11,13 @@ use App\Models\Tenant\Conductor;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Usuario;
 use App\Notifications\CredencialesUsuarioTenant;
+use App\Support\PasswordGenerada;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -54,7 +54,7 @@ class UsuarioController extends Controller
             'rol' => ['required', Rule::in(['AdminCliente', 'Despachador', 'Conductor'])],
         ]);
 
-        $password = Str::password(16);
+        $password = PasswordGenerada::generar();
 
         $usuario = DB::transaction(function () use ($data, $password) {
             $usuario = Usuario::create([...$data, 'password' => $password, 'estado' => 'Activo']);

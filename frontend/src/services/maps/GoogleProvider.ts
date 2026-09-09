@@ -18,7 +18,7 @@ import type {
 interface MapInstance {
   map: google.maps.Map
   markers: Map<string, google.maps.Marker>
-  routes: Map<string, google.maps.DirectionsRenderer | google.maps.Polyline>
+  routes: Map<string, google.maps.Polyline>
   directionsService: google.maps.DirectionsService
   polygon?: google.maps.Polygon
   polygonListeners: google.maps.MapsEventListener[]
@@ -163,16 +163,27 @@ export default class GoogleProvider extends BaseProvider {
         travelMode: google.maps.TravelMode.DRIVING,
       })
 
-      const renderer = new google.maps.DirectionsRenderer({
-        map: instance.map,
-        suppressMarkers: true,
-        preserveViewport: options.preserveViewport ?? false,
-        polylineOptions: trazo,
-      })
-      renderer.setDirections(response)
-      instance.routes.set(routeId, renderer)
-
       const route = response.routes[0]
+
+      // La línea se dibuja a mano en vez de con `DirectionsRenderer`: el renderer solo traslada a
+      // su polilínea las propiedades de trazo (color, opacidad, grosor) y descarta `icons`, que es
+      // con lo que se arman los guiones. El resultado era que el tramo H1 salía con la línea base
+      // invisible (`strokeOpacity: 0`) y sin los símbolos encima — o sea, sin nada. Con `Polyline`
+      // propia el trazo se aplica entero, igual que en la rama de respaldo de abajo y que en
+      // `panda_express`.
+      const polilinea = new google.maps.Polyline({
+        map: instance.map,
+        path: route?.overview_path ?? points,
+        geodesic: true,
+        ...trazo,
+      })
+      instance.routes.set(routeId, polilinea)
+
+      // Lo que hacía `preserveViewport: false` del renderer: encuadrar la ruta recién trazada.
+      if (!(options.preserveViewport ?? false) && route?.bounds) {
+        instance.map.fitBounds(route.bounds)
+      }
+
       const leg = route?.legs[0]
       if (!leg?.distance || !leg?.duration) return null
 

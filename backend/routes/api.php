@@ -10,6 +10,7 @@ use App\Http\Controllers\Tenant\ClienteController;
 use App\Http\Controllers\Tenant\Conductor\AuthController as ConductorAuthController;
 use App\Http\Controllers\Tenant\Conductor\DispositivoController as ConductorDispositivoController;
 use App\Http\Controllers\Tenant\Conductor\EstadoController as ConductorEstadoController;
+use App\Http\Controllers\Tenant\Conductor\GpsTokenController as ConductorGpsTokenController;
 use App\Http\Controllers\Tenant\Conductor\PedidoController as ConductorPedidoController;
 use App\Http\Controllers\Tenant\Conductor\SaldoController as ConductorSaldoController;
 use App\Http\Controllers\Tenant\Conductor\SyncController as ConductorSyncController;
@@ -164,6 +165,10 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
         Route::get('/me', [ConductorAuthController::class, 'me']);
 
         Route::post('/estado', [ConductorEstadoController::class, 'actualizar']);
+        // spec tenant/028: permiso para mandar la posición al microservicio GPS. `/ubicacion` se
+        // conserva como respaldo mientras dura la migración y para cuando el servicio no responde
+        // (RN-19).
+        Route::post('/gps-token', [ConductorGpsTokenController::class, 'emitir']);
         Route::post('/ubicacion', [ConductorUbicacionController::class, 'actualizar']);
         Route::post('/pedidos/{pedido}/ubicaciones/lote', [ConductorUbicacionController::class, 'lote']);
 
