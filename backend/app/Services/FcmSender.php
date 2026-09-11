@@ -52,10 +52,21 @@ class FcmSender
     /**
      * Intercambia la cuenta de servicio por un access token OAuth2 de Google, cacheado (los
      * tokens de Google duran 1 hora) para no firmar un JWT nuevo en cada push.
+     *
+     * `Cache::store(...)` a propósito, no la fachada `Cache::` a secas: esto corre siempre dentro
+     * de tenancy() (los eventos que llaman a `enviar()` son todos de tenant), y `CacheManager` de
+     * stancl/tenancy reemplaza el binding `cache` por uno que fuerza `->tags([...])` en cada
+     * llamada (`config/tenancy.php`, `CacheTenancyBootstrapper`). El store `database`
+     * (`CACHE_STORE=database` en local y en producción) no soporta tags y tira
+     * `BadMethodCallException: This cache store does not support tagging.` — `Cache::store()` es
+     * un método real de `Illuminate\Cache\CacheManager`, así que esquiva el `__call` que añade el
+     * tag y entrega el repositorio de siempre. Aparte, el access token de Firebase no es un dato de
+     * tenant — una sola cuenta de servicio (`FIREBASE_CREDENTIALS_PATH`) es compartida por todos—,
+     * así que ni siquiera correspondía etiquetarlo por tenant.
      */
     private function obtenerAccessToken(string $credentialsPath): ?string
     {
-        return Cache::remember('fcm_access_token', now()->addMinutes(55), function () use ($credentialsPath) {
+        return Cache::store(config('cache.default'))->remember('fcm_access_token', now()->addMinutes(55), function () use ($credentialsPath) {
             if (! File::exists($credentialsPath)) {
                 Log::warning('FcmSender: no se encontró el archivo de credenciales de Firebase.', ['path' => $credentialsPath]);
 
