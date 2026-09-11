@@ -144,3 +144,24 @@ de tenant se guarda en la base **del tenant**, y el worker —que corre sin tena
 - **El certificado no renueva solo**: el paquete `certbot` instala un timer de systemd
   (`certbot.timer`) que corre dos veces al día; comprobar con
   `ssh <alias> "systemctl status certbot.timer"`.
+- **El Panel/la App no reciben nada en tiempo real, pero `deploy/verify.sh` dice que Reverb
+  responde 101**: no es un problema de servidor — revisa `enabledTransports` en
+  `frontend/src/services/realtime.ts` y en `panda_expess/src/services/realtime.js`. Tiene que ser
+  `['ws']`, **nunca** `['wss']`: pusher-js no tiene ningún transporte llamado "wss" (el transporte
+  siempre se llama `'ws'`, y `forceTLS` es lo que decide si usa TLS). Con `'wss'` ahí, pusher-js no
+  reconoce ningún transporte válido y el estado salta de `"initialized"` a `"failed"` sin intentar
+  abrir el socket — por eso no aparece ni un intento fallido en la pestaña Network del navegador, y
+  por eso el handshake externo de `verify.sh` pasa igual (ese chequeo prueba Nginx+Reverb, no el
+  código del cliente). Ver spec `tenant/018`, revisión posterior a la implementación, punto 21.
+- **`deploy/verify.sh` dice que el handshake de Reverb NO responde 101**: `reverb.service` puede
+  estar `enabled` (sobrevive reinicios) sin estar `active` — pasó de verdad: Nginx y el Panel ya
+  estaban listos y nadie había corrido `systemctl start reverb` la primera vez. Comprobar con
+  `ssh <alias> "systemctl status reverb"` y arrancarlo si no está `active (running)`.
+- **`Cache::remember()`/`Cache::tags()` truena en el log con `"This cache store does not support
+  tagging"`**: pasa dentro de `tenancy()` con `CACHE_STORE=database` — `stancl/tenancy` reemplaza el
+  binding `cache` por uno que fuerza `->tags([...])` en cada llamada (`CacheTenancyBootstrapper`), y
+  el store `database` no soporta tags. Dos partes: en el código, usar `Cache::store(...)` (método
+  real de `CacheManager`, esquiva el `__call` que agrega el tag) en vez de la fachada `Cache::` a
+  secas; en el `.env`, `DB_CACHE_CONNECTION=mysql` tiene que estar puesto (la tabla `cache` solo
+  existe en la base central, no en la de cada tenant). Ver `FcmSender::obtenerAccessToken()` como
+  referencia y spec `tenant/018`, revisión posterior a la implementación, punto 22.

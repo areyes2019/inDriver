@@ -24,6 +24,15 @@ comprobar() {
 codigo()      { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 tipo()        { curl -s -o /dev/null -w '%{content_type}' "$@"; }
 
+# El handshake de WebSocket deja la conexión abierta (es su naturaleza), así que
+# --max-time la corta a los 3s — curl igual imprime el código de la respuesta
+# recibida antes de cortar (exit 28 de curl, que se ignora a propósito aquí).
+codigo_ws()   { curl -s --max-time 3 -o /dev/null -w '%{http_code}' \
+                    -H 'Upgrade: websocket' -H 'Connection: Upgrade' \
+                    -H 'Sec-WebSocket-Version: 13' \
+                    -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+                    "$@" 2>/dev/null || true; }
+
 HOST="${SITE_URL#https://}"
 
 say "Disponibilidad"
@@ -54,6 +63,22 @@ esac
 
 say "Sanctum"
 comprobar "GET /sanctum/csrf-cookie responde 204" 204 "$(codigo "$SITE_URL/sanctum/csrf-cookie")"
+
+say "Tiempo real (Reverb)"
+# No es un chequeo cosmético: Reverb corre como servicio systemd aparte
+# (reverb.service) y nada de lo anterior en este script lo toca ni lo arranca.
+# Puede estar `enabled` (sobrevive reinicios) sin estar `active` — pasó de
+# verdad en producción: Nginx y el Panel ya estaban listos y Reverb nunca se
+# había iniciado, así que nadie recibía nada en tiempo real y no había forma
+# de notarlo salvo probando el propio handshake (spec tenant/018, revisión
+# posterior a la implementación, punto 21).
+REVERB_KEY="$(sed -n 's/^VITE_REVERB_APP_KEY=//p' "$(dirname "${BASH_SOURCE[0]}")/../frontend/.env.production" | tr -d '\r')"
+if [ -z "$REVERB_KEY" ]; then
+    warn "no se encontró VITE_REVERB_APP_KEY en frontend/.env.production — comprobación de Reverb OMITIDA."
+else
+    comprobar "el handshake de WebSocket a Reverb responde 101" \
+        101 "$(codigo_ws "$SITE_URL/app/$REVERB_KEY?protocol=7&client=js&version=8.4.0&flash=false")"
+fi
 
 say "Nada del proyecto es descargable"
 

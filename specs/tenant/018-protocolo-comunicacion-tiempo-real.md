@@ -296,16 +296,24 @@ conductores, y a duplicar la autorización. El costo real del filtro es una comp
 
 ## Requisito de despliegue
 
-El tiempo real depende de dos ajustes de entorno que hoy **no** están puestos en producción:
+El tiempo real depende de varios ajustes de entorno y de un proceso corriendo — resueltos y en
+producción desde 2026-09-11, pero cualquiera de estos puede volver a apagarse en silencio, así que
+`deploy/verify.sh` (sección "Tiempo real (Reverb)") prueba el handshake real y `deploy/README.md`
+("Cuando algo no funciona") tiene el runbook de cada uno:
 
-- `BROADCAST_CONNECTION` debe valer `reverb`. El ejemplo de producción
-  (`deploy/hostinger/env.production.example`) trae `log`, que escribe el evento en la bitácora y no lo
-  emite a nadie. Mientras siga en `log`, el conductor **solo** recibe la notificación push del
-  teléfono: ningún aviso en pantalla llega, y no es un fallo de la app.
-- El servidor Reverb tiene que estar corriendo (`php artisan reverb:start`) y accesible en el host y
-  puerto que declaran `VITE_REVERB_*` en los dos frontends.
+- `BROADCAST_CONNECTION` debe valer `reverb` (no `log`) en el `.env` del servidor.
+- `reverb.service` tiene que estar **corriendo** (`active`), no solo `enabled` — systemd no lo
+  arranca solo la primera vez, hay que `systemctl start reverb` a mano una vez (ver incidente,
+  punto 23).
+- `DB_CACHE_CONNECTION=mysql` en el `.env` (ver incidente, punto 22) — sin esto, cualquier
+  `Cache::` dentro de tenancy() truena y puede interrumpir a medias el envío de un evento.
+- `enabledTransports: ['ws']` en `services/realtime.ts`/`services/realtime.js` — **nunca** `['wss']`
+  (ver incidente, punto 21). Esto ningún chequeo automático lo detecta; es responsabilidad de code
+  review.
 
-Sin estos dos, todo lo demás de esta spec sigue siendo correcto pero invisible.
+Sin cualquiera de estos, todo lo demás de esta spec sigue siendo correcto pero invisible — y, como
+pasó en producción, invisible **sin ningún error visible tampoco**: la app sigue funcionando por
+sondeo y nadie nota que el tiempo real nunca llegó.
 
 ## Criterios de aceptación
 
@@ -382,3 +390,43 @@ Sin estos dos, todo lo demás de esta spec sigue siendo correcto pero invisible.
     la cifra en silencio: anunciarlo con la misma celebración sería engañoso.
 20. El aviso flotante es de sesión viva. No hay recuperación de avisos perdidos; el respaldo para la
     app cerrada sigue siendo el push nativo (RN-04).
+
+### Incidente en producción (2026-09-11): tres causas independientes, una sola pantalla en negro
+
+El "Requisito de despliegue" de arriba avisaba que faltaban dos ajustes de entorno, pero cuando por
+fin se pusieron, el Panel y la App siguieron sin recibir nada en tiempo real. Quedan registradas las
+tres causas reales que se encontraron, en el orden en que se diagnosticaron, porque las tres son
+fáciles de reintroducir sin querer y ninguna se nota en un vistazo rápido:
+
+21. **`enabledTransports: ['wss']` es inválido — la causa raíz real.** `services/realtime.ts`
+    (Panel) y `services/realtime.js` (`panda_express`) armaban `enabledTransports: forceTLS ? ['wss']
+    : ['ws']`. pusher-js **no tiene ningún transporte llamado `"wss"`**: el nombre del transporte
+    siempre es `'ws'`, y `forceTLS: true` es lo que decide, por dentro, si esa conexión usa TLS. Con
+    `'wss'` en la lista, pusher-js no reconocía ningún transporte válido y el estado de la conexión
+    saltaba de `"initialized"` a `"failed"` **sin intentar abrir ningún socket** — ni un intento
+    fallido, nada, en la pestaña Network del navegador. Por eso el diagnóstico fue largo: Reverb
+    corría, Nginx proxyaba bien, el canal privado autorizaba bien con la firma correcta, y un
+    WebSocket a mano (`new WebSocket(...)`) conectaba perfecto — todo lo de infraestructura pasaba
+    cualquier prueba. Solo se encontró instanciando `pusher-js` a mano en la consola del navegador
+    con la config exacta de la app y leyendo `connection.state` (`'failed'`) y el log interno
+    (`Pusher.logToConsole = true`). Corregido a `enabledTransports: ['ws']` en los dos frontends.
+    **Nunca cambiar esto a `['wss']` otra vez** — "parece" más correcto para una conexión segura,
+    pero es exactamente el error. `deploy/verify.sh` prueba el handshake de Reverb contra Nginx
+    (protege contra la causa 23), pero **no** puede detectar esta — es un bug del cliente, no del
+    servidor; la única red es este párrafo y el comentario en el código.
+22. **`FcmSender::obtenerAccessToken()` usaba `Cache::remember()` (fachada) dentro de `tenancy()`.**
+    `stancl/tenancy` reemplaza el binding `cache` por uno que fuerza `->tags([...])` en cada llamada
+    (`config/tenancy.php`, `CacheTenancyBootstrapper`), y `CACHE_STORE=database` no soporta tags:
+    tronaba con `BadMethodCallException: This cache store does not support tagging` en **cada**
+    pedido publicado (interrumpía `EnviarPushSiEsCritico` a medio evento, y con eso también
+    `ExpirarOfertaPedido::dispatch()->delay()`, que nunca llegaba a programarse — RN-01/03/04 rotas
+    en cada oferta). Se reproduce localmente solo si hay un `ConductorDispositivo.fcm_token`
+    registrado; por eso nunca se vio en pruebas manuales sin dispositivo real. Corregido a
+    `Cache::store(config('cache.default'))->remember(...)` (`store()` es un método real de
+    `CacheManager`, esquiva el `__call` que agrega el tag) + `DB_CACHE_CONNECTION=mysql` en el
+    `.env` (la tabla `cache` solo vive en la base central).
+23. **`reverb.service` nunca se había arrancado en el VPS.** Estaba `enabled` (systemd lo levanta en
+    cada reinicio del servidor) pero nadie había corrido `systemctl start reverb` la primera vez —
+    Nginx y el frontend ya estaban listos desde antes, apuntando a un puerto donde no escuchaba
+    nada. `deploy/verify.sh` ahora prueba el handshake real de WebSocket contra Reverb (sección
+    "Tiempo real (Reverb)") para que un despliegue futuro no pueda dejarlo así en silencio.
