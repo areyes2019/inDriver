@@ -28,6 +28,13 @@ class TrackingService
     public const RETENCION_DIAS = 7;
 
     /**
+     * RN-03 (spec tenant/021): una lectura que implica más velocidad que esto desde la posición
+     * anterior es GPS implausible —geolocalización por red/IP en vez de GPS real, típico al
+     * probar en una máquina remota sin señal de GPS— y se descarta.
+     */
+    public const MAX_VELOCIDAD_KMH = 150.0;
+
+    /**
      * Flujo normal, en vivo (RN-04): guarda el punto y actualiza la posición "actual" del
      * conductor en la misma operación, y difunde al Panel.
      *
@@ -45,6 +52,13 @@ class TrackingService
             throw ValidationException::withMessages([
                 'pedido' => ['DELIVERY_NOT_ACTIVE'],
             ]);
+        }
+
+        // Se descarta en silencio, igual que un LOCATION_UPDATE inválido por socket (spec
+        // tenant/021, sección de errores): no hay a quién devolverle el error, y reintentar sería
+        // peor que perder un punto.
+        if ($this->esSaltoImposible($conductor, (float) $datos['latitud'], (float) $datos['longitud'])) {
+            return null;
         }
 
         $this->actualizarPosicionActual($conductor, (float) $datos['latitud'], (float) $datos['longitud']);
@@ -176,6 +190,31 @@ class TrackingService
             ['id_conductor' => $conductor->id_conductor],
             ['ultima_latitud' => $latitud, 'ultima_longitud' => $longitud, 'ultima_actualizacion' => now()],
         );
+    }
+
+    /**
+     * RN-03 (spec tenant/021): sin posición previa no hay nada contra qué comparar —se acepta,
+     * igual que hace la App—. Con posición previa, la velocidad implícita entre ambas no puede
+     * superar `MAX_VELOCIDAD_KMH`; dos lecturas casi simultáneas mandan la distancia derecho al
+     * numerador (un segundo mínimo evita dividir entre cero sin abrir la puerta a un salto de
+     * cientos de kilómetros "instantáneo").
+     */
+    private function esSaltoImposible(Conductor $conductor, float $latitud, float $longitud): bool
+    {
+        $estado = $conductor->estadoActual;
+
+        if ($estado === null || $estado->ultima_latitud === null || $estado->ultima_longitud === null || $estado->ultima_actualizacion === null) {
+            return false;
+        }
+
+        $segundos = max(1, $estado->ultima_actualizacion->diffInSeconds(now(), true));
+
+        $distanciaKm = $this->haversineKm(
+            (object) ['latitud' => $estado->ultima_latitud, 'longitud' => $estado->ultima_longitud],
+            (object) ['latitud' => $latitud, 'longitud' => $longitud],
+        );
+
+        return ($distanciaKm / ($segundos / 3600)) > self::MAX_VELOCIDAD_KMH;
     }
 
     private function haversineKm(object $a, object $b): float

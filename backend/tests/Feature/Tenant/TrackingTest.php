@@ -175,6 +175,40 @@ it('records a position linked to the active pedido and broadcasts it', function 
     Event::assertDispatched(UbicacionActualizada::class, fn ($event) => $event->idConductor === $datos['conductor']->id_conductor);
 });
 
+it('discards a position that implies an impossible speed from the last known one', function () {
+    Event::fake([UbicacionActualizada::class]);
+
+    $tenant = trackingTenant();
+    $datos = trackingConductor($tenant);
+    tenancy()->initialize($tenant);
+    $pedido = trackingPedido(['id_conductor' => $datos['conductor']->id_conductor]);
+    ConductorEstado::create([
+        'id_conductor' => $datos['conductor']->id_conductor,
+        'estado' => 'ONLINE',
+        'ultima_latitud' => 19.4326,
+        'ultima_longitud' => -99.1332,
+        'ultima_actualizacion' => now()->subSeconds(10),
+    ]);
+    tenancy()->end();
+    $token = trackingToken();
+
+    // San Francisco, a unos 3000 km de la posición anterior: a 10 segundos de distancia implica
+    // más de un millón de km/h, muy por encima de los 150 km/h de RN-03. Típico de una lectura de
+    // geolocalización por red/IP en vez de GPS real (spec tenant/021).
+    $this->withToken($token)
+        ->postJson('/api/v1/t/cafe-luna/conductor/ubicacion', ['latitud' => 37.7749, 'longitud' => -122.4194])
+        ->assertNoContent();
+
+    tenancy()->initialize($tenant);
+    expect(ConductorPosicion::count())->toBe(0);
+    $estado = ConductorEstado::where('id_conductor', $datos['conductor']->id_conductor)->first();
+    expect((float) $estado->ultima_latitud)->toEqualWithDelta(19.4326, 0.0001);
+    expect((float) $estado->ultima_longitud)->toEqualWithDelta(-99.1332, 0.0001);
+    tenancy()->end();
+
+    Event::assertNotDispatched(UbicacionActualizada::class);
+});
+
 it('uploads a batch of offline points without broadcasting, updating the current position', function () {
     Event::fake([UbicacionActualizada::class]);
 
