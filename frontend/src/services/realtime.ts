@@ -60,7 +60,12 @@ class RealtimeService {
         wsPort: port,
         wssPort: port,
         forceTLS,
-        enabledTransports: forceTLS ? ['wss'] : ['ws'],
+        // 'ws', no 'wss': pusher-js no tiene un transporte llamado "wss" — el nombre del
+        // transporte es siempre 'ws', y `forceTLS` es lo que decide si esa conexión usa TLS.
+        // Con 'wss' aquí, pusher-js no reconoce ningún transporte válido y el estado salta
+        // directo de "initialized" a "failed" sin intentar abrir ningún socket (por eso nunca
+        // aparecía ni un intento fallido en la pestaña Network).
+        enabledTransports: ['ws'],
         channelAuthorization: {
           customHandler: ({ socketId, channelName }, callback) => {
             http
