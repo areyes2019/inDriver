@@ -37,10 +37,11 @@ DIST="$REPO_ROOT/frontend/dist"
 # Las tres exclusiones son la parte importante de este script, y aparecen dos
 # veces: una para no subirlas, otra para no borrarlas.
 #
-#   .htaccess   Vite podría copiar uno propio a dist/ si frontend/public/
-#               llegara a tener uno. Si llegara al docroot pisaría el
-#               .htaccess de producción, que es el que decide qué petición va
-#               al SPA y cuál a Laravel.
+#   .htaccess   Inerte en producción, que corre nginx (deploy/vps/): el
+#               enrutado vive en el vhost. Se sigue excluyendo porque el
+#               montaje Apache de deploy/hostinger/ continúa documentado, y
+#               allá un .htaccess que Vite copiara a dist/ sí pisaría al de
+#               producción.
 #   index.php   Front controller de Laravel. No viene del build y no se toca.
 #   robots.txt  Se sube una sola vez en la instalación inicial.
 say "Publicando dist/ en el docroot"
@@ -58,16 +59,15 @@ borrar_sobrantes "$REMOTE_DOCROOT" "\
     -name index.php -prune -o \
     -name robots.txt -prune -o"
 
-# El .htaccess y el index.php de producción tienen que seguir ahí. Si faltan,
-# el sitio responde 404 o descarga el PHP en crudo, y más vale saberlo ahora.
+# El index.php de producción tiene que seguir ahí: sin él el sitio responde 404.
+# No se comprueba el .htaccess porque producción corre nginx (deploy/vps/), que
+# lo ignora — el enrutado vive en el vhost, no en el docroot.
 say "Comprobando los archivos de producción del docroot"
-for archivo in .htaccess index.php; do
-    if remote "[ -f '$REMOTE_DOCROOT/$archivo' ]"; then
-        ok "$archivo presente"
-    else
-        warn "FALTA $REMOTE_DOCROOT/$archivo — súbelo desde deploy/hostinger/ (ver README)"
-    fi
-done
+if remote "[ -f '$REMOTE_DOCROOT/index.php' ]"; then
+    ok "index.php presente"
+else
+    warn "FALTA $REMOTE_DOCROOT/index.php — súbelo desde deploy/hostinger/ (ver README)"
+fi
 
 say "Frontend desplegado"
 printf '    Verifica con:  deploy/verify.sh\n\n'
