@@ -10,6 +10,7 @@ use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConductorPosicion;
 use App\Models\Tenant\Pedido;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -33,6 +34,12 @@ class TrackingService
      * probar en una máquina remota sin señal de GPS— y se descarta.
      */
     public const MAX_VELOCIDAD_KMH = 150.0;
+
+    /**
+     * RN-03b (spec tenant/021): no se rechazan más de estas lecturas seguidas contra la misma
+     * línea base. Pasado el tope, la sospechosa es la base, no las lecturas.
+     */
+    public const MAX_RECHAZOS_CONSECUTIVOS = 3;
 
     /**
      * Flujo normal, en vivo (RN-04): guarda el punto y actualiza la posición "actual" del
@@ -102,6 +109,9 @@ class TrackingService
                 'ultima_latitud' => $latitud,
                 'ultima_longitud' => $longitud,
                 'ultima_actualizacion' => now(),
+                // Esta vía no pasa por RN-03 y reemplaza la base entera: una racha de rechazos
+                // contra la base anterior ya no dice nada de la nueva (RN-03b).
+                'rechazos_consecutivos' => 0,
             ]);
     }
 
@@ -187,11 +197,36 @@ class TrackingService
      * de entrada compartido por el camino HTTP directo (`registrarPosicion`) y por el worker que
      * aplica lo que reenvía el microservicio GPS (`ConsumirBuzonGps::difundir`, spec tenant/028):
      * el filtro no puede depender de por cuál de los dos caminos entró el punto.
+     *
+     * RN-03b: RN-03 compara siempre contra la posición anterior, así que una base equivocada se
+     * defiende sola —rechaza por "salto imposible" justo las lecturas buenas que la contradicen— y
+     * el conductor queda clavado ahí hasta que pasen las horas que la velocidad implícita necesita
+     * para volverse plausible. Pasó en producción: una lectura de geolocalización por red/IP entró
+     * como base y dejó el mapa congelado el resto del envío. Por eso, tras
+     * `MAX_RECHAZOS_CONSECUTIVOS` rechazos seguidos, gana la mayoría: varias lecturas que coinciden
+     * en contradecir a la base dicen más que la base sola.
      */
     public function filtrarPosicionEnVivo(Conductor $conductor, float $latitud, float $longitud): bool
     {
         if ($this->esSaltoImposible($conductor, $latitud, $longitud)) {
-            return false;
+            $rechazos = $this->contarRechazo($conductor);
+            $baseEnvenenada = $rechazos > self::MAX_RECHAZOS_CONSECUTIVOS;
+
+            // Se registra siempre, por los dos caminos de entrada: una coordenada inválida que se
+            // descarta en silencio es indistinguible de un GPS apagado cuando hay que diagnosticar.
+            Log::warning($baseEnvenenada
+                ? 'RN-03b: la posición anterior se da por envenenada tras rechazos seguidos; se adopta la lectura nueva como base.'
+                : 'RN-03: posición descartada por salto implausible desde la posición anterior.', [
+                    'id_conductor' => $conductor->id_conductor,
+                    'tenant' => tenant()?->slug,
+                    'latitud' => $latitud,
+                    'longitud' => $longitud,
+                    'rechazos_consecutivos' => $rechazos,
+                ]);
+
+            if (! $baseEnvenenada) {
+                return false;
+            }
         }
 
         $this->actualizarPosicionActual($conductor, $latitud, $longitud);
@@ -199,11 +234,26 @@ class TrackingService
         return true;
     }
 
+    /**
+     * RN-03b: no mueve `ultima_actualizacion`. Ese sello es el denominador de la velocidad
+     * implícita, y refrescarlo en cada rechazo volvería a hacer "reciente" una base que ya se
+     * sospecha mala, dejando el salto igual de imposible para siempre.
+     *
+     * Suma en SQL y relee: el mismo conductor puede venir por los dos caminos de entrada a la vez,
+     * y `$conductor->estadoActual` es una copia de cuando se cargó el modelo.
+     */
+    private function contarRechazo(Conductor $conductor): int
+    {
+        ConductorEstado::where('id_conductor', $conductor->id_conductor)->increment('rechazos_consecutivos');
+
+        return (int) ConductorEstado::where('id_conductor', $conductor->id_conductor)->value('rechazos_consecutivos');
+    }
+
     private function actualizarPosicionActual(Conductor $conductor, float $latitud, float $longitud): void
     {
         ConductorEstado::updateOrCreate(
             ['id_conductor' => $conductor->id_conductor],
-            ['ultima_latitud' => $latitud, 'ultima_longitud' => $longitud, 'ultima_actualizacion' => now()],
+            ['ultima_latitud' => $latitud, 'ultima_longitud' => $longitud, 'ultima_actualizacion' => now(), 'rechazos_consecutivos' => 0],
         );
     }
 

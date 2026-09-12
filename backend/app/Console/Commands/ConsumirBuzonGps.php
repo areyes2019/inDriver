@@ -151,12 +151,9 @@ class ConsumirBuzonGps extends Command
         $latitud = (float) $datos['latitud'];
         $longitud = (float) $datos['longitud'];
 
+        // El descarte lo registra `filtrarPosicionEnVivo`, que es el punto compartido con el camino
+        // HTTP directo: duplicarlo aquí daría dos líneas por la misma posición.
         if (! $tracking->filtrarPosicionEnVivo($conductor, $latitud, $longitud)) {
-            Log::warning('Posición GPS descartada por salto implausible (RN-03).', [
-                'id_conductor' => $idConductor,
-                'tenant' => $slug,
-            ]);
-
             return true;
         }
 

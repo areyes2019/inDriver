@@ -267,7 +267,10 @@ prioridad. Si el servicio no responde, Laravel cae a la consulta actual sobre `c
   preguntándole en cada posición.
 - **RN-03:** La App sigue decidiendo cuándo enviar y qué lecturas descartar: cada 15 s, o antes al
   moverse 50 m, o cada minuto si lleva 2 min detenido; descarta precisión mayor a 100 m o velocidad
-  implícita mayor a 150 km/h. Hereda RN-02 y RN-03 de SPEC-021.
+  implícita mayor a 150 km/h. Hereda RN-02 y RN-03 de SPEC-021. El filtro de velocidad se repite del
+  lado de Laravel al aplicar el aviso (§6.4), con su recuperación de base envenenada y su registro en
+  log: hereda también RN-03b y RN-03c de SPEC-021, porque una lectura que entra por el buzón no puede
+  quedar menos filtrada que una que entra por el POST directo.
 - **RN-04:** Un conductor en línea **sin** envío manda un latido cada 60 s, para no ser apagado
   mientras espera trabajo.
 - **RN-05:** El apagado por inactividad sigue siendo de Laravel, a los **10 minutos** sin señal
@@ -465,6 +468,17 @@ Corregido agregando el mismo `esTest()` que ya tenía `abrirTramoSimulado()` al 
 por lo tanto nunca acepta ni reenvía posición real de ese conductor mientras dure el envío simulado.
 Cubierto por dos pruebas nuevas en `GpsTest.php` que verifican que ninguno de los dos avisos se
 dispare para un pedido `ambiente = test`.
+
+**Corrección estructural (RN-03b/RN-03c de spec tenant/021).** Lo anterior cierra el disparador
+concreto, pero no lo que lo volvió irreversible: RN-03 se compara siempre contra la posición
+anterior, así que cualquier coordenada mala que llegue a sentarse de base se defiende sola
+—rechaza justo las lecturas buenas que la contradicen— y nadie se entera, porque el descarte era
+silencioso. Cualquier otra fuente de una lectura errónea reproduciría el mismo mapa congelado. Por
+eso RN-03 ahora lleva la cuenta de rechazos seguidos en
+`conductor_estado.rechazos_consecutivos`: pasados 3, la base se da por envenenada y se adopta la
+lectura nueva; y cada descarte deja una línea en el log con conductor, tenant y coordenada. El
+contador vive en el punto compartido `TrackingService::filtrarPosicionEnVivo()`, así que protege por
+igual al camino del buzón y al POST directo. Cubierto por dos pruebas en `TrackingTest.php`.
 
 ## 17. Incidente en producción (2026-09-11): un envío TEST llegaba a `ARRIBADO` al instante de aceptarse
 

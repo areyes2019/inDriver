@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['id_conductor', 'estado', 'ultima_conexion', 'ultima_desconexion', 'ultima_latitud', 'ultima_longitud', 'ultima_actualizacion'])]
+#[Fillable(['id_conductor', 'estado', 'ultima_conexion', 'ultima_desconexion', 'ultima_latitud', 'ultima_longitud', 'ultima_actualizacion', 'rechazos_consecutivos'])]
 class ConductorEstado extends Model
 {
     protected $table = 'conductor_estado';

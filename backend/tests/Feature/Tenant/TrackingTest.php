@@ -8,6 +8,7 @@ use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConductorPosicion;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Usuario;
+use App\Services\TrackingService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -207,6 +208,87 @@ it('discards a position that implies an impossible speed from the last known one
     tenancy()->end();
 
     Event::assertNotDispatched(UbicacionActualizada::class);
+});
+
+it('adopts a new base position after too many consecutive impossible jumps', function () {
+    Event::fake([UbicacionActualizada::class]);
+
+    $tenant = trackingTenant();
+    $datos = trackingConductor($tenant);
+    tenancy()->initialize($tenant);
+    trackingPedido(['id_conductor' => $datos['conductor']->id_conductor]);
+
+    // La base quedó envenenada con una lectura de geolocalización por red/IP en San Francisco
+    // (el incidente de producción de spec tenant/028, §16). Sin RN-03b, cada posición real de
+    // CDMX que la contradice se descarta por "salto imposible" y el conductor se queda clavado
+    // en San Francisco el resto del envío.
+    ConductorEstado::create([
+        'id_conductor' => $datos['conductor']->id_conductor,
+        'estado' => 'ONLINE',
+        'ultima_latitud' => 37.7749,
+        'ultima_longitud' => -122.4194,
+        'ultima_actualizacion' => now()->subSeconds(10),
+    ]);
+    tenancy()->end();
+    $token = trackingToken();
+
+    for ($i = 0; $i < TrackingService::MAX_RECHAZOS_CONSECUTIVOS; $i++) {
+        $this->withToken($token)
+            ->postJson('/api/v1/t/cafe-luna/conductor/ubicacion', ['latitud' => 19.4326, 'longitud' => -99.1332])
+            ->assertNoContent();
+    }
+
+    tenancy()->initialize($tenant);
+    expect(ConductorPosicion::count())->toBe(0);
+    expect(ConductorEstado::where('id_conductor', $datos['conductor']->id_conductor)->first()->rechazos_consecutivos)
+        ->toBe(TrackingService::MAX_RECHAZOS_CONSECUTIVOS);
+    tenancy()->end();
+    Event::assertNotDispatched(UbicacionActualizada::class);
+
+    // La siguiente ya pasa: varias lecturas que coinciden en contradecir a la base pesan más que
+    // la base sola.
+    $this->withToken($token)
+        ->postJson('/api/v1/t/cafe-luna/conductor/ubicacion', ['latitud' => 19.4326, 'longitud' => -99.1332])
+        ->assertNoContent();
+
+    tenancy()->initialize($tenant);
+    expect(ConductorPosicion::count())->toBe(1);
+    $estado = ConductorEstado::where('id_conductor', $datos['conductor']->id_conductor)->first();
+    expect((float) $estado->ultima_latitud)->toEqualWithDelta(19.4326, 0.0001);
+    expect($estado->rechazos_consecutivos)->toBe(0);
+    tenancy()->end();
+
+    Event::assertDispatched(UbicacionActualizada::class);
+});
+
+it('resets the rejection streak once a plausible position gets through', function () {
+    $tenant = trackingTenant();
+    $datos = trackingConductor($tenant);
+    tenancy()->initialize($tenant);
+    trackingPedido(['id_conductor' => $datos['conductor']->id_conductor]);
+    ConductorEstado::create([
+        'id_conductor' => $datos['conductor']->id_conductor,
+        'estado' => 'ONLINE',
+        'ultima_latitud' => 19.4326,
+        'ultima_longitud' => -99.1332,
+        'ultima_actualizacion' => now()->subSeconds(10),
+    ]);
+    tenancy()->end();
+    $token = trackingToken();
+
+    // Dos lecturas malas sueltas, con una buena en medio: no deben sumarse entre sí, o un GPS que
+    // parpadea de vez en cuando terminaría tumbando una base que está bien.
+    foreach ([[37.7749, -122.4194], [19.4330, -99.1335], [37.7749, -122.4194]] as [$latitud, $longitud]) {
+        $this->withToken($token)
+            ->postJson('/api/v1/t/cafe-luna/conductor/ubicacion', ['latitud' => $latitud, 'longitud' => $longitud])
+            ->assertNoContent();
+    }
+
+    tenancy()->initialize($tenant);
+    $estado = ConductorEstado::where('id_conductor', $datos['conductor']->id_conductor)->first();
+    expect($estado->rechazos_consecutivos)->toBe(1);
+    expect((float) $estado->ultima_latitud)->toEqualWithDelta(19.4330, 0.0001);
+    tenancy()->end();
 });
 
 it('uploads a batch of offline points without broadcasting, updating the current position', function () {
