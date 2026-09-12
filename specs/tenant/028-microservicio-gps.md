@@ -423,3 +423,38 @@ gps-service/
 ```
 
 Nada de lógica en `main.go`. Cada paquete se prueba solo.
+
+## 16. Incidente en producción (2026-09-11): el GPS real competía con el simulador durante un envío TEST
+
+Al aceptar un envío con el switch del Panel en TEST desde un entorno remoto, el punto de recolección
+del tramo de acercamiento (H1, spec tenant/026) aparecía a cientos de kilómetros de donde debía
+—en California— y el tracking del Panel se quedaba clavado ahí el resto del envío. El viaje seguía
+su curso normal en el teléfono hasta la entrega: solo el mapa del Panel se veía afectado.
+
+**Causa.** `PedidoEstadoService::avisarServicioGps()` avisaba al microservicio GPS
+(`BuzonGps::envioIniciado()`) al aceptar **cualquier** pedido, sin mirar el ambiente — a diferencia
+de `abrirTramoSimulado()`, el método hermano que arranca el simulador dos líneas más abajo en el
+mismo `transicionar()`, que sí comprobaba `$pedido->esTest()`. La RN-13 de esta spec ya decía "los
+envíos en modo TEST se siguen manejando por Laravel... el servicio GPS no participa", pero nada en
+el código lo hacía cumplir: el permiso GPS se emite por conductor al conectarse
+(`PermisoGpsService::emitir()`), no por pedido, así que el teléfono seguía mandando su posición real
+al servicio durante todo el envío TEST.
+
+Con el aviso llegando igual, dos fuentes escribían `conductor_estado` a la vez: el simulador
+(siempre coherente con las coordenadas del propio pedido) y el GPS real del teléfono. En el entorno
+remoto donde se probó, el teléfono no tenía una lectura GPS confiable —geolocalización por red/IP al
+probar fuera de sitio, el mismo caso que ya anticipaba el comentario de
+`TrackingService::MAX_VELOCIDAD_KMH`— y esa segunda fuente escribió una coordenada absurdamente
+lejana. RN-03 (velocidad implausible) la tomó como línea base y descartó en silencio cualquier
+lectura real posterior por "salto imposible", dejando el tracking visual clavado ahí para siempre —
+sin tocar la máquina de estados del pedido, que no depende de `conductor_estado` y por eso el envío
+se entregó con normalidad.
+
+Localmente nunca se vio: `gps:consumir-buzon` no está en el script `dev` de Composer, así que aunque
+el servicio GPS esté arriba, nada consume su buzón y la carrera no tiene forma de manifestarse.
+
+Corregido agregando el mismo `esTest()` que ya tenía `abrirTramoSimulado()` al inicio de
+`avisarServicioGps()`: en TEST ya no se avisa `envioIniciado`/`envioTerminado` al microservicio, que
+por lo tanto nunca acepta ni reenvía posición real de ese conductor mientras dure el envío simulado.
+Cubierto por dos pruebas nuevas en `GpsTest.php` que verifican que ninguno de los dos avisos se
+dispare para un pedido `ambiente = test`.

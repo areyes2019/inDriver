@@ -132,9 +132,21 @@ class PedidoEstadoService
      * Va por `diferir()` como el resto de avisos (spec tenant/027): `transicionar()` no guarda, y
      * mandar el aviso antes de que la fila exista abriría el rastreo de un envío que todavía puede
      * no llegar a persistirse.
+     *
+     * En TEST no se avisa nunca (spec tenant/025, RN-11; spec tenant/028, RN-13): el simulador ya
+     * escribe la posición por `TrackingService::registrarPosicion()`, y si el servicio GPS también
+     * queda habilitado para este conductor, el GPS real del teléfono —sin señal confiable al probar
+     * fuera de sitio— compite con el simulador por `conductor_estado` y puede dejarlo clavado en una
+     * lectura de red/IP muy lejos de la ruta simulada, sin que nada lo corrija después (RN-03 la
+     * toma como línea base y descarta cualquier lectura real posterior por "salto imposible").
+     * `abrirTramoSimulado()` ya hace esta misma comprobación; aquí faltaba.
      */
     private function avisarServicioGps(Pedido $pedido, string $nuevoEstado): void
     {
+        if ($pedido->esTest()) {
+            return;
+        }
+
         $slug = tenant()?->slug;
         $idConductor = $pedido->id_conductor;
 

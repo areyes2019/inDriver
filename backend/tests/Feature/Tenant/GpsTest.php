@@ -251,6 +251,45 @@ it('avisa al servicio cuando el envío termina', function () {
     tenancy()->end();
 });
 
+it('no avisa al servicio GPS cuando arranca un envío TEST', function () {
+    // spec tenant/025 RN-11 / spec tenant/028 RN-13: en TEST el simulador es la única fuente de
+    // posición. Si el servicio GPS también quedara habilitado para este conductor, el GPS real del
+    // teléfono —sin señal confiable al probar fuera de sitio— competiría con el simulador por
+    // `conductor_estado` (era exactamente el defecto: `avisarServicioGps()` no comprobaba `esTest()`
+    // aunque `abrirTramoSimulado()`, un método hermano en el mismo `transicionar()`, sí lo hacía).
+    $buzon = $this->mock(BuzonGps::class);
+    $buzon->shouldReceive('habilitado')->andReturnTrue();
+    $buzon->shouldNotReceive('envioIniciado');
+
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+    $pedido = gpsPedido($tenant, $conductor);
+
+    tenancy()->initialize($tenant);
+    $pedido = Pedido::find($pedido->id_pedido);
+    $pedido->ambiente = Pedido::AMBIENTE_TEST;
+    app(PedidoEstadoService::class)->transicionar($pedido, 'TOMADO');
+    $pedido->save();
+    tenancy()->end();
+});
+
+it('no avisa al servicio GPS cuando termina un envío TEST', function () {
+    $buzon = $this->mock(BuzonGps::class);
+    $buzon->shouldReceive('habilitado')->andReturnTrue();
+    $buzon->shouldNotReceive('envioTerminado');
+
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+    $pedido = gpsPedido($tenant, $conductor, 'ARRIBADO_A_ENTREGA');
+
+    tenancy()->initialize($tenant);
+    $pedido = Pedido::find($pedido->id_pedido);
+    $pedido->ambiente = Pedido::AMBIENTE_TEST;
+    app(PedidoEstadoService::class)->transicionar($pedido, 'ENTREGADO');
+    $pedido->save();
+    tenancy()->end();
+});
+
 it('no avisa de un pedido que todavía no tiene conductor', function () {
     $buzon = $this->mock(BuzonGps::class);
     $buzon->shouldReceive('habilitado')->andReturnTrue();
