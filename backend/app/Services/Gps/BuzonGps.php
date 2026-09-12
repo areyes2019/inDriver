@@ -31,6 +31,13 @@ class BuzonGps
     /** Avisos del servicio a Laravel. */
     public const POSICION = 'POSICION';
 
+    /**
+     * Posición de un conductor en línea sin envío en curso (RN-06 de spec tenant/028; RN-08 de
+     * spec tenant/025). No difunde al Panel ni genera historia, pero deja a `conductor_estados`
+     * con un origen real para la próxima simulación TEST que el conductor acepte.
+     */
+    public const POSICION_SIN_ENVIO = 'POSICION_SIN_ENVIO';
+
     public const RECORRIDO = 'RECORRIDO';
 
     public const LATIDO = 'LATIDO';

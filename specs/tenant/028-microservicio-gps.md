@@ -190,7 +190,8 @@ Autenticado con `auth:conductor-token` (Sanctum, como todo el resto de la App).
 
 | Aviso | Cuándo | Efecto en Laravel |
 |---|---|---|
-| `POSICION` | En cada posición aceptada | Dispara `UbicacionActualizada` por Reverb, igual que hoy |
+| `POSICION` | En cada posición aceptada, con envío en curso | Dispara `UbicacionActualizada` por Reverb, igual que hoy |
+| `POSICION_SIN_ENVIO` | En cada posición aceptada, sin envío en curso (§16) | Actualiza `conductor_estados.ultima_latitud/longitud`, sin difundir ni generar historia |
 | `RECORRIDO` | Cada 10 s o 50 puntos | Inserta la tanda en `conductor_posiciones` |
 | `LATIDO` | Cada 60 s por conductor | Actualiza `conductor_estados.ultima_actualizacion` |
 
@@ -215,13 +216,17 @@ renovar, deja de mandar en vivo y acumula localmente hasta reconectar (RN-08).
 1. Verificar la firma y que no esté caducado. Si falla → `401`.
 2. Comprobar que el `jti` no esté cancelado. Si lo está → `401`.
 3. Sacar `tenant` e `id_conductor` **del permiso**, nunca del cuerpo.
-4. Comprobar que el conductor tenga envío en curso (§6.3). Si no → se descarta, se responde `204` y
-   solo cuenta como latido (RN-01).
-5. Validar coordenadas, precisión y antigüedad. Si la posición es más vieja que la última guardada →
+4. Validar coordenadas, precisión y antigüedad. Si la posición es más vieja que la última guardada →
    se descarta (RN-11).
-6. Guardar posición actual y presencia en memoria.
-7. Encolar `POSICION` para el Panel y sumar el punto a la tanda del recorrido.
-8. Responder `204` sin esperar a nada de lo anterior.
+5. Guardar posición actual y presencia en memoria, **haya o no envío en curso** (§16): un conductor
+   sin envío sigue siendo geolocalizable en `/nearby` mientras esté en línea (RN-06), y Laravel
+   necesita su último punto real para poder arrancar ahí la simulación TEST del próximo envío que
+   acepte.
+6. Comprobar que el conductor tenga envío en curso (§6.3).
+   - Si lo tiene, encolar `POSICION` para el Panel y sumar el punto a la tanda del recorrido.
+   - Si no, encolar `POSICION_SIN_ENVIO`: Laravel actualiza `conductor_estados` sin difundir al
+     Panel ni generar historia (RN-01).
+7. Responder `204` sin esperar a nada de lo anterior.
 
 ### 7.4 El recorrido llega a MySQL
 
@@ -254,8 +259,10 @@ prioridad. Si el servicio no responde, Laravel cae a la consulta actual sobre `c
 
 ## 8. Reglas de negocio
 
-- **RN-01:** Solo se registra posición con un envío en curso. Sin envío, la posición se descarta y
-  solo cuenta como latido. Hereda RN-01 de SPEC-021.
+- **RN-01:** Se guarda toda posición válida, haya o no envío en curso (§16, corrige la redacción
+  original heredada de SPEC-021). Sin envío no se difunde al Panel ni se acumula recorrido —eso sí
+  sigue exclusivo del envío en curso—, pero la posición se conserva en `conductor_estados` como
+  última ubicación conocida del conductor.
 - **RN-02:** El servicio sabe si hay envío en curso **porque Laravel se lo avisó** (§6.3), nunca
   preguntándole en cada posición.
 - **RN-03:** La App sigue decidiendo cuándo enviar y qué lecturas descartar: cada 15 s, o antes al
@@ -458,3 +465,35 @@ Corregido agregando el mismo `esTest()` que ya tenía `abrirTramoSimulado()` al 
 por lo tanto nunca acepta ni reenvía posición real de ese conductor mientras dure el envío simulado.
 Cubierto por dos pruebas nuevas en `GpsTest.php` que verifican que ninguno de los dos avisos se
 dispare para un pedido `ambiente = test`.
+
+## 17. Incidente en producción (2026-09-11): un envío TEST llegaba a `ARRIBADO` al instante de aceptarse
+
+Con el switch del Panel en TEST, al aceptar un envío no aparecía ningún recorrido hacia la recogida:
+el estado saltaba directo a "Llegaste a tu destino" (`ARRIBADO`) sin dibujar el tramo de acercamiento.
+
+**Causa.** `SimulacionEnvioService::posicionDelConductor()` arranca el tramo de acercamiento desde
+`conductor_estado.ultima_latitud/longitud` (RN-08 de spec tenant/025); si esa columna está vacía,
+arranca en el punto de recogida mismo, con lo que el tramo mide cero metros y se completa en la misma
+petición que lo abre.
+
+Esa columna estaba vacía porque el paso 4 original de §7.3 ("sin envío, se descarta la posición")
+—heredado tal cual de RN-01 de SPEC-021, escrito antes de que existiera el modo TEST— descartaba
+también la posición de un conductor en línea **sin** envío, sin guardar nada de ella. El equivalente
+en Laravel (`Conductor\UbicacionController::actualizar()`) sí se había corregido para este caso
+exacto al escribir spec tenant/025 (`TrackingService::registrarPosicionSinEnvio()`), pero esa
+corrección nunca se trasladó al servicio Go cuando se construyó encima en `bdfe93a`: ese endpoint
+quedó como respaldo que solo se usa si el servicio no responde, así que con el servicio arriba
+—que es el caso normal en producción— ningún conductor tenía nunca una última posición conocida
+hasta que aceptaba su primer envío, y en TEST no la tenía **nunca**, porque ahí el GPS real que
+manda el teléfono durante el envío se descarta siempre (RN-11).
+
+RN-06 de esta misma spec ya asumía lo contrario —que un conductor en línea sin envío es
+geolocalizable en `/nearby` hasta que su posición caduca a los 3 min—, así que el defecto también
+dejaba sin candidatos cualquier búsqueda de cercanía sobre un conductor que aún no había hecho su
+primer envío.
+
+Corregido moviendo el guardado de la posición (`almacen.Guardar`) antes de comprobar si hay envío en
+curso, en `web.go`. Sin envío, el servicio ahora avisa a Laravel con un mensaje nuevo,
+`POSICION_SIN_ENVIO` (§6.4), que solo actualiza `conductor_estados` — no dispara
+`UbicacionActualizada` ni genera historia, respetando RN-01 en lo que sí importaba conservar. Cubierto
+por una prueba nueva en `GpsTest.php`.

@@ -417,6 +417,43 @@ it('difunde la posición al Panel con el evento de siempre', function () {
             && $e->latitud === 19.4326);
 });
 
+it('guarda la posición sin envío para que la próxima simulación TEST tenga un origen real', function () {
+    // spec tenant/028, RN-06 / spec tenant/025, RN-08: antes de este aviso, un conductor que
+    // aceptaba su primer envío hablándole al servicio GPS nunca tenía `ultima_latitud/longitud` en
+    // `conductor_estados`, y la simulación TEST arrancaba el tramo de acercamiento en la recogida
+    // misma, cayendo en `ARRIBADO` al instante de aceptarse.
+    Event::fake([UbicacionActualizada::class]);
+
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+
+    $buzon = $this->mock(BuzonGps::class);
+    $buzon->shouldReceive('habilitado')->andReturnTrue();
+    $buzon->shouldReceive('asegurarGrupo');
+    $buzon->shouldReceive('confirmar')->once();
+    $buzon->shouldReceive('leer')->once()->andReturn([[
+        'id' => '1-0',
+        'tipo' => BuzonGps::POSICION_SIN_ENVIO,
+        'datos' => [
+            'tenant' => 'cafe-luna',
+            'id_conductor' => $conductor->id_conductor,
+            'latitud' => 20.5248,
+            'longitud' => -100.8132,
+        ],
+    ]]);
+
+    $this->artisan('gps:consumir-buzon', ['--ciclos' => 1])->assertSuccessful();
+
+    tenancy()->initialize($tenant);
+    $estado = ConductorEstado::where('id_conductor', $conductor->id_conductor)->first();
+    expect((float) $estado->ultima_latitud)->toEqualWithDelta(20.5248, 0.0001);
+    expect((float) $estado->ultima_longitud)->toEqualWithDelta(-100.8132, 0.0001);
+    tenancy()->end();
+
+    // RN-01: sin envío no hay nada que mostrarle al Panel.
+    Event::assertNotDispatched(UbicacionActualizada::class);
+});
+
 it('descarta una posición del microservicio que implica un salto imposible sin difundirla', function () {
     Event::fake([UbicacionActualizada::class]);
 

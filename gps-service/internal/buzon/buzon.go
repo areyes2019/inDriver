@@ -21,7 +21,14 @@ import (
 
 // Avisos que el servicio manda a Laravel.
 const (
-	TipoPosicion  = "POSICION"
+	TipoPosicion = "POSICION"
+
+	// TipoPosicionSinEnvio es la posición de un conductor en línea sin envío en curso (RN-06,
+	// spec tenant/025 RN-08). No dispara `UbicacionActualizada` ni se acumula como recorrido —eso
+	// sigue siendo privilegio de `TipoPosicion`—, pero Laravel necesita guardarla en
+	// `conductor_estados` para tener un origen real de dónde arrancar la próxima simulación TEST.
+	TipoPosicionSinEnvio = "POSICION_SIN_ENVIO"
+
 	TipoRecorrido = "RECORRIDO"
 	TipoLatido    = "LATIDO"
 )

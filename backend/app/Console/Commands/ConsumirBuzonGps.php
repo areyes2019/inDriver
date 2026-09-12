@@ -112,6 +112,7 @@ class ConsumirBuzonGps extends Command
 
             return match ($aviso['tipo']) {
                 BuzonGps::POSICION => $this->difundir($tracking, $slug, $idConductor, $aviso['datos']),
+                BuzonGps::POSICION_SIN_ENVIO => $this->registrarSinEnvio($tracking, $idConductor, $aviso['datos']),
                 BuzonGps::RECORRIDO => $this->guardarRecorrido($tracking, $idConductor, $aviso['datos']),
                 BuzonGps::LATIDO => $this->latir($tracking, $idConductor),
                 default => true,
@@ -160,6 +161,31 @@ class ConsumirBuzonGps extends Command
         }
 
         UbicacionActualizada::dispatch($idConductor, $latitud, $longitud, $slug);
+
+        return true;
+    }
+
+    /**
+     * Conductor en línea sin envío (RN-06 de spec tenant/028): mismo trato que le daba
+     * `Conductor\UbicacionController::actualizar()` antes de que el servicio GPS existiera — se
+     * recuerda dónde quedó, sin difundir al Panel ni generar historia (RN-01). Sin este aviso,
+     * `conductor_estados.ultima_latitud/longitud` se quedaba vacío para cualquier conductor que
+     * aceptara su primer envío hablándole al servicio GPS, y la simulación TEST arrancaba el tramo
+     * de acercamiento en la recogida misma (spec tenant/025, RN-08), cayendo en `ARRIBADO` al
+     * instante.
+     *
+     * @param  array<string, mixed>  $datos
+     */
+    private function registrarSinEnvio(TrackingService $tracking, int $idConductor, array $datos): bool
+    {
+        $conductor = Conductor::find($idConductor);
+
+        // El conductor ya no existe: el aviso llegó tarde. No hay nada que reintentar.
+        if (! $conductor) {
+            return true;
+        }
+
+        $tracking->registrarPosicionSinEnvio($conductor, (float) $datos['latitud'], (float) $datos['longitud']);
 
         return true;
     }

@@ -117,22 +117,6 @@ func (s *Servidor) ping(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// RN-01: sin envío en curso no hay rastreo. Se responde 204 igual que si se hubiera guardado
-	// —para la App no es un error— y la posición solo cuenta como señal de vida.
-	pedido, err := s.presencia.EnvioActivo(ctx, p.Tenant, p.Conductor)
-	if err != nil {
-		s.sinMemoria(w, "envio_activo", err)
-
-		return
-	}
-
-	if pedido == "" {
-		s.latir(ctx, p.Tenant, p.Conductor)
-		w.WriteHeader(http.StatusNoContent)
-
-		return
-	}
-
 	punto, err := entrada.Validar(time.Now())
 	if err != nil {
 		escribirJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
@@ -140,6 +124,13 @@ func (s *Servidor) ping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Se guarda la posición aunque no haya envío en curso (RN-06 / spec tenant/025, RN-08): un
+	// conductor sin envío sigue siendo geolocalizable en `/nearby` mientras esté en línea, y
+	// Laravel necesita un origen real desde donde arrancar la próxima simulación TEST que acepte.
+	// Antes esta rama ni siquiera validaba ni guardaba: descartaba la posición entera y solo
+	// mandaba latido, dejando a `conductor_estados.ultima_latitud/longitud` sin dato — con lo que
+	// el tramo de acercamiento de la simulación arrancaba en la recogida misma y el envío TEST
+	// caía en `ARRIBADO` al instante de aceptarse (incidente spec tenant/028, §16 hermano).
 	escrito, err := s.almacen.Guardar(ctx, p.Tenant, p.Conductor, punto)
 	if err != nil {
 		s.sinMemoria(w, "guardar_posicion", err)
@@ -149,6 +140,23 @@ func (s *Servidor) ping(w http.ResponseWriter, r *http.Request) {
 
 	// RN-11: llegó más vieja que la que ya teníamos. No es un error del teléfono, es mala señal.
 	if !escrito {
+		w.WriteHeader(http.StatusNoContent)
+
+		return
+	}
+
+	// RN-01: sin envío en curso no hay recorrido que acumular ni Panel al que avisar por
+	// `UbicacionActualizada` — pero la posición ya quedó guardada arriba, a diferencia de antes.
+	pedido, err := s.presencia.EnvioActivo(ctx, p.Tenant, p.Conductor)
+	if err != nil {
+		s.sinMemoria(w, "envio_activo", err)
+
+		return
+	}
+
+	if pedido == "" {
+		s.difundirSinEnvio(ctx, p.Tenant, p.Conductor, punto)
+		s.latir(ctx, p.Tenant, p.Conductor)
 		w.WriteHeader(http.StatusNoContent)
 
 		return
@@ -240,6 +248,21 @@ func (s *Servidor) difundir(ctx context.Context, tenant string, conductor int64,
 	})
 	if err != nil {
 		s.bitacora.Warn("no se pudo difundir la posición", "tenant", tenant, "conductor", conductor, "error", err)
+	}
+}
+
+// difundirSinEnvio avisa a Laravel de dónde quedó un conductor en línea sin envío. A diferencia de
+// `difundir`, este aviso no dispara `UbicacionActualizada` (RN-01: sin envío no hay nada que
+// mostrarle al Panel) — Laravel solo lo usa para refrescar `conductor_estados`.
+func (s *Servidor) difundirSinEnvio(ctx context.Context, tenant string, conductor int64, p posicion.Punto) {
+	err := s.emisor.Publicar(ctx, buzon.TipoPosicionSinEnvio, map[string]any{
+		"tenant":       tenant,
+		"id_conductor": conductor,
+		"latitud":      p.Latitud,
+		"longitud":     p.Longitud,
+	})
+	if err != nil {
+		s.bitacora.Warn("no se pudo avisar la posición sin envío", "tenant", tenant, "conductor", conductor, "error", err)
 	}
 }
 
