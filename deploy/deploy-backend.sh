@@ -13,7 +13,8 @@
 #   5. Respalda la base de datos (central y la de cada tenant)
 #   6. php artisan migrate --force && php artisan tenants:migrate --force
 #   7. Recachea configuración, rutas y eventos
-#   8. Levanta el sitio
+#   8. Reinicia el worker gps-buzon (si está instalado)
+#   9. Levanta el sitio
 #
 # Nunca toca: .env, bootstrap/cache/, ni nada dentro de public_html.
 
@@ -245,6 +246,25 @@ ok "cachés reconstruidas"
 say "Ajustando el dueño de los archivos (www-data)"
 remote "chown -R www-data:www-data '$REMOTE_APP'"
 ok "dueño ajustado"
+
+# --- Worker del buzón GPS -----------------------------------------------------
+# `gps-buzon.service` (spec tenant/028, §6.4) es un daemon systemd de larga
+# duración: carga las clases de PHP una sola vez al arrancar y las mantiene en
+# memoria mientras corre. Subir código nuevo no le hace nada por sí solo — sin
+# este reinicio, el worker sigue aplicando la versión vieja de
+# `ConsumirBuzonGps`/`TrackingService` hasta que alguien lo note (así pasó: un
+# despliegue con un fix de tracking corrió 22 horas con el código viejo en
+# memoria antes de notarse). Es opcional porque no todos los entornos tienen
+# la integración GPS activa (§14), así que si el servicio no existe aquí solo
+# se avisa, no se aborta el despliegue.
+say "Reiniciando el worker del buzón GPS"
+if remote "systemctl list-unit-files gps-buzon.service >/dev/null 2>&1"; then
+    remote "systemctl restart gps-buzon" \
+        && ok "worker gps-buzon reiniciado" \
+        || warn "no se pudo reiniciar gps-buzon; hazlo a mano: ssh $SSH_ALIAS systemctl restart gps-buzon"
+else
+    warn "gps-buzon.service no está instalado en este servidor; se omite"
+fi
 
 say "Levantando el sitio"
 levantar
