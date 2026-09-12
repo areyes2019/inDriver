@@ -9,6 +9,8 @@ use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConductorPosicion;
 use App\Models\Tenant\Pedido;
+use Carbon\CarbonInterface;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -109,6 +111,9 @@ class TrackingService
                 'ultima_latitud' => $latitud,
                 'ultima_longitud' => $longitud,
                 'ultima_actualizacion' => now(),
+                // El aviso POSICION_SIN_ENVIO no trae hora de captura, así que aquí sí es la de
+                // proceso. Sigue siendo mejor denominador que `ultima_actualizacion` (RN-03d).
+                'ultima_posicion_en' => now(),
                 // Esta vía no pasa por RN-03 y reemplaza la base entera: una racha de rechazos
                 // contra la base anterior ya no dice nada de la nueva (RN-03b).
                 'rechazos_consecutivos' => 0,
@@ -141,7 +146,14 @@ class TrackingService
         ConductorPosicion::insert($filas);
 
         $ultimo = end($puntos);
-        $this->actualizarPosicionActual($conductor, (float) $ultimo['latitud'], (float) $ultimo['longitud']);
+        $this->actualizarPosicionActual(
+            $conductor,
+            (float) $ultimo['latitud'],
+            (float) $ultimo['longitud'],
+            // Son puntos que ya pasaron: fecharlos ahora dejaría la base con una hora de captura
+            // que no le corresponde y falsearía el siguiente cálculo de RN-03 (RN-03d).
+            Carbon::parse($ultimo['fecha_posicion']),
+        );
     }
 
     /**
@@ -206,9 +218,11 @@ class TrackingService
      * `MAX_RECHAZOS_CONSECUTIVOS` rechazos seguidos, gana la mayoría: varias lecturas que coinciden
      * en contradecir a la base dicen más que la base sola.
      */
-    public function filtrarPosicionEnVivo(Conductor $conductor, float $latitud, float $longitud): bool
+    public function filtrarPosicionEnVivo(Conductor $conductor, float $latitud, float $longitud, ?CarbonInterface $capturadaEn = null): bool
     {
-        if ($this->esSaltoImposible($conductor, $latitud, $longitud)) {
+        $capturadaEn ??= now();
+
+        if ($this->esSaltoImposible($conductor, $latitud, $longitud, $capturadaEn)) {
             $rechazos = $this->contarRechazo($conductor);
             $baseEnvenenada = $rechazos > self::MAX_RECHAZOS_CONSECUTIVOS;
 
@@ -229,7 +243,7 @@ class TrackingService
             }
         }
 
-        $this->actualizarPosicionActual($conductor, $latitud, $longitud);
+        $this->actualizarPosicionActual($conductor, $latitud, $longitud, $capturadaEn);
 
         return true;
     }
@@ -249,11 +263,17 @@ class TrackingService
         return (int) ConductorEstado::where('id_conductor', $conductor->id_conductor)->value('rechazos_consecutivos');
     }
 
-    private function actualizarPosicionActual(Conductor $conductor, float $latitud, float $longitud): void
+    private function actualizarPosicionActual(Conductor $conductor, float $latitud, float $longitud, ?CarbonInterface $capturadaEn = null): void
     {
         ConductorEstado::updateOrCreate(
             ['id_conductor' => $conductor->id_conductor],
-            ['ultima_latitud' => $latitud, 'ultima_longitud' => $longitud, 'ultima_actualizacion' => now(), 'rechazos_consecutivos' => 0],
+            [
+                'ultima_latitud' => $latitud,
+                'ultima_longitud' => $longitud,
+                'ultima_actualizacion' => now(),
+                'ultima_posicion_en' => $capturadaEn ?? now(),
+                'rechazos_consecutivos' => 0,
+            ],
         );
     }
 
@@ -263,16 +283,33 @@ class TrackingService
      * superar `MAX_VELOCIDAD_KMH`; dos lecturas casi simultáneas mandan la distancia derecho al
      * numerador (un segundo mínimo evita dividir entre cero sin abrir la puerta a un salto de
      * cientos de kilómetros "instantáneo").
+     *
+     * RN-03d: el denominador son las horas de **captura** de las dos coordenadas, no las de
+     * proceso. `ultima_actualizacion` no sirve: significa "cuándo supimos algo del conductor" y la
+     * refrescan el latido, el ponerse en línea y cada `/conductor/sync`, ninguno de los cuales
+     * mueve la coordenada. Usarla dejaba el denominador en segundos mientras el conductor llevaba
+     * minutos recorriendo distancia real, y esa distancia partida por casi nada siempre parece
+     * teletransportación. En un envío TEST era constante —ahí el GPS real se cambia por un latido
+     * cada 15 s (spec tenant/025, RN-11) mientras el simulador mueve al conductor— y también
+     * pasaba cada vez que el worker del buzón vaciaba una cola atrasada.
      */
-    private function esSaltoImposible(Conductor $conductor, float $latitud, float $longitud): bool
+    private function esSaltoImposible(Conductor $conductor, float $latitud, float $longitud, CarbonInterface $capturadaEn): bool
     {
         $estado = $conductor->estadoActual;
 
-        if ($estado === null || $estado->ultima_latitud === null || $estado->ultima_longitud === null || $estado->ultima_actualizacion === null) {
+        if ($estado === null || $estado->ultima_latitud === null || $estado->ultima_longitud === null) {
             return false;
         }
 
-        $segundos = max(1, $estado->ultima_actualizacion->diffInSeconds(now(), true));
+        // `ultima_posicion_en` es nula en las filas anteriores a su migración; ahí sigue valiendo
+        // lo que RN-03 usaba antes, que es lo más cercano a la verdad que hay.
+        $anterior = $estado->ultima_posicion_en ?? $estado->ultima_actualizacion;
+
+        if ($anterior === null) {
+            return false;
+        }
+
+        $segundos = max(1, $anterior->diffInSeconds($capturadaEn, true));
 
         $distanciaKm = $this->haversineKm(
             (object) ['latitud' => $estado->ultima_latitud, 'longitud' => $estado->ultima_longitud],

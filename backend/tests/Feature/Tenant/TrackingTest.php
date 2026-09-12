@@ -291,6 +291,69 @@ it('resets the rejection streak once a plausible position gets through', functio
     tenancy()->end();
 });
 
+it('does not reject real movement just because a heartbeat refreshed the timestamp', function () {
+    Event::fake([UbicacionActualizada::class]);
+
+    $tenant = trackingTenant();
+    $datos = trackingConductor($tenant);
+    tenancy()->initialize($tenant);
+    trackingPedido(['id_conductor' => $datos['conductor']->id_conductor]);
+
+    // El conductor tomó esta posición hace 5 minutos y desde entonces solo ha mandado latidos:
+    // `ultima_actualizacion` está fresca, pero la coordenada es de hace 5 minutos. Es lo que pasa
+    // en todo envío TEST, donde el GPS real se cambia por un latido cada 15 s (spec tenant/025,
+    // RN-11) mientras el simulador mueve al conductor.
+    ConductorEstado::create([
+        'id_conductor' => $datos['conductor']->id_conductor,
+        'estado' => 'ONLINE',
+        'ultima_latitud' => 20.5439297,
+        'ultima_longitud' => -100.8179536,
+        'ultima_posicion_en' => now()->subMinutes(5),
+        'ultima_actualizacion' => now()->subSecond(),
+    ]);
+    tenancy()->end();
+    $token = trackingToken();
+
+    // 2 km en 5 minutos son 24 km/h: un conductor circulando por ciudad. Medido contra el latido
+    // de hace un segundo serían más de 7000 km/h y se descartaba.
+    $this->withToken($token)
+        ->postJson('/api/v1/t/cafe-luna/conductor/ubicacion', ['latitud' => 20.5251896, 'longitud' => -100.8174188])
+        ->assertNoContent();
+
+    tenancy()->initialize($tenant);
+    expect(ConductorPosicion::count())->toBe(1);
+    $estado = ConductorEstado::where('id_conductor', $datos['conductor']->id_conductor)->first();
+    expect((float) $estado->ultima_latitud)->toEqualWithDelta(20.5251896, 0.0001);
+    tenancy()->end();
+
+    Event::assertDispatched(UbicacionActualizada::class);
+});
+
+it('measures the implied speed between capture times, not processing times', function () {
+    $tenant = trackingTenant();
+    $datos = trackingConductor($tenant);
+    tenancy()->initialize($tenant);
+    ConductorEstado::create([
+        'id_conductor' => $datos['conductor']->id_conductor,
+        'estado' => 'ONLINE',
+        'ultima_latitud' => 19.4326,
+        'ultima_longitud' => -99.1332,
+        'ultima_posicion_en' => now()->subSeconds(10),
+        'ultima_actualizacion' => now()->subSeconds(10),
+    ]);
+
+    $tracking = app(TrackingService::class);
+    $conductor = $datos['conductor']->fresh();
+
+    // San Francisco capturado 10 segundos después de CDMX: imposible, se rechaza.
+    expect($tracking->filtrarPosicionEnVivo($conductor, 37.7749, -122.4194, now()))->toBeFalse();
+
+    // La misma coordenada, pero capturada tres días después de la anterior: ya no implica ninguna
+    // velocidad imposible, aunque Laravel la esté procesando en este mismo instante.
+    expect($tracking->filtrarPosicionEnVivo($conductor->fresh(), 37.7749, -122.4194, now()->addDays(3)))->toBeTrue();
+    tenancy()->end();
+});
+
 it('uploads a batch of offline points without broadcasting, updating the current position', function () {
     Event::fake([UbicacionActualizada::class]);
 

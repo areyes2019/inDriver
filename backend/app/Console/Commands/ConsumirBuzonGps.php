@@ -151,9 +151,17 @@ class ConsumirBuzonGps extends Command
         $latitud = (float) $datos['latitud'];
         $longitud = (float) $datos['longitud'];
 
+        // La hora a la que el teléfono tomó la lectura, que el aviso ya traía. Sin ella RN-03 medía
+        // contra el momento de procesarla, y al vaciar una cola atrasada varias posiciones
+        // capturadas con minutos de diferencia se evaluaban como si hubieran llegado en el mismo
+        // segundo: movimiento normal que parecía imposible (RN-03d).
+        $capturadaEn = isset($datos['fecha_ms'])
+            ? Carbon::createFromTimestampMs((int) $datos['fecha_ms'])
+            : null;
+
         // El descarte lo registra `filtrarPosicionEnVivo`, que es el punto compartido con el camino
         // HTTP directo: duplicarlo aquí daría dos líneas por la misma posición.
-        if (! $tracking->filtrarPosicionEnVivo($conductor, $latitud, $longitud)) {
+        if (! $tracking->filtrarPosicionEnVivo($conductor, $latitud, $longitud, $capturadaEn)) {
             return true;
         }
 
