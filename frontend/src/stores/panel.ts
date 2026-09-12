@@ -145,6 +145,8 @@ export const usePanelStore = defineStore('panel', () => {
 
   const eventosVistos = new Set<string>()
   const ordenDeEventos: string[] = []
+  /** RN-11e: conductores por los que ya se preguntó al servidor, para no preguntar en cada posición. */
+  const conductoresPreguntados = new Set<number>()
 
   // ---------------------------------------------------------------------------------------------
   // Lecturas
@@ -280,6 +282,21 @@ export const usePanelStore = defineStore('panel', () => {
   // Reconciliación (RN-11 a RN-14)
   // ---------------------------------------------------------------------------------------------
 
+  /**
+   * RN-11e: llega la posición de un conductor que el Panel no tiene. Es el mismo caso que RN-11d
+   * —un evento sobre una fila que debería existir— pero en el evento de mayor frecuencia del
+   * sistema, así que no puede pedir una reconciliación cada vez: una posición que llega cada 15 s
+   * dispararía una petición cada 15 s, para siempre, cuando el conductor legítimamente no es de
+   * este Panel (otro ambiente, o ya salió de turno). Se pregunta **una vez** por conductor; si la
+   * reconciliación no lo trae, es que no es nuestro y se deja de preguntar.
+   */
+  function preguntarPorConductorDesconocido(idConductor: number) {
+    if (conductoresPreguntados.has(idConductor)) return
+
+    conductoresPreguntados.add(idConductor)
+    agendarSincronizacion()
+  }
+
   function agendarSincronizacion() {
     if (temporizadorSincronizacion !== null) return
 
@@ -371,6 +388,8 @@ export const usePanelStore = defineStore('panel', () => {
 
     for (const conductor of lista) {
       vistos.add(conductor.id_conductor)
+      // Llegó: si vuelve a faltar más adelante será otra desincronización, y merece otra pregunta.
+      conductoresPreguntados.delete(conductor.id_conductor)
       const actual = conductores.value.get(conductor.id_conductor)
       conductores.value.set(
         conductor.id_conductor,
@@ -685,7 +704,10 @@ export const usePanelStore = defineStore('panel', () => {
       if (yaProcesado(payload)) return
 
       const conductor = conductores.value.get(payload.id_conductor)
-      if (!conductor) return
+      if (!conductor) {
+        preguntarPorConductorDesconocido(payload.id_conductor)
+        return
+      }
 
       conductores.value.set(payload.id_conductor, {
         ...conductor,

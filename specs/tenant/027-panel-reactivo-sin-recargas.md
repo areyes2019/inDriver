@@ -269,7 +269,7 @@ en absoluto si la transición nunca llega a guardarse. Fuera del mecanismo se qu
 ### Actualización por evento
 
 - **RN-05:** Todo evento se aplica **en memoria, sobre la fila afectada, sin pedir nada**. Un evento
-  no dispara peticiones. Las únicas excepciones son los cuatro casos de RN-11.
+  no dispara peticiones. Las únicas excepciones son los cuatro casos de RN-11 y el de RN-11e.
 - **RN-06:** Se deduplica por `event_id` (SPEC-018 ya lo manda en todos los eventos). Se recuerdan
   los últimos 200; un `event_id` repetido se ignora en silencio. El mismo aviso puede llegar dos
   veces, por socket y por push.
@@ -286,7 +286,7 @@ en absoluto si la transición nunca llega a guardarse. Fuera del mecanismo se qu
   | `pedido.requiere-asignacion-manual` | `estado = PENDIENTE`, sin conductor | Libera al conductor si lo tenía |
   | `conductor.disponibilidad-cambiada` | — | `DISPONIBLE` inserta desde `payload.conductor`; `FUERA_DE_SERVICIO` quita la fila |
   | `saldo.acreditado` | — | Fija `saldo_viajes` con el valor recibido |
-  | `ubicacion.actualizada` | — | Mueve el marcador; no toca la lista |
+  | `ubicacion.actualizada` | — | Mueve el marcador; no toca la lista. Conductor desconocido: una sola reconciliación (RN-11e) |
 
 - **RN-08:** Un evento sobre una fila que no está en memoria **no es un error**. Si debería estar
   (por ejemplo un `pedido.tomado` de un id desconocido), se agenda una reconciliación diferida
@@ -301,6 +301,14 @@ en absoluto si la transición nunca llega a guardarse. Fuera del mecanismo se qu
 - **RN-11:** Se vuelve a pedir la lista completa **solo** en cuatro casos: (a) al abrir el Panel,
   (b) al reconectar el socket tras una caída, (c) al volver la pestaña al foco después de más de 60 s
   oculta, (d) al llegar un evento sobre una fila desconocida que debería existir.
+- **RN-11e:** `ubicacion.actualizada` también entra en el caso (d) —un conductor que se mueve pero
+  que el Panel no tiene es una desincronización, no un evento que sobre—, pero **se pregunta una sola
+  vez por conductor**. Es el evento de mayor frecuencia del sistema: pedir la lista en cada posición
+  sería una petición cada 15 s, indefinidamente, cuando el conductor legítimamente no es de este
+  Panel (otro ambiente, o ya salió de turno). Si la reconciliación lo trae, queda en la lista y el
+  contador de ese conductor se olvida; si no lo trae, es que no es nuestro y no se vuelve a preguntar.
+  Sin esto, un conductor ausente de la lista se quedaba invisible en el mapa para siempre: sus
+  posiciones se descartaban en silencio y nada forzaba la recuperación.
 - **RN-12:** Las reconciliaciones se agrupan: debounce de 500 ms y nunca dos en vuelo a la vez. Diez
   disparos seguidos son una sola petición.
 - **RN-13:** Una reconciliación **fusiona por id**: actualiza las filas que siguen, agrega las nuevas
@@ -443,6 +451,9 @@ en consola y se reintenta.
 - [ ] Al volver Reverb, el Panel se reconcilia una vez, el sondeo se apaga y la lista no parpadea.
 - [ ] Cortar la red durante un minuto y restaurarla deja la lista idéntica a la del servidor.
 - [ ] Un `event_id` repetido no duplica filas ni las quita dos veces.
+- [ ] Un conductor en movimiento que falta en la lista provoca **una** reconciliación y aparece en el
+      mapa; si la reconciliación no lo trae, sus siguientes posiciones no generan ninguna petición
+      más (RN-11e).
 - [ ] Dejar la pestaña en segundo plano cinco minutos y volver reconstruye el estado con una sola
       petición.
 - [ ] `GET /t/{slug}/pedidos/en-turno` devuelve solo los seis estados en turno y no pagina.
