@@ -111,7 +111,7 @@ class ConsumirBuzonGps extends Command
             }
 
             return match ($aviso['tipo']) {
-                BuzonGps::POSICION => $this->difundir($slug, $idConductor, $aviso['datos']),
+                BuzonGps::POSICION => $this->difundir($tracking, $slug, $idConductor, $aviso['datos']),
                 BuzonGps::RECORRIDO => $this->guardarRecorrido($tracking, $idConductor, $aviso['datos']),
                 BuzonGps::LATIDO => $this->latir($tracking, $idConductor),
                 default => true,
@@ -132,16 +132,34 @@ class ConsumirBuzonGps extends Command
      * El mismo evento y el mismo canal de siempre (spec tenant/018): por eso el Panel no cambia ni
      * una línea con esta spec.
      *
+     * Pasa por el mismo filtro RN-03 que el camino HTTP directo (`TrackingService::registrarPosicion`)
+     * antes de difundir: sin esto, una lectura de geolocalización por red/IP que llega por el
+     * microservicio en vez de `Conductor\UbicacionController` se retransmitía sin filtrar al Panel.
+     *
      * @param  array<string, mixed>  $datos
      */
-    private function difundir(string $slug, int $idConductor, array $datos): bool
+    private function difundir(TrackingService $tracking, string $slug, int $idConductor, array $datos): bool
     {
-        UbicacionActualizada::dispatch(
-            $idConductor,
-            (float) $datos['latitud'],
-            (float) $datos['longitud'],
-            $slug,
-        );
+        $conductor = Conductor::find($idConductor);
+
+        // El conductor ya no existe: el aviso llegó tarde. No hay nada que reintentar ni difundir.
+        if (! $conductor) {
+            return true;
+        }
+
+        $latitud = (float) $datos['latitud'];
+        $longitud = (float) $datos['longitud'];
+
+        if (! $tracking->filtrarPosicionEnVivo($conductor, $latitud, $longitud)) {
+            Log::warning('Posición GPS descartada por salto implausible (RN-03).', [
+                'id_conductor' => $idConductor,
+                'tenant' => $slug,
+            ]);
+
+            return true;
+        }
+
+        UbicacionActualizada::dispatch($idConductor, $latitud, $longitud, $slug);
 
         return true;
     }

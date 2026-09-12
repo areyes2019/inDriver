@@ -378,6 +378,50 @@ it('difunde la posición al Panel con el evento de siempre', function () {
             && $e->latitud === 19.4326);
 });
 
+it('descarta una posición del microservicio que implica un salto imposible sin difundirla', function () {
+    Event::fake([UbicacionActualizada::class]);
+
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+
+    tenancy()->initialize($tenant);
+    ConductorEstado::where('id_conductor', $conductor->id_conductor)->update([
+        'ultima_latitud' => 19.4326,
+        'ultima_longitud' => -99.1332,
+        'ultima_actualizacion' => now()->subSeconds(10),
+    ]);
+    tenancy()->end();
+
+    $buzon = $this->mock(BuzonGps::class);
+    $buzon->shouldReceive('habilitado')->andReturnTrue();
+    $buzon->shouldReceive('asegurarGrupo');
+    $buzon->shouldReceive('confirmar')->once();
+    $buzon->shouldReceive('leer')->once()->andReturn([[
+        'id' => '1-0',
+        'tipo' => BuzonGps::POSICION,
+        'datos' => [
+            'tenant' => 'cafe-luna',
+            'id_conductor' => $conductor->id_conductor,
+            // San Francisco, igual que en TrackingTest: a 10s de la posición anterior implica más
+            // de un millón de km/h, muy por encima de los 150 km/h de RN-03. Es el salto que se
+            // vio en el Panel de producción una vez que Reverb empezó a conectar de verdad.
+            'latitud' => 37.7749,
+            'longitud' => -122.4194,
+            'fecha_ms' => now()->getTimestampMs(),
+        ],
+    ]]);
+
+    $this->artisan('gps:consumir-buzon', ['--ciclos' => 1])->assertSuccessful();
+
+    tenancy()->initialize($tenant);
+    $estado = ConductorEstado::where('id_conductor', $conductor->id_conductor)->first();
+    expect((float) $estado->ultima_latitud)->toEqualWithDelta(19.4326, 0.0001);
+    expect((float) $estado->ultima_longitud)->toEqualWithDelta(-99.1332, 0.0001);
+    tenancy()->end();
+
+    Event::assertNotDispatched(UbicacionActualizada::class);
+});
+
 it('mantiene vivo al conductor con el latido del servicio', function () {
     $tenant = gpsTenant();
     ['conductor' => $conductor] = gpsConductor($tenant);

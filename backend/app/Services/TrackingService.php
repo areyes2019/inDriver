@@ -57,11 +57,9 @@ class TrackingService
         // Se descarta en silencio, igual que un LOCATION_UPDATE inválido por socket (spec
         // tenant/021, sección de errores): no hay a quién devolverle el error, y reintentar sería
         // peor que perder un punto.
-        if ($this->esSaltoImposible($conductor, (float) $datos['latitud'], (float) $datos['longitud'])) {
+        if (! $this->filtrarPosicionEnVivo($conductor, (float) $datos['latitud'], (float) $datos['longitud'])) {
             return null;
         }
-
-        $this->actualizarPosicionActual($conductor, (float) $datos['latitud'], (float) $datos['longitud']);
 
         $posicion = ConductorPosicion::create([
             'id_conductor' => $conductor->id_conductor,
@@ -182,6 +180,23 @@ class TrackingService
     public function pedidoActivo(Conductor $conductor): ?Pedido
     {
         return $conductor->pedidos()->whereNotIn('estado', PedidoEstadoService::ESTADOS_FINALES)->first();
+    }
+
+    /**
+     * Aplica RN-03 y, si la posición es plausible, la deja como la "actual" del conductor. Punto
+     * de entrada compartido por el camino HTTP directo (`registrarPosicion`) y por el worker que
+     * aplica lo que reenvía el microservicio GPS (`ConsumirBuzonGps::difundir`, spec tenant/028):
+     * el filtro no puede depender de por cuál de los dos caminos entró el punto.
+     */
+    public function filtrarPosicionEnVivo(Conductor $conductor, float $latitud, float $longitud): bool
+    {
+        if ($this->esSaltoImposible($conductor, $latitud, $longitud)) {
+            return false;
+        }
+
+        $this->actualizarPosicionActual($conductor, $latitud, $longitud);
+
+        return true;
     }
 
     private function actualizarPosicionActual(Conductor $conductor, float $latitud, float $longitud): void
