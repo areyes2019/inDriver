@@ -206,6 +206,8 @@ que en LIVE: son acciones humanas, no llegadas geográficas.
   ambiente activo. El saldo del conductor es la excepción conocida: es uno solo y mezcla ambos.
 - **RN-06**: El dinero se comporta idéntico en ambos ambientes. Un envío TEST descuenta prepago,
   genera comisión, mueve saldo y cobra importe como uno LIVE, sin marca distintiva.
+  **Enmienda** (ver §"Enmienda: el saldo de viajes del tenant es la excepción" abajo): el saldo de
+  viajes del **tenant** frente a ADMIN_CENTRAL no entra en esta regla; un envío TEST no lo consume.
 - **RN-07**: En TEST, la simulación arranca en dos momentos: al pasar a `TOMADO` (tramo de
   acercamiento, desde la última posición conocida del conductor hasta la recogida) y al pasar a
   `EN_CAMINO` (tramo de entrega, de la recogida a la entrega).
@@ -393,3 +395,43 @@ Sin cambios de ningún tipo.
     `schedule:run` no siempre corría, y el modo TEST lo vuelve permanente al exigirlo.
 36. El correlativo `numero_pedido` se calcula con `withoutGlobalScopes()`: es del tenant entero, no
     del ambiente. Sin eso, el primer envío TEST reciclaría el número de uno LIVE.
+
+## Enmienda: el saldo de viajes del tenant es la excepción a "el dinero no se simula"
+
+> Viene de la corrección de `015-configuracion-comisiones.md` ("el saldo del tenant se consume por
+> envío entregado") y de la ampliación de `007-panel-despachador.md` que pone ese saldo sobre el
+> mapa. Desde ahí cada envío entregado consume 1 viaje del saldo que ADMIN_CENTRAL acreditó al
+> tenant. RN-06 dice que el dinero se comporta igual en TEST y en LIVE; para **este** saldo no.
+
+### Qué cambia
+
+- Un envío `TEST` entregado **no** consume viajes del saldo del tenant. Todo lo demás de RN-06 sigue
+  igual: sí descuenta el prepago del conductor, sí calcula y guarda comisión, sí mueve
+  `conductores.saldo` y sí cobra su importe.
+- La decisión se toma **al escribir**, no al leer: `PedidoEstadoService::consumirViajeDelTenant()`
+  se sale sin hacer nada si `$pedido->esTest()`. `consumos_viajes_tenant` no lleva columna
+  `ambiente` ni global scope; sus filas son LIVE por construcción.
+- El indicador del Panel muestra el mismo saldo con el switch en TEST que en LIVE (es un número del
+  tenant, no del ambiente), y el aviso `saldo-tenant.cambiado` (027 §12) no lleva `ambiente`, así
+  que el Panel nunca lo descarta por RN-28 de 027.
+
+### Por qué esta excepción y no las otras
+
+Los saldos del conductor son ficticios hoy y el objetivo de TEST es *verificar que el descuento
+funcione* (supuestos 11-14). El saldo del tenant es distinto en dos cosas: lo acredita ADMIN_CENTRAL
+contra un paquete con precio (`compras_paquetes.importe_total`), y su descuento no es lo que se
+prueba en un envío simulado —lo que se prueba es la asignación, el recorrido y la liquidación del
+conductor. Dejar que las pruebas se coman el paquete comprado es exactamente el riesgo 1 de
+"Riesgos aceptados", pero sobre el dinero real del tenant, y sin reposición manual posible desde el
+propio tenant. Se prefiere que TEST no toque ese saldo.
+
+### Criterios de aceptación (de esta enmienda)
+
+- Entregar un envío TEST no crea fila en `consumos_viajes_tenant` ni emite
+  `saldo-tenant.cambiado`; el mismo envío en LIVE hace las dos cosas (`ModoTestLiveTest`).
+- Con el switch en TEST, el indicador del Panel muestra el mismo saldo que en LIVE.
+
+### Supuestos asumidos (continúa el registro de arriba)
+
+37. El saldo de viajes del tenant frente a ADMIN_CENTRAL no se consume con envíos TEST. Es la única
+    excepción a RN-06; el resto del dinero sigue comportándose igual en ambos ambientes.

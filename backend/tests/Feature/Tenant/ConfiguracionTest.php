@@ -7,6 +7,7 @@ use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 
 uses(RefreshDatabase::class);
 
@@ -161,4 +162,24 @@ it('sets all despachadores to Inactivo when usar_despachadores changes from Sí 
     expect($despachadorSuspendido->fresh()->estado)->toBe('Inactivo');
     expect(Usuario::find($usuarioActivo->id_usuario)->estado)->toBe('Activo');
     tenancy()->end();
+});
+
+it('still serves the configuración when the tenant balance cannot be computed', function () {
+    $tenant = configuracionTenant();
+    $admin = configuracionAdminUsuario($tenant);
+
+    // El caso real: migración de tenant pendiente. Que se caiga el saldo, no las tarifas.
+    tenancy()->initialize($tenant);
+    Schema::drop('consumos_viajes_tenant');
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->getJson('/api/v1/t/cafe-luna/configuracion')
+        ->assertOk()
+        ->assertJsonPath('saldo_viajes_tenant', null);
+
+    $this->actingAs($admin, 'usuario')
+        ->putJson('/api/v1/t/cafe-luna/configuracion', configuracionDatosValidos())
+        ->assertOk()
+        ->assertJsonPath('tarifa_banderazo', '10');
 });

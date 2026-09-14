@@ -47,6 +47,20 @@ export const useTenantAuthStore = defineStore('tenantAuth', () => {
 
   const isAuthenticated = computed(() => usuario.value !== null)
 
+  // El "operativo" del tenant —quien crea envíos y ve el Panel— depende de la configuración, no
+  // solo del rol: Despachador cuando el tenant usa despachadores, AdminCliente cuando no (spec
+  // tenant/011), nunca ambos a la vez. Vive aquí, y no en el router ni en el layout, porque el
+  // login también lo necesita para decidir a dónde aterrizar (spec tenant/007, RN-A1): tres copias
+  // de la misma regla eran una invitación a que un día una dijera otra cosa.
+  const esOperativo = computed(() => {
+    const rol = usuario.value?.rol
+    const usaDespachadores = usuario.value?.usar_despachadores === 'Sí'
+
+    return (
+      (rol === 'Despachador' && usaDespachadores) || (rol === 'AdminCliente' && !usaDespachadores)
+    )
+  })
+
   async function fetchMe(currentSlug: string): Promise<boolean> {
     slug.value = currentSlug
     try {
@@ -99,6 +113,7 @@ export const useTenantAuthStore = defineStore('tenantAuth', () => {
     checked,
     slug,
     isAuthenticated,
+    esOperativo,
     fetchMe,
     login,
     logout,

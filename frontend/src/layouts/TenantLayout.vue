@@ -48,14 +48,9 @@ watch(
   },
   { immediate: true },
 )
-// El rol "operativo" (el que crea pedidos y ve el Panel) depende de la configuración del tenant,
-// no solo del rol: Despachador cuando el tenant usa despachadores, AdminCliente cuando no
-// (spec tenant/011) — nunca ambos a la vez.
-const esOperativo = computed(
-  () =>
-    (esDespachador.value && usaDespachadores.value) ||
-    (esAdminCliente.value && !usaDespachadores.value),
-)
+// El rol "operativo" (el que crea pedidos y ve el Panel) lo decide el store (spec tenant/011),
+// que es el mismo que consultan el router y el login.
+const esOperativo = computed(() => auth.esOperativo)
 const mostrarNuevaEntrega = computed(() => enPanel.value && esOperativo.value)
 
 const botonNuevaEntregaRef = ref<HTMLButtonElement>()

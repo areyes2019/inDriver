@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\ScopedBy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'numero_pedido',
@@ -132,6 +133,15 @@ class Pedido extends Model
     public function ofertas(): HasMany
     {
         return $this->hasMany(PedidoOferta::class, 'id_pedido', 'id_pedido');
+    }
+
+    /**
+     * El viaje que este envío consumió del saldo del tenant, si lo consumió (spec tenant/015,
+     * corrección "el saldo del tenant se consume por envío entregado"). Solo envíos LIVE entregados.
+     */
+    public function consumoViajeTenant(): HasOne
+    {
+        return $this->hasOne(ConsumoViajeTenant::class, 'id_pedido', 'id_pedido');
     }
 
     public function posiciones(): HasMany

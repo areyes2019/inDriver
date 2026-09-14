@@ -7,6 +7,20 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Después de un `git pull` con migraciones nuevas
+
+Las migraciones del tenant **no** corren con `php artisan migrate`: viven en
+`database/migrations/tenant/` y se aplican a cada base `delivery_tenant_*` por separado. Si una
+pantalla empieza a fallar con `Base table or view not found` después de actualizar el código, es
+esto:
+
+```bash
+php artisan migrate            # base central (delivery_central)
+php artisan tenants:migrate    # cada base de tenant
+```
+
+En producción lo hace `/deploy`; en local es a mano.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

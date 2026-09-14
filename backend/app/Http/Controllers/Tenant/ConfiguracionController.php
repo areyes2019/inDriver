@@ -6,12 +6,11 @@ namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenant\Auditoria;
-use App\Models\Tenant\CompraPaquete;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Pedido;
-use App\Models\Tenant\VentaViajeConductor;
 use App\Support\ContextoAmbiente;
+use App\Support\SaldoViajesTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -96,8 +95,6 @@ class ConfiguracionController extends Controller
      */
     private function estadoActual(): array
     {
-        $saldoTenant = (int) CompraPaquete::sum('cantidad_viajes') - (int) VentaViajeConductor::sum('cantidad_viajes');
-
         $tarifaBanderazo = ConfiguracionTenant::obtener(ConfiguracionTenant::BANDERAZO);
         $kmIncluidosBanderazo = ConfiguracionTenant::obtener(ConfiguracionTenant::KM_INCLUIDOS);
         $tarifaKmAdicional = ConfiguracionTenant::obtener(ConfiguracionTenant::KM_ADICIONAL);
@@ -112,7 +109,7 @@ class ConfiguracionController extends Controller
             'comision_porcentaje' => ConfiguracionTenant::obtener(ConfiguracionTenant::COMISION_PORCENTAJE),
             'usar_despachadores' => ConfiguracionTenant::obtener(ConfiguracionTenant::USAR_DESPACHADORES, 'No'),
             'ambiente' => ConfiguracionTenant::obtener(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_LIVE),
-            'saldo_viajes_tenant' => $saldoTenant,
+            'saldo_viajes_tenant' => SaldoViajesTenant::actualONull(),
         ];
     }
 }

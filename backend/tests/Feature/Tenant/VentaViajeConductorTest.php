@@ -5,8 +5,10 @@ use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\CompraPaquete;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConfiguracionTenant;
+use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\VentaViajeConductor;
+use App\Services\PedidoEstadoService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -121,7 +123,9 @@ it('converts the amount paid into viajes using costo_viaje_prepago and credits t
         ])
         ->assertCreated()
         ->assertJsonPath('cantidad_viajes', 5)
-        ->assertJsonPath('saldo_tenant', 45);
+        // La venta ya no descuenta del saldo del tenant: lo consumen los envíos entregados
+        // (spec tenant/015, corrección "el saldo del tenant se consume por envío entregado").
+        ->assertJsonPath('saldo_tenant', 50);
 
     expect((float) $response->json('monto_pagado'))->toBe(500.0);
 
@@ -190,6 +194,47 @@ it('rejects crediting an amount that converts to more viajes than the tenant has
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['monto_pagado']);
+});
+
+it('caps the sale against the balance left after deliveries, not after previous sales', function () {
+    $tenant = ventaTenant();
+    $admin = ventaAdminUsuario($tenant);
+    $conductor = ventaCrearConductor($tenant);
+    ventaConfigurarPrepago($tenant, '100');
+    ventaAcreditarPaquete($tenant, 5);
+
+    // Vender 5 no gasta el saldo del tenant (RN-C4): se puede volver a vender 5.
+    $this->actingAs($admin, 'usuario')
+        ->postJson("/api/v1/t/cafe-luna/conductores/{$conductor->id_conductor}/vender-viajes", ['monto_pagado' => 500])
+        ->assertCreated()
+        ->assertJsonPath('saldo_tenant', 5);
+
+    // Tres envíos entregados sí lo gastan: quedan 2 y vender 3 ya no cabe.
+    tenancy()->initialize($tenant);
+    for ($i = 0; $i < 3; $i++) {
+        $pedido = Pedido::create([
+            'numero_pedido' => 'PED-'.random_int(100000, 999999),
+            'nombre_solicitante' => 'Mario Sánchez', 'telefono_solicitante' => '5511223344',
+            'direccion_recogida' => 'A', 'latitud_recogida' => 19.4, 'longitud_recogida' => -99.1,
+            'direccion_entrega' => 'B', 'latitud_entrega' => 19.41, 'longitud_entrega' => -99.1,
+            'fecha_servicio' => now()->toDateString(), 'lo_antes_posible' => true,
+            'modalidad_pago' => 'RECEPTOR_PAGA_ENVIO', 'importe_envio' => 80,
+            'estado' => 'ARRIBADO_A_ENTREGA', 'id_conductor' => $conductor->id_conductor,
+        ]);
+        app(PedidoEstadoService::class)->transicionar($pedido, 'ENTREGADO');
+        $pedido->save();
+    }
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson("/api/v1/t/cafe-luna/conductores/{$conductor->id_conductor}/vender-viajes", ['monto_pagado' => 300])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['monto_pagado']);
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson("/api/v1/t/cafe-luna/conductores/{$conductor->id_conductor}/vender-viajes", ['monto_pagado' => 200])
+        ->assertCreated()
+        ->assertJsonPath('saldo_tenant', 2);
 });
 
 it('lists the payment history of a conductor with the accumulated total', function () {

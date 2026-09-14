@@ -8,7 +8,9 @@ use App\Events\Tenant\PedidoCanceladoParaConductor;
 use App\Events\Tenant\PedidoEntregado;
 use App\Events\Tenant\PedidoEstadoCambiado;
 use App\Events\Tenant\PedidoYaTomado;
+use App\Events\Tenant\SaldoTenantCambiado;
 use App\Models\Tenant\ConfiguracionTenant;
+use App\Models\Tenant\ConsumoViajeTenant;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\VentaViajeConductor;
 use App\Services\Gps\BuzonGps;
@@ -115,6 +117,10 @@ class PedidoEstadoService
         if ($nuevoEstado === 'ENTREGADO' && $pedido->id_conductor) {
             $this->liquidarConductor($pedido);
             $this->tracking->calcularResumenRuta($pedido);
+        }
+
+        if ($nuevoEstado === 'ENTREGADO') {
+            $this->consumirViajeDelTenant($pedido);
         }
 
         $this->abrirTramoSimulado($pedido, $nuevoEstado);
@@ -249,6 +255,38 @@ class PedidoEstadoService
             $nuevoEstado === 'ENTREGADO' => $this->diferir($pedido, fn () => PedidoEntregado::dispatch($idPedido, $slug)),
             default => null,
         };
+    }
+
+    /**
+     * Descuenta 1 viaje del saldo del tenant frente a ADMIN_CENTRAL (spec tenant/015, corrección
+     * "el saldo del tenant se consume por envío entregado", RN-C2). Es independiente de
+     * `liquidarConductor()`: aquella es la cuenta del tenant con cada conductor; esta, la del tenant
+     * con quien le vendió el paquete. Consume en Prepago y en Comisión por igual.
+     *
+     * Va diferido como los avisos: `transicionar()` no guarda, y un consumo escrito antes del
+     * `save()` quedaría huérfano si la entrega nunca llegara a persistirse. `firstOrCreate` sobre
+     * el `UNIQUE(id_pedido)` es la garantía de "una sola vez" aunque `saved()` corra dos veces, y el
+     * aviso solo sale si la fila es nueva. Se difiere ANTES que `pedido.entregado`
+     * (`notificarConductores`) para que quien lea el saldo tras ese aviso ya lo vea descontado.
+     *
+     * En TEST no se consume nada (spec tenant/025, enmienda a RN-06): es la única excepción a "el
+     * dinero no se simula", porque este saldo lo pagó el tenant contra un paquete con precio.
+     */
+    private function consumirViajeDelTenant(Pedido $pedido): void
+    {
+        if ($pedido->esTest()) {
+            return;
+        }
+
+        $slug = tenant()?->slug;
+
+        $this->diferir($pedido, function () use ($pedido, $slug): void {
+            $consumo = ConsumoViajeTenant::firstOrCreate(['id_pedido' => $pedido->id_pedido]);
+
+            if ($consumo->wasRecentlyCreated && $slug !== null) {
+                SaldoTenantCambiado::dispatch(SaldoTenantCambiado::MOTIVO_CONSUMO, $pedido->id_pedido, $slug);
+            }
+        });
     }
 
     /**

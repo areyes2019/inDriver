@@ -107,6 +107,12 @@ const router = createRouter({
       component: () => import('../views/tenant/ResetPasswordView.vue'),
     },
     {
+      // spec tenant/007 (RN-A2): "abrir mi sistema" a secas termina en el mapa. El guard de
+      // `tenant-panel` decide después si esa persona puede estar ahí (login o Clientes).
+      path: '/t/:slug',
+      redirect: { name: 'tenant-panel' },
+    },
+    {
       path: '/t/:slug/panel',
       name: 'tenant-panel',
       component: () => import('../views/tenant/panel/PanelView.vue'),
@@ -236,21 +242,13 @@ router.beforeEach(async (to) => {
       return { name: 'tenant-login', params: { slug } }
     }
 
-    if (
-      to.name === 'tenant-panel' &&
-      !['Despachador', 'AdminCliente'].includes(auth.usuario?.rol ?? '')
-    ) {
-      return { name: 'tenant-clientes-lista', params: { slug } }
-    }
-
     // El "operativo" (quien ve el Panel) depende de la configuración del tenant, no solo del rol:
-    // Despachador cuando usa despachadores, AdminCliente cuando no (spec tenant/011).
+    // Despachador cuando usa despachadores, AdminCliente cuando no (spec tenant/011). La regla vive
+    // en el store, compartida con el login y el layout (spec tenant/007, RN-A1). Un rol que no es
+    // ninguno de los dos tampoco es operativo, así que la comprobación de rol de antes sobra.
     const usaDespachadores = auth.usuario?.usar_despachadores === 'Sí'
-    const esOperativo =
-      (auth.usuario?.rol === 'Despachador' && usaDespachadores) ||
-      (auth.usuario?.rol === 'AdminCliente' && !usaDespachadores)
 
-    if (to.name === 'tenant-panel' && !esOperativo) {
+    if (to.name === 'tenant-panel' && !auth.esOperativo) {
       return { name: 'tenant-clientes-lista', params: { slug } }
     }
 

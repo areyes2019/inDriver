@@ -7,11 +7,11 @@ namespace App\Http\Controllers\Tenant;
 use App\Events\Tenant\SaldoAcreditado;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant\Auditoria;
-use App\Models\Tenant\CompraPaquete;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\VentaViajeConductor;
 use App\Support\SaldoViajes;
+use App\Support\SaldoViajesTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -40,7 +40,9 @@ class VentaViajeConductorController extends Controller
             ]);
         }
 
-        $saldoTenant = (int) CompraPaquete::sum('cantidad_viajes') - (int) VentaViajeConductor::sum('cantidad_viajes');
+        // Tope contra el saldo del tenant (spec tenant/015, RN-C4). La venta ya no descuenta de ese
+        // saldo —lo consumen los envíos entregados—, pero se decidió conservar el límite.
+        $saldoTenant = SaldoViajesTenant::actual();
 
         if ($cantidadViajes > $saldoTenant) {
             throw ValidationException::withMessages([
@@ -74,7 +76,8 @@ class VentaViajeConductorController extends Controller
             'cantidad_viajes' => $venta->cantidad_viajes,
             'monto_pagado' => $venta->monto_pagado,
             'saldo_conductor' => self::saldoConductor($conductor),
-            'saldo_tenant' => $saldoTenant - $cantidadViajes,
+            // La venta ya no descuenta del saldo del tenant (spec tenant/015, RN-C4).
+            'saldo_tenant' => $saldoTenant,
         ], 201);
     }
 

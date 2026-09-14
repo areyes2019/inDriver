@@ -148,7 +148,10 @@ se desincroniza fácil si algo falla a medio camino). Se calculan siempre a part
 movimientos, mismo espíritu que `LogCentral`/`Auditoria`: la fuente de verdad es la bitácora, no un
 acumulador.
 
-- **Saldo del tenant** = `SUM(compras_paquetes.cantidad_viajes)` − `SUM(ventas_viajes_conductor.cantidad_viajes)`.
+- ~~**Saldo del tenant** = `SUM(compras_paquetes.cantidad_viajes)` − `SUM(ventas_viajes_conductor.cantidad_viajes)`.~~
+  **Reemplazado** por la corrección "el saldo del tenant se consume por envío entregado" (abajo):
+  `SUM(compras_paquetes.cantidad_viajes)` − `COUNT(consumos_viajes_tenant)`. La venta a conductores
+  ya no lo descuenta; sigue validándose contra él (RN-1).
 - **Saldo de un conductor** = `SUM(ventas_viajes_conductor.cantidad_viajes)` para ese conductor −
   `COUNT(pedidos)` de ese conductor con `prepago_descontado = true`.
 
@@ -236,6 +239,8 @@ puede construirse de forma independiente.
    exceda el saldo disponible del tenant.
 2. Un pedido solo descuenta saldo prepagado (o calcula comisión) al pasar a `ENTREGADO`, y solo una
    vez (columna `prepago_descontado` evita doble descuento si el estado se vuelve a consultar).
+   **Corrección (abajo, RN-C2):** en ese mismo momento el envío consume también 1 viaje del saldo
+   del tenant, en cualquier modalidad, una sola vez (`UNIQUE` en `consumos_viajes_tenant`).
 3. Si la modalidad es Prepago y el conductor no tiene saldo, el pedido igual puede marcarse
    `ENTREGADO` (no se bloquea): simplemente no se descuenta nada.
 4. Cambiar la modalidad global o los porcentajes/tarifas no recalcula pedidos ya entregados.
@@ -431,9 +436,11 @@ puede construirse de forma independiente.
 4. La conversión de monto a viajes trunca hacia abajo (`piso`): solo se acreditan viajes completos,
    y el remanente que no alcanza para un viaje completo no se acredita ni se acumula para una carga
    futura.
-5. El saldo de viajes del tenant se sigue calculando y validando igual que antes
+5. ~~El saldo de viajes del tenant se sigue calculando y validando igual que antes
    (`SUM(compras_paquetes.cantidad_viajes) - SUM(ventas_viajes_conductor.cantidad_viajes)`); el
-   monto pagado por el conductor no afecta ese cálculo, solo determina cuántos viajes se acreditan.
+   monto pagado por el conductor no afecta ese cálculo, solo determina cuántos viajes se acreditan.~~
+   Reemplazado por el supuesto 30 (corrección de abajo): el saldo del tenant baja por envío
+   entregado, no por venta.
 6. Cada acreditación registra también el monto pagado por el conductor (no solo la cantidad de
    viajes), formando un historial de pagos consultable por conductor y para todo el tenant.
 7. El esquema de "comisión por porcentaje" es una modalidad **alternativa** al prepago, no
@@ -494,3 +501,164 @@ puede construirse de forma independiente.
 29. `saldo_viajes` se incluye siempre en la respuesta de `ConductorResource`, sin condicionar al
     valor de `modalidad_conductores` en el backend; es el frontend quien decide, con un `v-if`,
     cuándo mostrar la columna.
+
+## Corrección: el saldo del tenant se consume por envío entregado, no por venta a conductores
+
+> Historia del dueño del tenant (ver `007-panel-despachador.md`, §"Ampliación: el Panel es la vista
+> principal…"): *"quiero ver el número de viajes que tengo acreditados y cómo se van descontando"*.
+> Al aterrizar esa historia salió a la luz que "descontar" significaba otra cosa para el dueño que
+> para esta spec: aquí el saldo del tenant bajaba cuando el dueño **vendía** viajes a un conductor
+> (viajes acreditados − viajes vendidos), y en modalidad Comisión no bajaba nunca. El dueño espera
+> que baje **cada vez que se entrega un envío**, sin importar cómo le cobre a sus conductores. Esta
+> corrección reescribe la fórmula del saldo del tenant y deja intacta la del conductor.
+
+### Objetivo / Alcance de esta corrección
+
+Deja funcionando:
+
+- **Nueva fórmula del saldo del tenant**: viajes acreditados por ADMIN_CENTRAL menos envíos
+  entregados que consumieron un viaje.
+  `saldo_viajes_tenant = SUM(compras_paquetes.cantidad_viajes) − COUNT(consumos_viajes_tenant)`.
+- **Qué consume**: cada envío que pasa a `ENTREGADO` consume **exactamente 1 viaje** del tenant,
+  una sola vez, en cualquier modalidad (`Prepago` o `Comision`). Vender viajes a un conductor
+  **deja de descontar** del saldo del tenant.
+- **Qué no consume**: un envío cancelado o rechazado en cualquier punto (no consume ni devuelve);
+  un envío del ambiente `TEST` (ver enmienda en `025-modo-test-live.md`); y los envíos entregados
+  **antes** de desplegar esta corrección (no hay relleno retroactivo).
+- **Bitácora del consumo**: tabla nueva `consumos_viajes_tenant`, una fila por envío consumido.
+  Como el resto de saldos de esta spec, el número no se guarda en ningún contador: se calcula.
+- **Un solo lugar que calcula**: helper `App\Support\SaldoViajesTenant::actual()`, usado por
+  Configuración, por la validación de venta a conductores, por el aviso de tiempo real (027 §12) y
+  por la carga inicial del Panel.
+- **La validación de venta se conserva como tope** (RN-1): no se puede vender a un conductor una
+  cantidad de viajes mayor al saldo actual del tenant, calculado con la fórmula nueva. Se preguntó
+  y se decidió mantenerla aunque la venta ya no descuente.
+- **Configuración sigue mostrando el saldo** (pestaña Comisión/Prepago), ahora con la fórmula
+  nueva, para que el Panel y Configuración nunca muestren dos números distintos.
+
+**No** incluye:
+
+- Bloquear la creación, publicación o entrega de envíos cuando el saldo llega a `0` o queda en
+  negativo. El saldo **puede quedar negativo**; el bloqueo sigue siendo la historia futura que ya
+  registra `010-paquetes-viajes.md`.
+- Pantalla de historial de consumos del tenant. La tabla queda lista para eso.
+- Cambios al saldo prepagado del conductor (`ventas_viajes_conductor` − `pedidos.prepago_descontado`)
+  ni a la comisión: `liquidarConductor()` no cambia. Son dos contabilidades independientes: la del
+  tenant con ADMIN_CENTRAL (esta corrección) y la del tenant con cada conductor (lo ya existente).
+
+### Decisión técnica
+
+#### Por qué una tabla de consumos y no una columna en `pedidos`
+
+Marcar el pedido (`viaje_tenant_consumido = true`, al estilo de `prepago_descontado`) era la salida
+corta. Se prefiere la tabla porque (1) es la bitácora que el dueño va a pedir después ("qué envío
+me consumió cada viaje"), con `created_at` propio y sin recorrer `pedidos`; (2) el `UNIQUE` sobre
+`id_pedido` es la garantía de "una sola vez" a nivel de base, no de código; y (3) contar filas es la
+misma consulta que ya usa `SaldoViajes` del conductor, sin filtrar por estado ni por ambiente:
+la fila existe o no existe.
+
+#### Cuándo se escribe el consumo
+
+`PedidoEstadoService::transicionar()` no guarda —el llamador decide cuándo y dentro de qué
+transacción (027 §5, Enmienda 2)—, así que el consumo no puede insertarse ahí: si el `save()` no
+llegara, quedaría un consumo huérfano de un envío que nunca se entregó. Se escribe con el mismo
+mecanismo que los avisos: `diferir($pedido, fn () => $this->consumirViajeDelTenant($pedido))` al
+transicionar a `ENTREGADO`, que `PedidoObserver::saved()` suelta después de confirmar. Dentro de esa
+clausura: si `$pedido->esTest()` no se hace nada; si no, `ConsumoViajeTenant::firstOrCreate(['id_pedido'
+=> $pedido->id_pedido])` y, solo si se creó, se dispara `SaldoTenantCambiado` con el saldo
+resultante (027 §12). `firstOrCreate` + `UNIQUE` cubren el caso de un `saved()` repetido.
+
+Se difiere **antes** que `PedidoEntregado::dispatch(...)`, para que quien lea el saldo del tenant
+después del aviso de entrega ya lo vea descontado; el propio `PedidoEntregado` no lo lleva en su
+carga (027 §12 explica por qué va en un evento aparte).
+
+#### Sin relleno retroactivo
+
+La migración crea la tabla vacía. Los envíos `ENTREGADO` anteriores al despliegue no se cuentan:
+bajo la regla anterior ya "pagaron" con la venta que los cubrió, y volverlos a contar castigaría dos
+veces a los tenants que operaban en Prepago. Consecuencia visible que el dueño aceptó: al desplegar,
+el saldo de un tenant **sube** a su total acreditado (las ventas a conductores dejan de restarle) y
+empieza a bajar con el primer envío entregado desde entonces.
+
+#### El saldo se calcula fuera de cualquier scope de ambiente
+
+`ConsumoViajeTenant` no lleva `ambiente` ni global scope: la fila solo existe para envíos LIVE
+(se decide al escribir, no al leer). `compras_paquetes` tampoco tiene ambiente. Así `actual()` da el
+mismo número desde una petición del Panel en TEST, en LIVE, desde la app del conductor o desde el
+contexto de ADMIN_CENTRAL con la tenencia inicializada.
+
+### Reglas de negocio (de esta corrección)
+
+Reemplazan o complementan las reglas 1 y 2 de arriba:
+
+- **RN-C1** *(reemplaza la definición implícita en "Saldos calculados")*: saldo del tenant =
+  `SUM(compras_paquetes.cantidad_viajes) − COUNT(consumos_viajes_tenant)`. Puede ser negativo.
+- **RN-C2** *(complementa RN-2)*: al pasar a `ENTREGADO`, además de liquidar al conductor, el envío
+  consume 1 viaje del tenant, una sola vez (`UNIQUE(id_pedido)`), en ambas modalidades.
+- **RN-C3**: cancelaciones y rechazos no consumen ni devuelven. Un envío TEST no consume.
+- **RN-C4** *(RN-1 se mantiene)*: la venta a un conductor se rechaza si la cantidad resultante
+  excede el saldo actual del tenant (RN-C1). La venta no modifica ese saldo.
+- **RN-C5**: ningún saldo del tenant `<= 0` bloquea operación alguna.
+- **RN-C6**: no hay relleno retroactivo; el consumo empieza con el primer envío entregado después
+  de desplegar la corrección.
+
+### Backend (Laravel) — cambios de esta corrección
+
+- **Migración de tenant** `create_consumos_viajes_tenant_table`: `id_consumo` (PK), `id_pedido`
+  (FK a `pedidos.id_pedido`, `UNIQUE`), `timestamps()`. Sin `ambiente`, sin borrado lógico.
+- **Modelo** `App\Models\Tenant\ConsumoViajeTenant` (`$table = 'consumos_viajes_tenant'`,
+  relación `pedido()`), y `Pedido::consumoViajeTenant()` (hasOne).
+- **Helper** `App\Support\SaldoViajesTenant::actual(): int` — la fórmula RN-C1, una sola vez.
+  Sustituye las dos copias de `CompraPaquete::sum(...) - VentaViajeConductor::sum(...)` que hoy
+  viven en `ConfiguracionController::estadoActual()` y en `VentaViajeConductorController::store()`.
+  **Enmienda (posterior a la implementación):** gana `actualONull(): ?int`, que envuelve el cálculo
+  en `try/catch`, registra el fallo y devuelve `null`. Lo usan las lecturas de paso —Configuración y
+  el `meta` de `pedidos/en-turno`— para que un saldo que no se puede calcular (el caso real fue la
+  migración de tenant pendiente en local) no tumbe las tarifas ni las listas del Panel: Configuración
+  muestra "no disponible por ahora" y la píldora se queda en skeleton. El tope de venta (RN-C4)
+  sigue usando `actual()` y sí falla, porque ahí el número decide algo.
+- **`PedidoEstadoService`**: método privado `consumirViajeDelTenant(Pedido)` diferido al
+  transicionar a `ENTREGADO` (ver "Cuándo se escribe el consumo").
+- **Evento** `App\Events\Tenant\SaldoTenantCambiado` — definido en 027 §12.
+- **`Admin\CreditoPaqueteController::store()`**: dentro del bloque con la tenencia inicializada,
+  tras `CompraPaquete::create(...)`, dispara `SaldoTenantCambiado` (motivo `acreditacion`) con
+  `$tenant->slug`. Como todo aviso del protocolo (018, RN-08), si la emisión falla la acreditación
+  responde con éxito igual.
+- **Pruebas**: `ConfiguracionTest` (fórmula nueva: vender no baja el saldo, entregar sí),
+  `VentaViajeConductorTest` (tope RN-C4 con la fórmula nueva), `PedidoTest`/`PanelReactivoTest`
+  (entregar un envío LIVE crea exactamente un consumo aunque se guarde dos veces; entregar un TEST
+  no crea ninguno; cancelar no crea ninguno), y prueba del controlador central (acreditar emite el
+  evento con el saldo resultante).
+
+### Frontend (Vue 3) — cambios de esta corrección
+
+- `ConfiguracionView.vue`: ninguno; sigue leyendo `saldo_viajes_tenant` de `GET /configuracion`,
+  que ahora sale del helper.
+- El indicador sobre el mapa y su actualización en vivo: `007` (ampliación) y `027 §12`.
+
+### Criterios de aceptación (de esta corrección)
+
+1. Con 100 viajes acreditados y 30 vendidos a conductores, `GET /configuracion` reporta
+   `saldo_viajes_tenant = 100`.
+2. Entregar un envío LIVE baja ese número a 99, en Prepago y en Comisión; entregarlo "dos veces"
+   (doble `save()` del mismo estado) lo deja en 99.
+3. Cancelar un envío, o entregar un envío TEST, no cambia el número.
+4. Vender a un conductor 101 viajes con saldo 100 se rechaza con el mensaje de RN-1; vender 100 se
+   acepta y el saldo del tenant sigue en 100.
+5. Con saldo 0, entregar un envío lo deja en −1 y no falla nada.
+6. Acreditar un paquete desde ADMIN_CENTRAL emite `saldo-tenant.cambiado` con el saldo resultante.
+7. Las pruebas listadas arriba pasan.
+
+### Supuestos asumidos (continúa el registro de arriba)
+
+30. El saldo del tenant baja 1 por envío entregado, en cualquier modalidad; ya no baja al vender
+    viajes a un conductor. **Reemplaza al supuesto 5.**
+31. Cancelados y rechazados no consumen ni devuelven.
+32. Los envíos TEST no consumen del saldo real del tenant (excepción a RN-06 de 025, registrada
+    allá).
+33. El saldo puede quedar negativo; no se bloquea nada por saldo. El bloqueo sigue pendiente.
+34. La validación de venta a conductores (RN-1) se mantiene como tope contra la fórmula nueva.
+    **Decidido al preguntar.**
+35. No hay relleno retroactivo de consumos. **Decidido al preguntar.**
+36. Cada consumo queda registrado como fila propia (`consumos_viajes_tenant`), no como bandera en
+    `pedidos`, para que exista bitácora aunque no haya pantalla todavía.

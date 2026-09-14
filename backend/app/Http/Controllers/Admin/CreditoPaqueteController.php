@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Events\Tenant\SaldoTenantCambiado;
 use App\Http\Controllers\Controller;
 use App\Models\LogCentral;
 use App\Models\PaqueteViaje;
@@ -11,6 +12,7 @@ use App\Models\Tenant as TenantModel;
 use App\Models\Tenant\CompraPaquete;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class CreditoPaqueteController extends Controller
@@ -45,6 +47,18 @@ class CreditoPaqueteController extends Controller
                 'estado' => 'Activo',
                 'fecha_compra' => now(),
             ]);
+
+            // El Panel del tenant sube su saldo sin recargar (spec tenant/027 §12). Se dispara con
+            // la tenencia todavía inicializada para que el helper lea la base correcta. Si la
+            // emisión falla, la acreditación no se revierte (spec tenant/018, RN-08).
+            try {
+                SaldoTenantCambiado::dispatch(SaldoTenantCambiado::MOTIVO_ACREDITACION, null, $tenant->slug);
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo avisar al Panel del tenant de la acreditación.', [
+                    'id_tenant' => $tenant->id_tenant,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         } finally {
             tenancy()->end();
         }

@@ -1,11 +1,13 @@
 <?php
 
+use App\Events\Tenant\SaldoTenantCambiado;
 use App\Events\Tenant\UbicacionActualizada;
 use App\Models\Tenant;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConductorPosicion;
 use App\Models\Tenant\ConfiguracionTenant;
+use App\Models\Tenant\ConsumoViajeTenant;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\SimulacionEnvio;
 use App\Models\Tenant\Usuario;
@@ -537,7 +539,36 @@ it('settles a delivered test envío exactly like a live one', function () {
     $pedido->save();
 
     // El envío de prueba consume un viaje real: es la decisión explícita de la spec (RN-06).
-    expect($pedido->fresh()->prepago_descontado)->toBeTrue();
+    expect($pedido->fresh()->prepago_descontado)->toBeTrue()
+        // ...salvo el saldo del tenant frente a ADMIN_CENTRAL, la única excepción (enmienda a RN-06).
+        ->and(ConsumoViajeTenant::count())->toBe(0);
+    tenancy()->end();
+});
+
+it('does not consume the tenant balance with a test envío, but does with a live one', function () {
+    $tenant = ambienteTenant();
+    $datos = ambienteConductor($tenant);
+
+    tenancy()->initialize($tenant);
+    Event::fake([SaldoTenantCambiado::class]);
+
+    $test = ambientePedido([
+        'id_conductor' => $datos['conductor']->id_conductor, 'estado' => 'ARRIBADO_A_ENTREGA',
+    ], Pedido::AMBIENTE_TEST);
+    app(PedidoEstadoService::class)->transicionar($test, 'ENTREGADO');
+    $test->save();
+
+    expect(ConsumoViajeTenant::count())->toBe(0);
+    Event::assertNotDispatched(SaldoTenantCambiado::class);
+
+    $live = ambientePedido([
+        'id_conductor' => $datos['conductor']->id_conductor, 'estado' => 'ARRIBADO_A_ENTREGA',
+    ]);
+    app(PedidoEstadoService::class)->transicionar($live, 'ENTREGADO');
+    $live->save();
+
+    expect(ConsumoViajeTenant::where('id_pedido', $live->id_pedido)->exists())->toBeTrue();
+    Event::assertDispatched(SaldoTenantCambiado::class, fn (SaldoTenantCambiado $e) => $e->motivo === 'consumo' && $e->idPedido === $live->id_pedido);
     tenancy()->end();
 });
 

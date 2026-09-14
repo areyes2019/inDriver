@@ -15,6 +15,7 @@ use App\Models\Tenant\Pedido;
 use App\Models\Tenant\PedidoCotizacion;
 use App\Services\CambioEnvioService;
 use App\Services\PedidoEstadoService;
+use App\Support\SaldoViajesTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -76,8 +77,13 @@ class PedidoController extends Controller
             ->orderByDesc('id_pedido')
             ->get();
 
+        // El saldo del tenant viaja en el `meta` (spec tenant/027 §12): el Panel lo necesita al
+        // abrir y RN-01 promete dos peticiones, no tres. Mismo helper que Configuración.
         return PedidoResource::collection($pedidos)
-            ->additional(['meta' => ['snapshot_en' => Carbon::now()->toIso8601String()]]);
+            ->additional(['meta' => [
+                'snapshot_en' => Carbon::now()->toIso8601String(),
+                'saldo_viajes_tenant' => SaldoViajesTenant::actualONull(),
+            ]]);
     }
 
     public function show(Pedido $pedido): JsonResponse

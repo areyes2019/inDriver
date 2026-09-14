@@ -6,11 +6,14 @@ use App\Events\Tenant\PedidoDisponible;
 use App\Events\Tenant\PedidoEntregado;
 use App\Events\Tenant\PedidoYaTomado;
 use App\Events\Tenant\SaldoAcreditado;
+use App\Events\Tenant\SaldoTenantCambiado;
 use App\Jobs\ExpirarOfertaPedido;
 use App\Models\Tenant;
+use App\Models\Tenant\CompraPaquete;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConfiguracionTenant;
+use App\Models\Tenant\ConsumoViajeTenant;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\VentaViajeConductor;
@@ -21,6 +24,7 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * spec tenant/027 — el Panel se actualiza por evento en vez de recargar.
@@ -167,6 +171,98 @@ it('returns only the six en-turno states, without paginating', function () {
         ->and($respuesta->json('meta.snapshot_en'))->not->toBeNull()
         // Sin bloque de paginación: la respuesta es la lista completa.
         ->and($respuesta->json('meta.last_page'))->toBeNull();
+});
+
+it('carries the tenant balance in the meta, so the panel opens with two requests and not three', function () {
+    $tenant = panelTenant();
+    $admin = panelAdmin($tenant);
+
+    tenancy()->initialize($tenant);
+    CompraPaquete::create([
+        'codigo_paquete' => 'P10', 'cantidad_paquetes' => 1, 'cantidad_viajes' => 10,
+        'precio_unitario' => 0, 'importe_total' => 0, 'estado' => 'Activo', 'fecha_compra' => now(),
+    ]);
+    $entregado = panelPedido(['estado' => 'ENTREGADO']);
+    ConsumoViajeTenant::create(['id_pedido' => $entregado->id_pedido]);
+    tenancy()->end();
+
+    // spec tenant/027 §12: mismo helper que Configuración, así que no pueden decir cifras distintas.
+    $this->actingAs($admin, 'usuario')
+        ->getJson('/api/v1/t/panel-express/pedidos/en-turno')
+        ->assertOk()
+        ->assertJsonPath('meta.saldo_viajes_tenant', 9);
+});
+
+it('still serves the lists when the tenant balance cannot be computed', function () {
+    $tenant = panelTenant();
+    $admin = panelAdmin($tenant);
+
+    tenancy()->initialize($tenant);
+    panelPedido(['estado' => 'PUBLICADO']);
+    // El caso real: migración de tenant pendiente. La píldora se queda en skeleton; las listas viven.
+    Schema::drop('consumos_viajes_tenant');
+    tenancy()->end();
+
+    $respuesta = $this->actingAs($admin, 'usuario')
+        ->getJson('/api/v1/t/panel-express/pedidos/en-turno')
+        ->assertOk()
+        ->assertJsonPath('meta.saldo_viajes_tenant', null);
+
+    expect($respuesta->json('data'))->toHaveCount(1);
+});
+
+it('consumes one tenant viaje per delivered pedido, once, in either modality, and announces it', function () {
+    $tenant = panelTenant();
+    panelAdmin($tenant);
+    $conductor = panelConductor($tenant, 'beto@panelexpress.com');
+
+    tenancy()->initialize($tenant);
+    ConfiguracionTenant::establecer(ConfiguracionTenant::MODALIDAD, 'Comision');
+    ConfiguracionTenant::establecer(ConfiguracionTenant::COMISION_PORCENTAJE, '10');
+
+    $cargas = [];
+    Event::listen(SaldoTenantCambiado::class, function (SaldoTenantCambiado $evento) use (&$cargas) {
+        $cargas[] = $evento->broadcastWith();
+    });
+
+    $pedido = panelPedido(['estado' => 'ARRIBADO_A_ENTREGA', 'id_conductor' => $conductor->id_conductor]);
+    app(PedidoEstadoService::class)->transicionar($pedido, 'ENTREGADO');
+
+    // Nada antes de escribir la fila (spec tenant/015, "Cuándo se escribe el consumo").
+    expect(ConsumoViajeTenant::count())->toBe(0)->and($cargas)->toBeEmpty();
+
+    $pedido->save();
+    // Un segundo `saved()` del mismo envío no vuelve a consumir ni a avisar.
+    $pedido->distancia_recorrida_km = 3.2;
+    $pedido->save();
+
+    expect(ConsumoViajeTenant::where('id_pedido', $pedido->id_pedido)->count())->toBe(1)
+        ->and($cargas)->toHaveCount(1)
+        // Sin paquetes acreditados el saldo queda negativo y no pasa nada (RN-C5).
+        ->and($cargas[0]['saldo_viajes_tenant'])->toBe(-1)
+        ->and($cargas[0]['motivo'])->toBe('consumo')
+        ->and($cargas[0]['id_pedido'])->toBe($pedido->id_pedido)
+        ->and($cargas[0])->not->toHaveKey('ambiente');
+    tenancy()->end();
+});
+
+it('does not consume a tenant viaje when a pedido is cancelled', function () {
+    $tenant = panelTenant();
+    panelAdmin($tenant);
+    $conductor = panelConductor($tenant, 'beto@panelexpress.com');
+
+    tenancy()->initialize($tenant);
+    Event::fake([SaldoTenantCambiado::class]);
+
+    $pedido = panelPedido(['estado' => 'EN_CAMINO', 'id_conductor' => $conductor->id_conductor]);
+    $pedido->cancelado_por = 'ADMIN';
+    $pedido->motivo_cancelacion = 'Cliente ausente';
+    app(PedidoEstadoService::class)->transicionar($pedido, 'CANCELADO');
+    $pedido->save();
+
+    expect(ConsumoViajeTenant::count())->toBe(0);
+    Event::assertNotDispatched(SaldoTenantCambiado::class);
+    tenancy()->end();
 });
 
 it('does not paginate at fifteen like the historical listing does', function () {

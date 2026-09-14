@@ -123,8 +123,14 @@ export const usePanelStore = defineStore('panel', () => {
   const desincronizado = ref(false)
   /** RN-23: viajes marcados como entregados que siguen visibles mientras se animan hacia afuera. */
   const saliendo = ref(new Set<number>())
-  /** RN-22: claves (`viaje:12`, `conductor:3`) de las filas que acaban de cambiar. */
+  /** RN-22: claves (`viaje:12`, `conductor:3`, `saldo-tenant`) de las filas que acaban de cambiar. */
   const resaltados = ref(new Set<string>())
+  /**
+   * Viajes que le quedan al tenant frente a ADMIN_CENTRAL (spec tenant/027 §12). Llega en el `meta`
+   * de `pedidos/en-turno`, se reemplaza por `saldo-tenant.cambiado` y se reconcilia con las listas
+   * (RN-40). `null` solo antes de la primera carga.
+   */
+  const saldoViajesTenant = ref<number | null>(null)
   /** Último conductor que se puso en línea, para que la flotilla saque su aviso (spec tenant/019). */
   const ultimaConexionDeConductor = ref<{
     id_conductor: number
@@ -342,6 +348,7 @@ export const usePanelStore = defineStore('panel', () => {
 
       fusionarViajes(respuestaViajes.data.data as ViajeEnTurno[])
       fusionarConductores(respuestaConductores.data.data as ConductorActivo[])
+      fijarSaldoTenant(respuestaViajes.data.meta?.saldo_viajes_tenant)
 
       primeraCarga.value = false
       desincronizado.value = false
@@ -438,6 +445,18 @@ export const usePanelStore = defineStore('panel', () => {
   function resaltar(clave: string) {
     resaltados.value.add(clave)
     setTimeout(() => resaltados.value.delete(clave), RESALTADO_MS)
+  }
+
+  /**
+   * RN-39: se escribe el saldo que manda el servidor, nunca se suma ni se resta. Solo se resalta
+   * cuando de verdad cambió: la reconciliación lo vuelve a traer y no debe destellar por eso.
+   */
+  function fijarSaldoTenant(valor: unknown) {
+    if (typeof valor !== 'number') return
+    if (saldoViajesTenant.value !== null && saldoViajesTenant.value !== valor) {
+      resaltar('saldo-tenant')
+    }
+    saldoViajesTenant.value = valor
   }
 
   function esFinal(estado: EstadoPedido | undefined): boolean {
@@ -695,6 +714,21 @@ export const usePanelStore = defineStore('panel', () => {
     },
 
     /**
+     * spec tenant/027 §12: un envío LIVE entregado consumió un viaje del tenant, o ADMIN_CENTRAL
+     * acreditó un paquete. No trae `ambiente` a propósito —el saldo es del tenant, no del
+     * ambiente— así que `ignorar()` solo lo descarta por `event_id` (RN-41).
+     */
+    'saldo-tenant.cambiado': (payload: EventoBase & { saldo_viajes_tenant?: number | null }) => {
+      if (ignorar(payload)) return
+      if (payload.saldo_viajes_tenant === undefined || payload.saldo_viajes_tenant === null) {
+        agendarSincronizacion()
+        return
+      }
+
+      fijarSaldoTenant(payload.saldo_viajes_tenant)
+    },
+
+    /**
      * El evento de mayor frecuencia del sistema (spec tenant/021). Mueve al conductor y nada más:
      * ni resalta la fila ni toca la lista, o el panel entero estaría destellando todo el día.
      */
@@ -727,6 +761,7 @@ export const usePanelStore = defineStore('panel', () => {
     viajesOrdenados,
     conductoresOrdenados,
     enLinea,
+    saldoViajesTenant,
     ultimaConexionDeConductor,
     estaSaliendo,
     estaResaltado,

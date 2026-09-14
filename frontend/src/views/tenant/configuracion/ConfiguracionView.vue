@@ -54,7 +54,8 @@ const form = reactive({
   usar_despachadores: 'No' as 'Sí' | 'No',
 })
 
-const saldoTenant = ref(0)
+// `null` cuando el backend no pudo calcularlo (spec tenant/015): se dice, no se pinta un 0 falso.
+const saldoTenant = ref<number | null>(null)
 const valorOriginalUsarDespachadores = ref<'Sí' | 'No'>('No')
 const mostrarConfirmDesactivarDespachadores = ref(false)
 const fieldErrors = reactive<Record<string, string>>({})
@@ -77,7 +78,7 @@ async function fetchConfiguracion() {
     form.comision_porcentaje = data.comision_porcentaje ?? '0'
     form.usar_despachadores = data.usar_despachadores ?? 'No'
     valorOriginalUsarDespachadores.value = form.usar_despachadores
-    saldoTenant.value = data.saldo_viajes_tenant ?? 0
+    saldoTenant.value = data.saldo_viajes_tenant ?? null
   } catch {
     errorConfig.value = 'No se pudo cargar la configuración.'
   } finally {
@@ -462,7 +463,8 @@ onBeforeUnmount(() => {
           </label>
 
           <UiAlert variant="info">
-            Saldo de viajes disponible del tenant: <strong>{{ saldoTenant }}</strong>
+            Saldo de viajes disponible del tenant:
+            <strong>{{ saldoTenant ?? 'no disponible por ahora' }}</strong>
           </UiAlert>
 
           <label class="block">

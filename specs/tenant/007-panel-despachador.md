@@ -349,3 +349,146 @@ Deja funcionando:
     inició sesión.
 20. `AdminCliente` no obtiene una versión reducida ni distinta de `/panel` — ve exactamente el
     mismo contenido que ya veía `Despachador`.
+
+## Ampliación: el Panel es la vista principal, con el saldo de viajes del tenant sobre el mapa
+
+> Historia del dueño del tenant: *"quiero ver el panel (donde está el mapa) como vista principal
+> al abrir mi sistema, y dentro de la vista del mapa ver el número de viajes que tengo acreditados;
+> también quiero ver cómo se van descontando del saldo sin recargar la página."*
+>
+> Esta ampliación cubre las dos primeras partes (aterrizar en el Panel y ver el número sobre el
+> mapa). La tercera —que el número baje solo— vive en `027-panel-reactivo-sin-recargas.md`
+> (versión 1.2), y la regla de negocio de *cuándo* se descuenta un viaje del tenant se reescribe en
+> `015-configuracion-comisiones.md` (§"Corrección: el saldo del tenant se consume por envío
+> entregado").
+
+### Objetivo / Alcance de esta ampliación
+
+Deja funcionando:
+
+- **Aterrizaje en el Panel para quien opera.** Tras un login exitoso, el destino es `tenant-panel`
+  si el usuario es el *operativo* del tenant según `011-gestion-despachadores-tenant.md`:
+  `AdminCliente` con `usar_despachadores = No`, o `Despachador` con `usar_despachadores = Sí`. En
+  cualquier otro caso el destino sigue siendo `tenant-clientes-lista`, como hoy. Lo que cambia en
+  la práctica es el `AdminCliente` que opera él mismo su flotilla: hoy cae en Clientes y tiene que
+  hacer clic en "Panel"; ahora cae directo en el mapa.
+- **La raíz del tenant lleva al Panel.** Se agrega la ruta `/t/:slug` como redirección a
+  `tenant-panel`. El guard ya existente hace el resto: sin sesión manda al login, y con sesión de un
+  usuario no operativo manda a Clientes. Así "abrir mi sistema" (escribir la URL del tenant a secas,
+  o un marcador viejo) termina en el mapa sin pasos intermedios.
+- **Indicador de saldo de viajes del tenant sobre el mapa.** Componente nuevo
+  `components/panel/SaldoViajesTenant.vue`, flotante sobre `MapaConductores`, siempre visible
+  mientras el Panel esté abierto, con el saldo disponible del tenant como un solo número entero
+  ("Saldo: 128 viajes"). Lo ven los dos roles que entran al Panel; no se oculta ni se reduce por rol
+  ni por modalidad (Prepago/Comisión).
+- **Aviso visual en cero o negativo, sin bloqueo.** Cuando el saldo es `<= 0` el indicador cambia a
+  su variante de alerta (`bg-red-100 text-red-700`, mismo tono que ya usan los errores de
+  formulario y el badge rojo) y el texto pasa a "Sin viajes disponibles" (en `0`) o "Saldo: -3 viajes"
+  (en negativo). **No** se bloquea nada: los envíos se siguen creando, publicando y entregando. El
+  bloqueo por falta de viajes sigue siendo una historia futura (spec `010-paquetes-viajes.md`).
+
+**No** incluye:
+
+- Cambios a quién es "operativo" ni a la exclusividad de crear envíos. El `AdminCliente` de un tenant
+  con despachadores sigue **sin** entrar al Panel (spec 011, supuesto 13); su única lectura del saldo
+  sigue siendo la pestaña Comisión/Prepago de Configuración. Se preguntó y se decidió mantener 011
+  tal cual.
+- Un historial de movimientos del saldo del tenant (qué envío consumió, cuándo). El indicador es
+  solo el número actual; la bitácora que lo respalda (`consumos_viajes_tenant`, spec 015) queda
+  lista para una pantalla futura.
+- El cálculo del número y su actualización en vivo: el componente **no hace ninguna petición**; lee
+  `saldoViajesTenant` del store del Panel (`stores/panel.ts`, spec 027 §12).
+
+### Decisión técnica
+
+#### El destino del login usa la misma regla que el guard, escrita una sola vez
+
+Hoy la condición de "operativo" está escrita dos veces con el mismo texto —en el `beforeEach` de
+`router/index.ts` y en el `computed` `esOperativo` de `TenantLayout.vue`— y `LoginView.vue` no la
+usa: decide solo por rol. Meter una tercera copia en el login es pedir que un día una de las tres
+diga otra cosa. La regla se extrae a un getter `esOperativo` en `stores/tenantAuth.ts` (ya tiene
+`usuario.rol` y `usuario.usar_despachadores`, que `/login` y `/me` devuelven por
+`AuthController::respuestaUsuario`), y los tres lugares lo consumen. Sin cambios de backend.
+
+#### El indicador flota sobre el mapa, no va en la cabecera
+
+`TenantLayout` ya carga la cabecera con el menú, el switch de ambiente (025), la campana y el
+engranaje. El saldo es información **del Panel** —solo tiene sentido junto al mapa y a la flotilla—
+y el dueño lo pidió literalmente "dentro de la vista mapa". Se coloca centrado en la franja superior
+del mapa (`fixed top-[4.75rem] left-1/2 -translate-x-1/2 z-30`), entre los dos paneles laterales del
+20 %, con el mismo `z-index` que la columna derecha y por debajo de la navbar (`z-50`) y de los
+paneles deslizantes (`NuevaEntregaPanel`, `DetalleEnvioPanel`), que al abrirse pueden taparlo sin
+problema: el dato vuelve a verse al cerrarlos.
+
+No se reusa `UiCard`: igual que los paneles flotantes de 008/023, necesita `position: fixed` y un
+tamaño que `UiCard` no ofrece. Es una píldora de una línea: `rounded-full bg-white/95 shadow-md
+px-4 py-1.5 text-sm font-semibold`, con un ícono pequeño de ticket a la izquierda.
+
+#### Se resalta cuando cambia
+
+Para que "ver cómo se van descontando" sea visible y no solo cierto, el indicador reutiliza el
+mecanismo de resaltado que ya tienen las filas del Panel (spec 027, RN-22: `resaltar(clave)` con
+`estaResaltado`): al cambiar el número, la píldora hace el mismo destello breve que una fila
+actualizada. Clave: `'saldo-tenant'`.
+
+### Reglas de negocio
+
+- **RN-A1:** El destino tras el login es `tenant-panel` si y solo si `auth.esOperativo`; en
+  cualquier otro caso, `tenant-clientes-lista`.
+- **RN-A2:** `/t/:slug` redirige a `tenant-panel`; el guard existente decide después si esa persona
+  puede estar ahí.
+- **RN-A3:** El indicador muestra el saldo disponible del tenant (definición en spec 015
+  §Corrección) como entero, en singular/plural correcto ("1 viaje", "2 viajes").
+- **RN-A4:** Con saldo `<= 0` el indicador toma la variante de alerta; nunca bloquea ni deshabilita
+  ninguna acción del Panel.
+- **RN-A5:** El indicador no consulta al servidor: pinta lo que haya en el store. Mientras el store
+  no tenga el valor (`saldoViajesTenant === null`, antes de la primera carga) muestra el mismo
+  skeleton de una línea que usan los paneles (RN-16 de 027).
+
+### Frontend (Vue 3)
+
+- **`stores/tenantAuth.ts`**: getter nuevo `esOperativo` con la regla de 011.
+- **`views/tenant/LoginView.vue`**: `const destino = auth.esOperativo ? 'tenant-panel' :
+  'tenant-clientes-lista'`.
+- **`router/index.ts`**: ruta nueva `{ path: '/t/:slug', redirect: { name: 'tenant-panel' } }`
+  (antes de las rutas hijas); el `beforeEach` sustituye su cálculo local por `auth.esOperativo`.
+- **`layouts/TenantLayout.vue`**: `esOperativo` deja de calcularse ahí y pasa a leer el getter.
+- **`components/panel/SaldoViajesTenant.vue`** (nuevo): lee `panel.saldoViajesTenant` y
+  `panel.estaResaltado('saldo-tenant')`; sin props ni eventos.
+- **`views/tenant/panel/PanelView.vue`**: monta `<SaldoViajesTenant />` junto a los demás
+  componentes flotantes, con su comentario de origen como los otros.
+
+### Fuera de alcance (de esta ampliación)
+
+- Abrir el Panel al `AdminCliente` cuando usa despachadores.
+- Historial de consumos del tenant.
+- Cualquier bloqueo por saldo en cero.
+
+### Criterios de aceptación (de esta ampliación)
+
+1. Login como `AdminCliente` en un tenant con `usar_despachadores = No` aterriza en
+   `/t/{slug}/panel`.
+2. Login como `AdminCliente` en un tenant con `usar_despachadores = Sí` sigue aterrizando en
+   Clientes; login como `Despachador` en ese mismo tenant aterriza en el Panel.
+3. Visitar `/t/{slug}` sin sesión lleva al login; con sesión operativa, al Panel; con sesión no
+   operativa, a Clientes.
+4. En el Panel se ve una píldora centrada sobre el mapa con "Saldo: N viajes", visible para
+   `AdminCliente` y `Despachador`, en Prepago y en Comisión.
+5. Con saldo `0` la píldora muestra "Sin viajes disponibles" en variante de alerta; con saldo
+   negativo muestra el número negativo en la misma variante; "Nueva Entrega" sigue funcionando.
+6. La píldora no genera ninguna petición HTTP propia (pestaña Red).
+7. ESLint/Prettier corren sin errores.
+
+### Supuestos asumidos (continúa el registro de arriba)
+
+21. "Vista principal al abrir mi sistema" = destino del login **y** de la raíz `/t/{slug}`. No se
+    recuerda la última página visitada.
+22. ~~Todos los roles entran al Panel al iniciar sesión.~~ **Ajustado al preguntar**: solo el
+    operativo de 011; el `AdminCliente` de un tenant con despachadores no cambia.
+23. El saldo mostrado es un solo número (disponible), no el desglose por paquete comprado.
+24. El indicador vive dentro del mapa como píldora flotante fija, no en la cabecera ni en un menú.
+25. Lo ven ambos roles del Panel, sin distinción por modalidad de cobro.
+26. En cero o negativo solo cambia de color y de texto; no bloquea nada.
+27. Sin historial de movimientos del tenant en esta ampliación.
+28. El componente es de solo lectura sobre el store del Panel: el dato, su carga inicial y su
+    actualización en vivo se especifican en 027 §12.

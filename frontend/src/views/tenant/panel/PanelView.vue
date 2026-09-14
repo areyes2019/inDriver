@@ -6,6 +6,7 @@ import ServiciosEnTurno from '@/components/panel/ServiciosEnTurno.vue'
 import MapaConductores from '@/components/panel/MapaConductores.vue'
 import ConductoresActivos from '@/components/panel/ConductoresActivos.vue'
 import NuevaEntregaPanel from '@/components/panel/NuevaEntregaPanel.vue'
+import SaldoViajesTenant from '@/components/panel/SaldoViajesTenant.vue'
 import DetalleEnvioPanel from '@/components/panel/DetalleEnvioPanel.vue'
 import { usePanelStore, type ViajeEnTurno } from '@/stores/panel'
 import realtimeService from '@/services/realtime'
@@ -94,6 +95,8 @@ function onColapsoTerminado() {
     <div class="h-[calc(100vh-4.25rem)] w-full">
       <MapaConductores ref="mapaRef" />
     </div>
+    <!-- Saldo de viajes del tenant, píldora fija centrada sobre el mapa: tenant/007-panel-despachador.md (ampliación "vista principal"), tenant/027 §12 -->
+    <SaldoViajesTenant />
     <!-- Columna derecha (flotilla), fija y colapsable sobre el 20% derecho: tenant/023-rediseno-panel-flotilla.md -->
     <ConductoresActivos @colapso-terminado="onColapsoTerminado" />
     <!-- Panel deslizante de agendamiento rápido, se superpone a la columna izquierda al abrir: tenant/006-crud-pedidos.md -->

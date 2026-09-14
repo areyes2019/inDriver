@@ -470,6 +470,19 @@ fecha_compra
 created_at
 updated_at
 
+## 15b Tabla consumos_viajes_tenant - Bitacora de viajes consumidos del saldo del tenant
+
+id_consumo
+id_pedido (UNIQUE, FK a pedidos)
+created_at
+updated_at
+
+Una fila por envio LIVE que pasa a ENTREGADO, en cualquier modalidad (Prepago o Comision). Los
+envios TEST, cancelados o rechazados no generan fila. El saldo de viajes del tenant se calcula, no se
+guarda: SUM(compras_paquetes.cantidad_viajes) - COUNT(consumos_viajes_tenant). Ver
+specs/tenant/015-configuracion-comisiones.md (correccion "el saldo del tenant se consume por envio
+entregado") y specs/tenant/025-modo-test-live.md (enmienda TEST).
+
 ## 16 Tabla configuraciones_tenant - Configuraciones particulares de cada empresa.
 
 id_configuracion

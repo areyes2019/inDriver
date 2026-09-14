@@ -7,7 +7,7 @@
 | ID | SPEC-027 |
 | Módulo | Panel / Tiempo real |
 | Autor | A. Rivas |
-| Versión | 1.1 |
+| Versión | 1.2 |
 | Estado | Borrador |
 | Sprint | S-12 |
 | Depende de | SPEC-012 (Datos reales servicios en turno), SPEC-014 (Datos reales conductores activos), SPEC-018 (Protocolo realtime), SPEC-023 (Rediseño panel flotilla), SPEC-024 (Publicación de envíos), SPEC-026 (Cola y polilínea) |
@@ -621,3 +621,142 @@ decisión propia que no se cuela en esta spec (§9, adición 19).
   de pruebas y esta función es 100 % de navegador, así que la red de seguridad es la lista de
   verificación manual de §8. Es el riesgo aceptado a cambio de no meter la instalación de un sistema
   de pruebas dentro de una función de dos secciones.
+
+## 12. Versión 1.2 — el saldo de viajes del tenant, en vivo
+
+> Historia del dueño del tenant: *"quiero ver cómo se van descontando los viajes del saldo sin
+> recargar la página"*. El número que se descuenta lo define `015-configuracion-comisiones.md`
+> (§"Corrección: el saldo del tenant se consume por envío entregado"); dónde se pinta lo define
+> `007-panel-despachador.md` (§"Ampliación: el Panel es la vista principal…"). Esta sección define
+> cómo llega al Panel y cómo se mantiene al día con las mismas reglas que las dos listas.
+
+### Qué agrega la 1.2
+
+- El store del Panel gana **un tercer dato** además de viajes y conductores: `saldoViajesTenant:
+  number | null`. Llega con la carga inicial, se reemplaza por evento y se reconcilia igual que el
+  resto (RN-10 a RN-14). `null` solo antes de la primera carga (skeleton, RN-16).
+- **Un evento nuevo**, `saldo-tenant.cambiado`, el primero que se crea desde la 1.0. Sale cuando un
+  envío LIVE entregado consume un viaje y cuando ADMIN_CENTRAL acredita un paquete.
+- **Nada más cambia**: ni el número de peticiones al abrir (RN-01 sigue en dos), ni el canal, ni
+  `panda_express`, ni los eventos existentes.
+
+### Carga inicial: dentro de `GET /pedidos/en-turno`, no en una petición más
+
+RN-01 promete dos peticiones al abrir y ninguna después. Un `GET /t/{slug}/saldo-viajes` propio
+serían tres, y otra ruta que mover al limitador del Panel, para un entero. El saldo viaja en el
+`meta` que `pedidos/en-turno` ya tiene:
+
+```json
+{
+  "data": [ /* PedidoResource */ ],
+  "meta": { "snapshot_en": "2026-09-14T14:31:02Z", "saldo_viajes_tenant": 128 }
+}
+```
+
+`saldo_viajes_tenant` sale de `App\Support\SaldoViajesTenant::actual()` (015), el mismo helper que
+usa Configuración: las dos pantallas no pueden decir números distintos. `GET /configuracion` sigue
+siendo exclusivo de `AdminCliente`; `pedidos/en-turno` ya lo ven los dos roles del Panel, así que
+el Despachador ve el saldo sin abrirle Configuración.
+
+Se descarta meterlo en `conductores/activos`: el saldo es del tenant, no de la flotilla, y esa
+respuesta es una colección sin `meta`.
+
+### El evento: `saldo-tenant.cambiado`
+
+| Evento | Carga | Para qué |
+|---|---|---|
+| `saldo-tenant.cambiado` | `saldo_viajes_tenant`, `motivo` (`consumo` \| `acreditacion`), `id_pedido` (solo en `consumo`), `event_id` | El Panel **escribe** el saldo que recibe (RN-07: el resultante, nunca el delta) |
+
+- Clase `App\Events\Tenant\SaldoTenantCambiado`, `ShouldBroadcastNow` como todos (018, RN-08 y
+  supuesto 15), en el mismo canal `tenant.{slug}.conductores`. Constructor: `(string $motivo,
+  ?int $idPedido, string $tenantSlug)`; `broadcastWith()` resuelve el saldo contra la base en el
+  momento de emitir, igual que los demás (§10, "los constructores no cambian").
+- **No lleva `ambiente`.** El saldo es del tenant, no del ambiente (025, enmienda): un Panel parado
+  en TEST lo muestra igual. Al no traer el campo, `esDeOtroAmbiente()` devuelve `false` y RN-28 no
+  lo descarta.
+- **No es crítico** (018, RN-04): no va por push. `panda_express` no lo escucha; un nombre que no
+  se enlaza se ignora.
+- **Por qué un evento aparte y no un campo más en `pedido.entregado`.** El consumo se escribe en
+  una clausura diferida (015, "Cuándo se escribe el consumo") y `pedido.entregado` también es
+  diferido: que la carga del segundo leyera el saldo ya descontado dependería del orden de dos
+  clausuras en `Pedido::$avisosDiferidos`. Con un evento propio, disparado desde la misma clausura
+  que inserta el consumo, no hay orden que cuidar. Y la acreditación central no tiene ningún
+  evento de pedido en el que colgarse.
+- **Quién lo dispara**: `PedidoEstadoService::consumirViajeDelTenant()` (solo si la fila de consumo
+  se creó) y `Admin\CreditoPaqueteController::store()` (con la tenencia inicializada, antes de
+  `tenancy()->end()`, para que el helper lea la base correcta).
+
+### Reglas de negocio (1.2)
+
+- **RN-38:** El saldo del tenant se lee **una vez** con la carga inicial (`meta` de
+  `pedidos/en-turno`) y después solo cambia por `saldo-tenant.cambiado` o por reconciliación.
+  Ninguna petición propia.
+- **RN-39:** El reductor de `saldo-tenant.cambiado` escribe `saldo_viajes_tenant` tal cual llega
+  y llama a `resaltar('saldo-tenant')`. No suma ni resta. Un evento repetido se descarta por
+  `event_id` (RN-06) y, aunque pasara, dejaría el mismo número.
+- **RN-40:** Toda reconciliación (RN-11: abrir, reconectar, volver al foco, fila desconocida)
+  refresca también el saldo, porque viene en la misma respuesta. Gana el servidor (RN-10). Es la
+  adición 5 que aprobó el dueño: tras perder internet, el número no se queda viejo.
+- **RN-41:** El saldo nunca se filtra por ambiente ni por rol en el cliente.
+- **RN-42:** Mientras el socket esté caído, el sondeo de RN-14 también trae el saldo (misma
+  petición). No hay sondeo adicional.
+
+### Criterios de aceptación (1.2)
+
+- [ ] Al abrir el Panel, la píldora muestra el saldo con las mismas dos peticiones de siempre
+      (pestaña Red: ninguna petición adicional).
+- [ ] Entregar un envío LIVE baja la píldora en 1, con destello, sin peticiones.
+- [ ] Entregar un envío TEST no la mueve.
+- [ ] Acreditar un paquete desde ADMIN_CENTRAL, con el Panel del tenant abierto en otra ventana,
+      sube la píldora en `cantidad_viajes × cantidad_paquetes` sin recargar.
+- [ ] Desconectar la red, entregar un envío desde la app, reconectar: la píldora se corrige sola en
+      la reconciliación de RN-11 (b).
+- [ ] Cambiar el switch TEST/LIVE no cambia el número.
+- [ ] `PanelReactivoTest`: `meta.saldo_viajes_tenant` presente y correcto; la carga de
+      `SaldoTenantCambiado` trae el saldo resultante y no trae `ambiente`; entregar un envío LIVE
+      emite exactamente un `saldo-tenant.cambiado` con `motivo = consumo`; entregar un TEST no
+      emite ninguno.
+
+### Adiciones técnicas aceptadas (1.2)
+
+| # | Adición | Dónde vive |
+|---|---|---|
+| 20 | Registrar cada consumo como fila, no como resta | `consumos_viajes_tenant` + `ConsumoViajeTenant` (015) |
+| 21 | Un solo lugar que calcula el saldo del tenant | `App\Support\SaldoViajesTenant` (015), usado por Configuración, ventas, `meta` y el evento |
+| 22 | Evento de tiempo real "saldo del tenant cambió", con el saldo resultante | `App\Events\Tenant\SaldoTenantCambiado` → `saldo-tenant.cambiado` |
+| 23 | La acreditación de ADMIN_CENTRAL también avisa al Panel | `Admin\CreditoPaqueteController::store()` dispara el evento dentro de la tenencia |
+| 24 | El saldo se recupera al reconectar, sin petición propia | `meta` de `pedidos/en-turno` + `sincronizar()` (RN-40) |
+
+### Impacto en el código existente (1.2)
+
+**Backend**
+
+- `app/Http/Controllers/Tenant/PedidoController.php` — `enTurno()` agrega
+  `meta.saldo_viajes_tenant`.
+- `app/Events/Tenant/SaldoTenantCambiado.php` — **nuevo**.
+- `app/Support/SaldoViajesTenant.php`, `app/Models/Tenant/ConsumoViajeTenant.php`, migración y
+  `PedidoEstadoService::consumirViajeDelTenant()` — definidos en 015.
+- `app/Http/Controllers/Admin/CreditoPaqueteController.php` — dispara el evento.
+- `tests/Feature/Tenant/PanelReactivoTest.php` — los casos listados arriba.
+
+**Panel (`frontend`)**
+
+- `src/stores/panel.ts` — `saldoViajesTenant` (ref), lectura desde `meta` en
+  `ejecutarSincronizacion()`, reductor `'saldo-tenant.cambiado'`, y se expone en el `return`.
+- `src/components/panel/SaldoViajesTenant.vue` — **nuevo** (007).
+- `src/views/tenant/panel/PanelView.vue` — lo monta (007).
+
+**App del conductor (`panda_express`)**
+
+- Sin cambios. No enlaza `saldo-tenant.cambiado`.
+
+### Riesgos (1.2)
+
+- **El saldo puede mostrarse desactualizado hasta la siguiente reconciliación** si se pierde el
+  evento. Es el mismo riesgo de las filas (§11) y se corrige por el mismo camino: RN-11 y el sondeo
+  de RN-14. La píldora no tiene indicador propio de conexión; el punto de los paneles (RN-20) ya
+  dice si lo que se ve es de hace un segundo o de hace diez minutos, y aplica al saldo por igual.
+- **Un evento emitido desde el contexto de ADMIN_CENTRAL** corre sin la petición del tenant: el
+  helper se llama con `tenancy()->initialize($tenant)` vivo (ya lo hace `CreditoPaqueteController`
+  para escribir la compra). Si la emisión falla, la acreditación no se revierte (018, RN-08); el
+  Panel lo verá en su próxima reconciliación.

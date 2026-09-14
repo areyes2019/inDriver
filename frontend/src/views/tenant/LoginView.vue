@@ -21,7 +21,8 @@ async function onSubmit() {
   loading.value = true
   try {
     await auth.login(slug, email.value, password.value)
-    const destino = auth.usuario?.rol === 'Despachador' ? 'tenant-panel' : 'tenant-clientes-lista'
+    // spec tenant/007 (ampliación 'vista principal'): quien opera aterriza en el mapa.
+    const destino = auth.esOperativo ? 'tenant-panel' : 'tenant-clientes-lista'
     router.push({ name: destino, params: { slug } })
   } catch {
     error.value = 'Correo o contraseña incorrectos.'
