@@ -510,6 +510,12 @@ onBeforeUnmount(() => {
             <span v-if="fieldErrors.comision_porcentaje" class="mt-1 block text-sm text-red-600">
               {{ fieldErrors.comision_porcentaje }}
             </span>
+            <RouterLink
+              :to="{ name: 'tenant-comisiones', params: { slug } }"
+              class="mt-2 inline-block text-sm font-semibold text-accent hover:underline"
+            >
+              Ver comisiones de conductores
+            </RouterLink>
           </label>
 
           <p v-if="errorConfig" role="alert" class="text-sm text-red-600">{{ errorConfig }}</p>

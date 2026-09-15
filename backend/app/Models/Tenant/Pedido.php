@@ -144,6 +144,12 @@ class Pedido extends Model
         return $this->hasOne(ConsumoViajeTenant::class, 'id_pedido', 'id_pedido');
     }
 
+    /** La comisión que este envío generó a su conductor, si el tenant estaba en Comisión (spec tenant/030). */
+    public function comision(): HasOne
+    {
+        return $this->hasOne(ComisionConductor::class, 'id_pedido', 'id_pedido');
+    }
+
     public function posiciones(): HasMany
     {
         return $this->hasMany(ConductorPosicion::class, 'id_pedido', 'id_pedido');

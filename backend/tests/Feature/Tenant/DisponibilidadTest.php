@@ -8,7 +8,6 @@ use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Usuario;
-use App\Services\SaldoService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -84,33 +83,15 @@ function disponibilidadToken(string $email, string $password): string
     return $response->json('token');
 }
 
-it('rejects going online without balance under Comision modality', function () {
+it('allows going online under Comision modality without any money balance', function () {
+    // spec tenant/030, RN-15: en Comisión el conductor trabaja y genera comisión a su favor; no
+    // deposita nada, así que `conductores.saldo` (SPEC-023) ya no decide si puede conectarse.
     $tenant = disponibilidadTenant();
     $datos = disponibilidadCrearConductor($tenant);
 
     tenancy()->initialize($tenant);
     ConfiguracionTenant::establecer(ConfiguracionTenant::MODALIDAD, 'Comision');
-    tenancy()->end();
-
-    $token = disponibilidadToken($datos['usuario']->email, $datos['password']);
-
-    $this->withToken($token)
-        ->postJson('/api/v1/t/cafe-luna/conductor/estado', ['estado' => 'ONLINE'])
-        ->assertUnprocessable()
-        ->assertJsonValidationErrors(['estado']);
-
-    tenancy()->initialize($tenant);
-    expect(Conductor::find($datos['conductor']->id_conductor)->disponibilidad)->toBe('FUERA_DE_SERVICIO');
-    tenancy()->end();
-});
-
-it('allows going online under Comision modality once money balance is positive', function () {
-    $tenant = disponibilidadTenant();
-    $datos = disponibilidadCrearConductor($tenant);
-
-    tenancy()->initialize($tenant);
-    ConfiguracionTenant::establecer(ConfiguracionTenant::MODALIDAD, 'Comision');
-    app(SaldoService::class)->registrar($datos['conductor'], 'CREDITO', 50.0);
+    expect((float) Conductor::find($datos['conductor']->id_conductor)->saldo)->toBe(0.0);
     tenancy()->end();
 
     $token = disponibilidadToken($datos['usuario']->email, $datos['password']);
@@ -124,6 +105,10 @@ it('allows going online under Comision modality once money balance is positive',
 
     Event::assertDispatched(ConductorDisponibilidadCambiada::class, fn ($event) => $event->idConductor === $datos['conductor']->id_conductor
         && $event->disponibilidad === 'DISPONIBLE');
+
+    tenancy()->initialize($tenant);
+    expect(Conductor::find($datos['conductor']->id_conductor)->disponibilidad)->toBe('DISPONIBLE');
+    tenancy()->end();
 });
 
 it('rejects going online without prepaid viajes under Prepago modality', function () {

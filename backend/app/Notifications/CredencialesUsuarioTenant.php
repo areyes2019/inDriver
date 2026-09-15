@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Support\UrlPanelTenant;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -26,7 +27,7 @@ class CredencialesUsuarioTenant extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $url = rtrim(config('app.frontend_url'), '/')."/t/{$this->slug}/login";
+        $url = UrlPanelTenant::login($this->slug);
 
         return (new MailMessage)
             ->subject("Acceso a tu panel de {$this->nombreComercial}")

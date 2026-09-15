@@ -24,7 +24,6 @@ use Illuminate\Validation\ValidationException;
 class DisponibilidadService
 {
     public function __construct(
-        private readonly SaldoService $saldos,
         private readonly PermisoGpsService $permisosGps,
     ) {}
 
@@ -65,8 +64,10 @@ class DisponibilidadService
     }
 
     /**
-     * Modalidad `Comision`: saldo en dinero (SPEC-023). Modalidad `Prepago`: viajes disponibles
-     * (spec tenant/013) — son los dos modelos de cobro que ya coexisten en el tenant.
+     * Modalidad `Prepago`: viajes disponibles (spec tenant/013). Modalidad `Comision`: siempre
+     * puede (spec tenant/030, RN-15) — el conductor no deposita nada; trabaja y genera comisión a su
+     * favor. Hasta la 030 aquí se exigía `conductores.saldo > 0` (SPEC-023), un saldo en dinero que
+     * nadie cargaba desde el Panel y que dejaba a todo conductor en Comisión sin poder conectarse.
      *
      * Público porque `OfertaPedidoService` decide con esto mismo si un conductor recién liberado
      * puede recibir la cola (spec tenant/026, RN-07): "puede trabajar" tiene que significar
@@ -77,7 +78,7 @@ class DisponibilidadService
         $modalidad = ConfiguracionTenant::obtener(ConfiguracionTenant::MODALIDAD, 'Prepago');
 
         if ($modalidad === 'Comision') {
-            return $this->saldos->tieneSaldoDisponible($conductor);
+            return true;
         }
 
         return VentaViajeConductorController::saldoConductor($conductor) > 0;

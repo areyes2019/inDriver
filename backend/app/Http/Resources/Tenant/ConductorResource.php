@@ -43,6 +43,12 @@ class ConductorResource extends JsonResource
                 array_key_exists('viajes_vendidos', $this->resource->getAttributes()),
                 fn () => (int) $this->viajes_vendidos - (int) $this->viajes_consumidos,
             ),
+            // Siempre que el listado la calcule, sin condicionar a la modalidad: el frontend decide
+            // con `v-if` cuándo mostrarla, igual que con `saldo_viajes` (spec tenant/030, supuesto 21).
+            'comision_pendiente' => $this->when(
+                array_key_exists('comision_generada', $this->resource->getAttributes()),
+                fn () => round((float) $this->comision_generada - (float) $this->comision_pagada, 2),
+            ),
             'created_at' => $this->created_at,
         ];
     }

@@ -211,6 +211,12 @@ const router = createRouter({
       meta: { requiresTenantAuth: true },
     },
     {
+      path: '/t/:slug/panel/comisiones',
+      name: 'tenant-comisiones',
+      component: () => import('../views/tenant/comisiones/ComisionesView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
       path: '/t/:slug/panel/cambiar-password',
       name: 'tenant-cambiar-password',
       component: () => import('../views/tenant/cuenta/CambiarPasswordView.vue'),
@@ -257,7 +263,9 @@ router.beforeEach(async (to) => {
     }
 
     if (
-      (to.name === 'tenant-configuracion' || to.name === 'tenant-reporte-pagos-conductores') &&
+      (to.name === 'tenant-configuracion' ||
+        to.name === 'tenant-reporte-pagos-conductores' ||
+        to.name === 'tenant-comisiones') &&
       auth.usuario?.rol !== 'AdminCliente'
     ) {
       return { name: 'tenant-clientes-lista', params: { slug } }

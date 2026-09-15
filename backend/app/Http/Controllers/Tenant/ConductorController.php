@@ -40,6 +40,10 @@ class ConductorController extends Controller
             ->with(['usuario', 'despachador.usuario', 'vehiculo'])
             ->withSum('ventasViajes as viajes_vendidos', 'cantidad_viajes')
             ->withCount(['pedidos as viajes_consumidos' => fn ($q) => $q->where('prepago_descontado', true)])
+            // Comisión pendiente por fila, con la misma técnica que `saldo_viajes` (spec tenant/030,
+            // adición 8): dos sumas por página, ninguna consulta por conductor.
+            ->withSum('comisiones as comision_generada', 'importe_comision')
+            ->withSum('liquidacionesComision as comision_pagada', 'monto')
             ->orderBy('id_conductor');
 
         if ($search = $request->query('search')) {

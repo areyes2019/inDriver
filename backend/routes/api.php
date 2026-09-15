@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\PaqueteViajeController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Tenant\AuthController as TenantAuthController;
 use App\Http\Controllers\Tenant\ClienteController;
+use App\Http\Controllers\Tenant\ComisionController;
 use App\Http\Controllers\Tenant\Conductor\AuthController as ConductorAuthController;
 use App\Http\Controllers\Tenant\Conductor\DispositivoController as ConductorDispositivoController;
 use App\Http\Controllers\Tenant\Conductor\EstadoController as ConductorEstadoController;
@@ -120,6 +121,11 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
 
             Route::post('/conductores/{conductor}/saldo', [SaldoConductorController::class, 'store']);
             Route::get('/conductores/{conductor}/saldo', [SaldoConductorController::class, 'historial']);
+
+            // Comisiones de conductores (spec tenant/030).
+            Route::get('/comisiones/resumen', [ComisionController::class, 'resumen']);
+            Route::get('/conductores/{conductor}/comisiones', [ComisionController::class, 'conductor']);
+            Route::post('/conductores/{conductor}/liquidaciones', [ComisionController::class, 'liquidar']);
 
             Route::post('/clientes', [ClienteController::class, 'store']);
             Route::put('/clientes/{cliente}', [ClienteController::class, 'update']);

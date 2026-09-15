@@ -7,6 +7,9 @@ import realtimeService from '@/services/realtime'
 import TenantLayout from '@/layouts/TenantLayout.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiBadge from '@/components/ui/UiBadge.vue'
+import LiquidarComisionModal, {
+  type ConductorLiquidable,
+} from '@/components/comisiones/LiquidarComisionModal.vue'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
 
 interface DespachadorInfo {
@@ -35,6 +38,7 @@ interface Conductor {
   despachador: DespachadorInfo | null
   vehiculo: VehiculoInfo | null
   saldo_viajes: number | null
+  comision_pendiente: number | null
   created_at: string
 }
 
@@ -87,6 +91,7 @@ watch(page, () => fetchConductores())
 // --- Venta de viajes prepagados ---
 
 const modalidadPrepago = ref(false)
+const modalidadComision = ref(false)
 const conductorVenta = ref<Conductor | null>(null)
 const formVenta = reactive({ monto_pagado: '' })
 const saldoConductorActual = ref<number | null>(null)
@@ -102,8 +107,10 @@ async function fetchModalidad() {
   try {
     const { data } = await http.get(`/t/${slug.value}/configuracion`)
     modalidadPrepago.value = data.modalidad_conductores === 'Prepago'
+    modalidadComision.value = data.modalidad_conductores === 'Comision'
   } catch {
     modalidadPrepago.value = false
+    modalidadComision.value = false
   }
 }
 
@@ -162,6 +169,29 @@ async function confirmarVenderViajes() {
   }
 }
 
+// --- Comisiones (spec tenant/030, adición 8): espejo de "Vender viajes" para modalidad Comisión ---
+
+const formatoImporte = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' })
+const puedeLiquidarComision = computed(
+  () => auth.usuario?.rol === 'AdminCliente' && modalidadComision.value,
+)
+const conductorLiquidacion = ref<ConductorLiquidable | null>(null)
+const exitoLiquidacion = ref('')
+
+function abrirLiquidarComision(conductor: Conductor) {
+  exitoLiquidacion.value = ''
+  conductorLiquidacion.value = {
+    id_conductor: conductor.id_conductor,
+    nombre: `${conductor.nombre} ${conductor.apellido_paterno}`,
+  }
+}
+
+function onComisionLiquidada(payload: { liquidacion: { monto: number } }) {
+  exitoLiquidacion.value = `Se registró un pago de ${formatoImporte.format(payload.liquidacion.monto)} a ${conductorLiquidacion.value?.nombre ?? 'el conductor'}.`
+  // Se vuelve a pedir el listado completo, como tras "Vender viajes", para que la columna quede al día.
+  fetchConductores()
+}
+
 // --- Historial de pagos de un conductor ---
 
 interface PagoConductor {
@@ -205,7 +235,11 @@ function cerrarHistorialPagos() {
 
 const usaDespachadores = computed(() => auth.usuario?.usar_despachadores === 'Sí')
 const columnasTabla = computed(
-  () => 7 + (usaDespachadores.value ? 1 : 0) + (modalidadPrepago.value ? 1 : 0),
+  () =>
+    7 +
+    (usaDespachadores.value ? 1 : 0) +
+    (modalidadPrepago.value ? 1 : 0) +
+    (modalidadComision.value ? 1 : 0),
 )
 const despachadoresActivos = ref<{ id_despachador: number; nombre: string }[]>([])
 // Con 0 o 1 despachador activo no se pide el selector: sin ninguno no hay nada que elegir, y con
@@ -296,11 +330,18 @@ onUnmounted(() => {
         />
         <div class="flex gap-2">
           <RouterLink
-            v-if="auth.usuario?.rol === 'AdminCliente'"
+            v-if="auth.usuario?.rol === 'AdminCliente' && modalidadPrepago"
             :to="{ name: 'tenant-reporte-pagos-conductores', params: { slug } }"
             class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-semibold text-heading transition-colors hover:bg-black/5"
           >
             Reporte de pagos
+          </RouterLink>
+          <RouterLink
+            v-if="puedeLiquidarComision"
+            :to="{ name: 'tenant-comisiones', params: { slug } }"
+            class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-semibold text-heading transition-colors hover:bg-black/5"
+          >
+            Comisiones
           </RouterLink>
           <RouterLink
             :to="{ name: 'tenant-conductores-crear', params: { slug } }"
@@ -315,6 +356,7 @@ onUnmounted(() => {
       <p v-if="errorReasignar" role="alert" class="mb-4 text-sm text-red-600">
         {{ errorReasignar }}
       </p>
+      <p v-if="exitoLiquidacion" class="mb-4 text-sm text-green-600">{{ exitoLiquidacion }}</p>
 
       <div class="overflow-x-auto">
         <table class="w-full min-w-[760px] text-left text-sm">
@@ -330,6 +372,7 @@ onUnmounted(() => {
               <th class="py-2 pr-4">Disponibilidad</th>
               <th v-if="usaDespachadores" class="py-2 pr-4">Despachador</th>
               <th v-if="modalidadPrepago" class="py-2 pr-4">Saldo de viajes</th>
+              <th v-if="modalidadComision" class="py-2 pr-4">Comisión pendiente</th>
               <th class="py-2 pr-4">Acciones</th>
             </tr>
           </thead>
@@ -388,6 +431,9 @@ onUnmounted(() => {
               <td v-if="modalidadPrepago" class="py-2 pr-4">
                 {{ conductor.saldo_viajes ?? 0 }} viaje(s)
               </td>
+              <td v-if="modalidadComision" class="py-2 pr-4">
+                {{ formatoImporte.format(conductor.comision_pendiente ?? 0) }}
+              </td>
               <td class="py-2 pr-4">
                 <div class="flex flex-wrap gap-2">
                   <RouterLink
@@ -415,6 +461,26 @@ onUnmounted(() => {
                   >
                     Historial de pagos
                   </button>
+                  <button
+                    v-if="puedeLiquidarComision"
+                    type="button"
+                    :disabled="(conductor.comision_pendiente ?? 0) <= 0"
+                    class="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-accent"
+                    @click="abrirLiquidarComision(conductor)"
+                  >
+                    Liquidar comisión
+                  </button>
+                  <RouterLink
+                    v-if="puedeLiquidarComision"
+                    :to="{
+                      name: 'tenant-comisiones',
+                      params: { slug },
+                      query: { conductor: String(conductor.id_conductor) },
+                    }"
+                    class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-semibold text-heading transition-colors hover:bg-black/5"
+                  >
+                    Ver comisiones
+                  </RouterLink>
                 </div>
               </td>
             </tr>
@@ -558,5 +624,12 @@ onUnmounted(() => {
         </div>
       </div>
     </Teleport>
+    <LiquidarComisionModal
+      v-if="conductorLiquidacion"
+      :slug="slug"
+      :conductor="conductorLiquidacion"
+      @cerrar="conductorLiquidacion = null"
+      @liquidado="onComisionLiquidada"
+    />
   </TenantLayout>
 </template>

@@ -9,6 +9,7 @@ use App\Events\Tenant\PedidoEntregado;
 use App\Events\Tenant\PedidoEstadoCambiado;
 use App\Events\Tenant\PedidoYaTomado;
 use App\Events\Tenant\SaldoTenantCambiado;
+use App\Models\Tenant\ComisionConductor;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\ConsumoViajeTenant;
 use App\Models\Tenant\Pedido;
@@ -353,8 +354,12 @@ class PedidoEstadoService
     }
 
     /**
-     * Descuenta 1 viaje del saldo prepagado del conductor, o calcula la comisión del pedido, según
-     * la modalidad de cobro configurada para el tenant (spec 015).
+     * Descuenta 1 viaje del saldo prepagado del conductor, o genera la comisión del pedido, según
+     * la modalidad de cobro configurada para el tenant (spec 015; comisión: spec tenant/030).
+     *
+     * La modalidad y el porcentaje se resuelven aquí, al transicionar, y se pasan ya fijos a la
+     * clausura diferida: un cambio de configuración entre la transición y el commit no puede
+     * alterar lo que este viaje generó (RN-04).
      */
     private function liquidarConductor(Pedido $pedido): void
     {
@@ -362,7 +367,8 @@ class PedidoEstadoService
 
         if ($modalidad === 'Comision') {
             $porcentaje = (float) ConfiguracionTenant::obtener(ConfiguracionTenant::COMISION_PORCENTAJE, '0');
-            $pedido->comision_calculada = round((float) $pedido->importe_cobro * $porcentaje / 100, 2);
+
+            $this->diferir($pedido, fn () => $this->generarComision($pedido, $porcentaje));
 
             return;
         }
@@ -375,5 +381,35 @@ class PedidoEstadoService
         if (($vendidos - $consumidos) > 0) {
             $pedido->prepago_descontado = true;
         }
+    }
+
+    /**
+     * Anota la comisión del envío a favor del conductor (spec tenant/030). Gemela de
+     * `consumirViajeDelTenant()`: va diferida hasta que la entrega quedó escrita, y `firstOrCreate`
+     * sobre el `UNIQUE(id_pedido)` cubre un `saved()` repetido sin duplicar ni fallar (RN-03).
+     *
+     * La base es **solo** `importe_envio` (RN-02): ni `importe_cobro`, ni `pago_extra`, ni la
+     * mercancía. Con porcentaje cero la fila nace `PAGADA`: queda constancia del viaje sin dejar
+     * un pendiente de $0 para siempre (RN-05). A diferencia del consumo del tenant, aquí TEST y
+     * LIVE generan por igual (supuesto 4): el sistema completo se prueba en TEST.
+     *
+     * No toca `pedidos.comision_calculada`: esa columna queda sin uso (adición 7).
+     */
+    private function generarComision(Pedido $pedido, float $porcentaje): void
+    {
+        $importeEnvio = round((float) $pedido->importe_envio, 2);
+        $importeComision = round($importeEnvio * $porcentaje / 100, 2);
+
+        ComisionConductor::firstOrCreate(
+            ['id_pedido' => $pedido->id_pedido],
+            [
+                'id_conductor' => $pedido->id_conductor,
+                'importe_envio' => $importeEnvio,
+                'porcentaje_aplicado' => round($porcentaje, 2),
+                'importe_comision' => $importeComision,
+                'estado' => $importeComision > 0 ? ComisionConductor::ESTADO_PENDIENTE : ComisionConductor::ESTADO_PAGADA,
+                'pagada_en' => $importeComision > 0 ? null : now(),
+            ],
+        );
     }
 }

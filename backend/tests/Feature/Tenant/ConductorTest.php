@@ -2,9 +2,11 @@
 
 use App\Models\Tenant;
 use App\Models\Tenant\Auditoria;
+use App\Models\Tenant\ComisionConductor;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
+use App\Models\Tenant\LiquidacionComision;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\Vehiculo;
@@ -331,6 +333,51 @@ it('includes saldo_viajes in the listing, computed without an extra query per co
         ->assertOk();
 
     expect($response->json('data.0.saldo_viajes'))->toBe(4);
+});
+
+it('includes comision_pendiente in the listing, computed with aggregates and regardless of modalidad', function () {
+    // spec tenant/030, adición 8: la lista trae el pendiente por fila con la misma técnica que
+    // `saldo_viajes`, y lo manda siempre (aquí el tenant sigue en Prepago); Vue decide con `v-if`.
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    $conductor = Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+
+    foreach ([1, 2, 3] as $n) {
+        $pedido = Pedido::create([
+            'numero_pedido' => "PED-00000{$n}",
+            'nombre_solicitante' => 'Mario Sánchez',
+            'telefono_solicitante' => '5511223344',
+            'direccion_recogida' => 'Av. Reforma 100',
+            'direccion_entrega' => 'Av. Insurgentes 200',
+            'fecha_servicio' => now()->toDateString(),
+            'modalidad_pago' => 'RECEPTOR_PAGA_ENVIO',
+            'importe_envio' => 100,
+            'id_conductor' => $conductor->id_conductor,
+            'estado' => 'ENTREGADO',
+        ]);
+        ComisionConductor::create([
+            'id_conductor' => $conductor->id_conductor,
+            'id_pedido' => $pedido->id_pedido,
+            'importe_envio' => 100,
+            'porcentaje_aplicado' => 25,
+            'importe_comision' => 25,
+        ]);
+    }
+    LiquidacionComision::create(['id_conductor' => $conductor->id_conductor, 'id_usuario' => $admin->id_usuario, 'monto' => 30]);
+    tenancy()->end();
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->getJson('/api/v1/t/cafe-luna/conductores')
+        ->assertOk();
+
+    expect($response->json('data.0.comision_pendiente'))->toBe(45)
+        ->and($response->json('data.0.saldo_viajes'))->toBe(0);
 });
 
 it('shows a single conductor with its usuario data', function () {

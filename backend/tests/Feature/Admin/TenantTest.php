@@ -142,6 +142,23 @@ it('creates a tenant, provisions its database, logs the action, and creates the 
         CredencialesAdminCliente::class,
         fn ($notification, $channels, $notifiable) => $notifiable->routes['mail'] === 'contacto@cafeluna.com',
     );
+
+    // spec 011, enmienda "la ruta de acceso en el correo de bienvenida": el correo dice a qué
+    // dirección entrar (RN-E1/E2) y lo explica antes de las credenciales (RN-E3).
+    Notification::assertSentOnDemand(
+        CredencialesAdminCliente::class,
+        function (CredencialesAdminCliente $notification, $channels, $notifiable) use ($tenant) {
+            $url = "http://localhost:5173/t/{$tenant->slug}/login";
+            $correo = $notification->toMail($notifiable);
+            $html = $correo->render()->toHtml();
+
+            return $correo->actionUrl === $url
+                && str_contains($html, $url)
+                && str_contains($html, 'Tu dirección de acceso es')
+                && str_contains($html, 'contacto@cafeluna.com')
+                && strpos($html, 'Tu dirección de acceso es') < strpos($html, 'contacto@cafeluna.com');
+        },
+    );
 });
 
 it('throttles tenant creation after 20 attempts per minute', function () {

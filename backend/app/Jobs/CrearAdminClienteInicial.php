@@ -45,7 +45,7 @@ class CrearAdminClienteInicial implements ShouldQueue
             ]);
 
             Notification::route('mail', $usuario->email)
-                ->notify(new CredencialesAdminCliente($this->tenant->nombre_comercial, $usuario->email, $password));
+                ->notify(new CredencialesAdminCliente($this->tenant->nombre_comercial, $this->tenant->slug, $usuario->email, $password));
         } catch (\Throwable $e) {
             Log::error('No se pudo crear el AdminCliente inicial del tenant', [
                 'id_tenant' => $this->tenant->id_tenant,

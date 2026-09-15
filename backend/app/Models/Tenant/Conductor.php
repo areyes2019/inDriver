@@ -52,6 +52,18 @@ class Conductor extends Model
         return $this->hasMany(MovimientoSaldo::class, 'id_conductor', 'id_conductor');
     }
 
+    /** Comisiones generadas a su favor por envíos entregados en modalidad Comisión (spec tenant/030). */
+    public function comisiones(): HasMany
+    {
+        return $this->hasMany(ComisionConductor::class, 'id_conductor', 'id_conductor');
+    }
+
+    /** Pagos de comisión que el tenant le registró (spec tenant/030). */
+    public function liquidacionesComision(): HasMany
+    {
+        return $this->hasMany(LiquidacionComision::class, 'id_conductor', 'id_conductor');
+    }
+
     public function vehiculo(): HasOne
     {
         return $this->hasOne(Vehiculo::class, 'id_conductor', 'id_conductor');

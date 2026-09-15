@@ -144,3 +144,121 @@ tenant.
     Crear tenant no capturaba datos de una persona (solo del negocio), se agregan campos nuevos y
     requeridos (`nombre`, `apellido_paterno`) más uno opcional (`apellido_materno`) al formulario,
     en vez de reutilizar `nombre_comercial` o `razon_social` como nombre de la persona.
+
+## Enmienda: la ruta de acceso en el correo de bienvenida
+
+> Historia del dueño del producto: *"Quiero que el correo muestre también la ruta completa que el
+> tenant usará y una explicación breve de lo que eso significa. Algo así como: Su ruta de acceso
+> será http://localhost:5173/t/moto-express-celaya/login"*.
+
+### Historia de usuario
+
+Como AdminCliente recién dado de alta, quiero que el correo con mis credenciales me diga también
+**a qué dirección entrar** y qué significa esa dirección, para no tener que adivinar ni pedirla,
+y para saber que es la que debo compartir con mi equipo.
+
+### Objetivo / Alcance
+
+Hoy `CredencialesAdminCliente` manda nombre comercial, correo y contraseña, pero ningún enlace: el
+AdminCliente recibe con qué entrar y no dónde. El correo de los demás usuarios del tenant
+(`CredencialesUsuarioTenant`, spec `tenant/001`) sí lleva un botón "Ir al panel" con
+`{FRONTEND_URL}/t/{slug}/login`. Esta enmienda lleva ese mismo enlace al correo del tenant nuevo y
+le agrega una explicación breve.
+
+Deja funcionando:
+
+- La URL completa del panel del tenant (`{FRONTEND_URL}/t/{slug}/login`) en el correo de
+  bienvenida, **dos veces**: como texto visible (para copiarla o guardarla) y como botón "Ir al
+  panel" (para abrirla de un clic).
+- Una explicación breve, en lenguaje llano y **antes** de las credenciales: esa dirección es
+  exclusiva del negocio (la parte `/t/{slug}/` lo identifica), es la que debe usar siempre para
+  entrar y la que debe compartir con sus despachadores y conductores; las credenciales del correo
+  son las de su usuario administrador dentro de esa dirección.
+- Un solo lugar que arma la URL, compartido por los dos correos de credenciales.
+
+**No incluye:**
+
+- Cambios al asunto, al saludo, a las credenciales ni al mecanismo SMTP/Mailpit del correo.
+- Agregar la explicación al correo de usuarios del tenant (`CredencialesUsuarioTenant`): solo pasa
+  a usar el helper; su texto no cambia.
+- Reenviar el correo a tenants ya creados.
+- Configurar una URL por tenant: la base sigue siendo `FRONTEND_URL` del servidor.
+
+### Decisión técnica
+
+- **La URL no se captura: se deriva.** El slug ya existe en el tenant desde que
+  `TenantController@store` lo genera, y `CrearAdminClienteInicial` tiene el tenant completo en
+  `$this->tenant`. Se pasa `$this->tenant->slug` como cuarto argumento a la notificación. La base
+  es `config('app.frontend_url')` (`FRONTEND_URL`), la misma que ya usan CORS y el correo de
+  recuperación de contraseña: en local `http://localhost:5173`, en producción la del servidor.
+- **Helper `App\Support\UrlPanelTenant::login(string $slug): string`.** La línea
+  `rtrim(config('app.frontend_url'), '/')."/t/{$slug}/login"` vivía dentro de
+  `CredencialesUsuarioTenant`; al necesitarla un segundo correo, se extrae y ambos la llaman. Mismo
+  criterio que `SaldoViajesTenant` y `ComisionesConductor`: una fórmula, un lugar. Si la ruta del
+  login cambia (por ejemplo, dominio por tenant), se corrige una vez.
+- **Orden del correo:** saludo → explicación con la URL como texto → credenciales (sin cambios,
+  contraseña en code span) → botón "Ir al panel" → recomendación de cambiar la contraseña. Primero
+  "dónde", luego "con qué".
+- **Prueba del contenido.** `TenantTest` solo afirmaba que la notificación se envía; se le agrega
+  la verificación de que el correo renderizado (`toMail()->render()`) contiene la URL con el slug
+  del tenant creado y la frase de explicación.
+
+### Reglas de negocio (de esta enmienda)
+
+- **RN-E1** La URL del correo es exactamente `{FRONTEND_URL}/t/{slug}/login`, con el slug del
+  tenant recién creado y sin barra final duplicada.
+- **RN-E2** La URL aparece como texto visible y como botón; ambas idénticas.
+- **RN-E3** La explicación precede a las credenciales; las credenciales no cambian.
+- **RN-E4** Solo afecta a altas nuevas; no hay reenvío.
+
+### Backend (Laravel) — cambios de esta enmienda
+
+- **`App\Support\UrlPanelTenant`** (nuevo): `login(string $slug): string`.
+- **`App\Notifications\CredencialesAdminCliente`**: constructor gana `string $slug`; `toMail()`
+  agrega la línea de explicación con la URL en texto, el `->action('Ir al panel', $url)` y
+  conserva el resto.
+- **`App\Notifications\CredencialesUsuarioTenant`**: reemplaza su línea de URL por el helper. Sin
+  cambio de texto.
+- **`App\Jobs\CrearAdminClienteInicial`**: pasa `$this->tenant->slug` a la notificación.
+- **`tests/Feature/Admin/TenantTest.php`**: en la prueba de alta, además de
+  `assertSentOnDemand`, renderiza la notificación capturada y afirma que contiene
+  `http://localhost:5173/t/{slug}/login` y "Tu dirección de acceso".
+
+### Frontend (Vue 3)
+
+Ninguno.
+
+### Criterios de aceptación (de esta enmienda)
+
+1. Al crear un tenant con slug `cafe-luna`, el correo recibido en Mailpit contiene el texto
+   `http://localhost:5173/t/cafe-luna/login` y un botón "Ir al panel" que abre esa misma URL.
+2. El correo explica, antes de las credenciales, que esa dirección es la del negocio y la que debe
+   compartir con su equipo.
+3. Correo y contraseña siguen apareciendo igual que antes; la contraseña recibida sigue
+   coincidiendo con `usuarios.password`.
+4. El correo de usuarios del tenant (`CredencialesUsuarioTenant`) produce exactamente la misma URL
+   que antes.
+5. `TenantTest` y `UsuarioTest` (o el que cubra `CredencialesUsuarioTenant`) pasan; Pint sin
+   errores.
+
+### Supuestos asumidos (continúa el registro de arriba)
+
+12. La ruta se construye con el mismo patrón que ya usa el correo de usuarios del tenant:
+    `{FRONTEND_URL}/t/{slug}/login`. No se captura ni configura nada nuevo por tenant.
+13. La ruta aparece dos veces: como texto completo visible y como botón "Ir al panel".
+14. La explicación dice que la dirección es exclusiva del negocio (la parte `/t/{slug}/` lo
+    identifica), que es la que debe usar siempre para entrar y compartir con sus despachadores y
+    conductores, y que las credenciales del correo son las de su usuario administrador ahí.
+15. La explicación va antes de las credenciales; las credenciales se mantienen exactamente igual.
+16. El resto del correo no cambia: asunto, saludo con el nombre comercial, remitente/SMTP.
+17. Solo se modifica el correo del AdminCliente inicial (esta spec). El correo de los demás
+    usuarios del tenant (spec `tenant/001`) ya tiene el botón; no se le agrega la explicación.
+18. No se reenvía el correo a tenants ya creados; aplica solo a altas nuevas.
+19. El slug se toma del tenant recién creado; no se pide en el formulario.
+
+### Adiciones técnicas aceptadas
+
+1. Pasar el `slug` a la notificación desde `CrearAdminClienteInicial`.
+2. Helper `App\Support\UrlPanelTenant::login()` compartido por los dos correos de credenciales.
+3. Prueba del contenido renderizado del correo en `TenantTest`.
+4. Esta enmienda, al final de la spec, en vez de reescribirla.

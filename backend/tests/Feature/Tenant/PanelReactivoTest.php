@@ -9,6 +9,7 @@ use App\Events\Tenant\SaldoAcreditado;
 use App\Events\Tenant\SaldoTenantCambiado;
 use App\Jobs\ExpirarOfertaPedido;
 use App\Models\Tenant;
+use App\Models\Tenant\ComisionConductor;
 use App\Models\Tenant\CompraPaquete;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConductorEstado;
@@ -242,7 +243,9 @@ it('consumes one tenant viaje per delivered pedido, once, in either modality, an
         ->and($cargas[0]['saldo_viajes_tenant'])->toBe(-1)
         ->and($cargas[0]['motivo'])->toBe('consumo')
         ->and($cargas[0]['id_pedido'])->toBe($pedido->id_pedido)
-        ->and($cargas[0])->not->toHaveKey('ambiente');
+        ->and($cargas[0])->not->toHaveKey('ambiente')
+        // spec tenant/030: en Comisión el mismo envío genera además su comisión, también una sola vez.
+        ->and(ComisionConductor::where('id_pedido', $pedido->id_pedido)->count())->toBe(1);
     tenancy()->end();
 });
 
