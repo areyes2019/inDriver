@@ -176,7 +176,17 @@ it('sends a password reset notification for an existing email', function () {
     $this->postJson('/api/v1/t/cafe-luna/forgot-password', ['email' => $usuario->email])
         ->assertOk();
 
-    Notification::assertSentTo($usuario, ResetPassword::class);
+    // El enlace lleva al Panel sin `/t/` (spec tenant/001, enmienda "el slug va inmediatamente
+    // después del dominio", RN-S6). Se resuelve la URL aquí, con la tenencia inicializada a mano,
+    // porque `createUrlUsing` lee `tenant('slug')` y la petición ya terminó.
+    Notification::assertSentTo($usuario, ResetPassword::class, function (ResetPassword $notification) use ($tenant, $usuario) {
+        tenancy()->initialize($tenant);
+        $url = $notification->toMail($usuario)->actionUrl;
+        tenancy()->end();
+
+        return str_starts_with($url, 'http://localhost:5173/cafe-luna/reset-password/')
+            && str_contains($url, 'email='.urlencode($usuario->email));
+    });
 });
 
 it('resets the password with a valid token and allows login with the new one', function () {

@@ -61,9 +61,10 @@ class AppServiceProvider extends ServiceProvider
             $frontendUrl = rtrim(config('app.frontend_url'), '/');
 
             // La tenencia sigue activa aquí: el envío del correo (forgotPassword) ocurre de forma
-            // síncrona dentro de la misma petición que la inicializó.
+            // síncrona dentro de la misma petición que la inicializó. La ruta va sin `/t/` desde
+            // la enmienda "el slug va inmediatamente después del dominio" (spec tenant/001, RN-S6).
             if ($notifiable instanceof Usuario) {
-                return "{$frontendUrl}/t/".tenant('slug')."/reset-password/{$token}?email={$email}";
+                return "{$frontendUrl}/".tenant('slug')."/reset-password/{$token}?email={$email}";
             }
 
             return "{$frontendUrl}/admin/reset-password/{$token}?email={$email}";

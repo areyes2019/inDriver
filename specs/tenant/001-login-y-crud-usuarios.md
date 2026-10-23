@@ -16,8 +16,10 @@ Esta historia resuelve, en un solo paquete, el prerrequisito de acceso (login de
 
 Deja funcionando:
 
-- **Identificación del tenant por slug en la URL** (`/t/{slug}/...`), en vez de por subdominio —
-  ver "Decisión técnica" para el porqué.
+- **Identificación del tenant por slug en la URL** (`/t/{slug}/...`; desde la enmienda "el slug
+  va inmediatamente después del dominio", al final de esta spec, la ruta de frontend es
+  `/{slug}/...` y la de API sigue en `/api/v1/t/{slug}/...`), en vez de por subdominio — ver
+  "Decisión técnica" para el porqué.
 - **Login, logout, "quién soy", recuperar y restablecer contraseña** para usuarios de tenant
   (AdminCliente/Despachador/Conductor), con el mismo nivel de completitud que ya existe para
   ADMIN_CENTRAL (`004-auth-admin-central.md`, `006-rediseno-login-admin.md`).
@@ -49,6 +51,10 @@ En su lugar, el tenant se identifica por un **slug** (identificador corto, únic
 `acme`) como primer segmento de la ruta: `delivery.prosello.com.mx/t/acme/...` tanto en el frontend
 (Vue Router) como en el backend (`/api/v1/t/acme/...`). Esto no requiere tocar DNS ni SSL, y
 convive sin conflicto con las rutas ya existentes de ADMIN_CENTRAL bajo `/admin/...`.
+
+> **Enmendado:** el prefijo `/t/` se retiró del frontend; la dirección del tenant es
+> `delivery.prosello.com.mx/acme/...` y la API conserva `/api/v1/t/acme/...`. Ver la enmienda al
+> final de esta spec.
 
 ### Columna `slug` nueva en `tenants` (base central)
 
@@ -219,9 +225,12 @@ siempre arma `/admin/reset-password/{token}`. Se cambia para que distinga por ti
   `UiConfirmDialog.vue` con el campo de contraseña (ya extendido en spec 007). La tabla ocupa el
   100% del ancho interior disponible del card, sin `max-width` ni centrado propio, igual que la
   corrección ya aplicada en `ListaTenantsView.vue` (spec 008).
-- **Rutas** (`router/index.ts`): `/t/:slug/login`, `/t/:slug/forgot-password`,
+- **Rutas** (`router/index.ts`): ~~`/t/:slug/login`, `/t/:slug/forgot-password`,
   `/t/:slug/reset-password/:token`, `/t/:slug/panel/usuarios`,
-  `/t/:slug/panel/usuarios/crear`, `/t/:slug/panel/usuarios/:id/editar`, protegidas con
+  `/t/:slug/panel/usuarios/crear`, `/t/:slug/panel/usuarios/:id/editar`~~ **Enmendado:**
+  `/:slug` (login, nombre `tenant-login`), `/:slug/forgot-password`,
+  `/:slug/reset-password/:token`, `/:slug/panel/usuarios`, `/:slug/panel/usuarios/crear`,
+  `/:slug/panel/usuarios/:id/editar`, protegidas con
   `meta: { requiresTenantAuth: true }` (excepto login/forgot/reset). El guard `router.beforeEach`
   replica el de `requiresAdminAuth`, usando `useTenantAuthStore()` y el `slug` de `route.params`.
 
@@ -274,7 +283,8 @@ siempre arma `/admin/reset-password/{token}`. Se cambia para que distinga por ti
 
 ## Supuestos asumidos (registro completo)
 
-1. El tenant se identifica por un `slug` en la URL (`/t/{slug}/...`), no por subdominio — un
+1. El tenant se identifica por un `slug` en la URL (`/t/{slug}/...`; enmendado a `/{slug}/...`
+   en el frontend, ver enmienda al final), no por subdominio — un
    subdominio real requeriría DNS/SSL wildcard, no soportado de forma simple en el hosting
    compartido de `002-despliegue-hostinger.md`. (Corrige la primera versión de esta spec, que asumía
    que la identificación de tenant ya estaba resuelta en `007-crear-tenants.md`; se verificó que esa
@@ -330,3 +340,261 @@ siempre arma `/admin/reset-password/{token}`. Se cambia para que distinga por ti
     ni centrado propio; solo conserva un ancho mínimo para pantallas angostas, resuelto con scroll
     horizontal en su propio contenedor — misma corrección aplicada a `ListaTenantsView.vue` (spec
     008).
+
+## Enmienda: el slug va inmediatamente después del dominio
+
+> Historia del dueño del tenant: *"como usuario tenant no quiero ver la ruta de entrada así:
+> `http://localhost:5173/t/moto-celaya/login`; quiero verla así: `http://localhost:5173/moto-celaya`.
+> Quiero que mi slug se vea inmediatamente después del dominio principal. Prefiero que el
+> admin_central tenga una ruta especial, pero la ruta del tenant debe ser fácil de entender."*
+>
+> Esta enmienda cambia **solo la dirección que ve el navegador**. La API sigue en
+> `/api/v1/t/{slug}/...` y no se toca: el prefijo `/t/` deja de existir en las rutas de Vue Router,
+> no en las de Laravel. Donde una spec anterior escriba una ruta de frontend como `/t/{slug}/...` o
+> `/t/:slug/...`, léase `/{slug}/...` o `/:slug/...`; las rutas de API (`GET/POST /t/{slug}/...`,
+> `/api/v1/t/...`) se leen tal cual.
+
+### Historia de usuario
+
+Como usuario de un tenant (AdminCliente, Despachador o Conductor), quiero que la dirección de mi
+sistema sea `{dominio}/{mi-slug}` —sin prefijos ni palabras técnicas— para poder dictarla,
+recordarla y compartirla con mi equipo sin explicar qué significa `/t/`.
+
+### Objetivo / Alcance
+
+Deja funcionando:
+
+- **El slug como primer segmento de la ruta.** Todas las rutas de frontend del tenant pierden el
+  prefijo `/t/`: `/moto-celaya`, `/moto-celaya/panel`, `/moto-celaya/panel/clientes`,
+  `/moto-celaya/forgot-password`, `/moto-celaya/reset-password/{token}`, etc. Los nombres de ruta
+  (`tenant-login`, `tenant-panel`, `tenant-clientes-lista`…) no cambian, así que ningún
+  `router.push({ name, params: { slug } })` existente se toca.
+- **`/{slug}` es la única entrada del tenant.** Sin sesión, muestra el login **ahí mismo**, sin
+  cambiar la dirección. Con sesión, lleva al Panel (`/{slug}/panel`); el guard existente decide
+  después si esa persona es operativa o va a Clientes (spec 007, RN-A1/RN-A2). Deja de existir
+  `/{slug}/login` como ruta propia: la ruta `tenant-login` pasa a vivir en `/:slug`.
+- **Las direcciones viejas siguen funcionando.** `/t/{slug}`, `/t/{slug}/login` y cualquier
+  `/t/{slug}/lo-que-sea` redirigen a su equivalente sin `/t/` conservando el resto de la ruta,
+  para que correos ya enviados, marcadores y enlaces guardados por despachadores y conductores
+  no se rompan.
+- **Los correos mandan la dirección nueva.** `UrlPanelTenant::login()` devuelve
+  `{FRONTEND_URL}/{slug}`, y el enlace de restablecimiento pasa a
+  `{FRONTEND_URL}/{slug}/reset-password/{token}?email=...`. El texto del correo de bienvenida del
+  AdminCliente (spec 011, enmienda) se reescribe: en vez de "la parte `/t/{slug}/` identifica a tu
+  negocio", dice que el nombre que va justo después del dominio (`/{slug}`) es el que identifica a
+  su negocio.
+- **Palabras reservadas.** Como el slug ahora ocupa el primer lugar después del dominio, ningún
+  tenant puede tener un slug que sea una ruta del sistema. Al crear un tenant cuyo nombre comercial
+  produzca uno de esos slugs, `generarSlugUnico` le agrega sufijo numérico (`admin-2`), igual que
+  hoy cuando el slug ya está ocupado. La lista vive **una sola vez**, en el backend.
+- **Slug inexistente.** Entrar a `/{slug}` con un slug que no corresponde a ningún tenant muestra,
+  en la misma pantalla de entrada, "No encontramos ningún negocio en esta dirección" en vez del
+  formulario de login. No se manda al admin central ni a una página en blanco.
+- **Sin parpadeo al entrar con sesión.** Mientras se resuelve "¿esta persona ya inició sesión?",
+  se muestra una pantalla neutra (logo centrado); el login y el Panel nunca se pintan uno detrás
+  del otro.
+
+**No** incluye:
+
+- Cambios a la API (`/api/v1/t/{slug}/...`), a `IdentificarTenantPorSlug`, ni a la app de
+  conductor (`panda_expess`), cuyo `VITE_API_BASE_URL` sigue incluyendo `/api/v1/t/{slug}`.
+- Cambios al admin central: `/admin`, `/admin/login`, `/admin/tenants`, etc. se quedan donde están.
+  Es la "ruta especial" que pidió el dueño.
+- `/` (HomeView) y `/about`: siguen existiendo tal cual.
+- Cambiar el slug de tenants ya creados, o hacerlo editable desde el formulario. Solo cambia la
+  forma de la ruta.
+- Subdominios por tenant (descartados en la decisión técnica original de esta spec; el motivo no
+  cambió).
+
+### Decisión técnica
+
+#### Por qué `/:slug` no choca con `/admin` ni con `/about`
+
+Vue Router ordena las rutas por especificidad, no por el orden en que se declaran: un segmento
+estático (`/admin`, `/about`) siempre gana a uno dinámico (`/:slug`) para la misma URL. Así,
+`/admin/tenants` sigue cayendo en `admin-tenants-lista` aunque exista `/:slug/panel/...`. No hace
+falta reordenar el arreglo de rutas; sí hace falta que ningún tenant se llame `admin` o `about`,
+que es lo que resuelve la lista de palabras reservadas.
+
+Lo que Vue Router **no** ve son las rutas que nginx atiende antes de entregar `index.html`
+(`deploy/vps/nginx-delivery.prosello.com.mx.conf`): `api`, `sanctum`, `up`, `gps`, `gps-health`, y
+`assets` (carpeta del build de Vite). Un tenant con slug `gps` tendría una dirección que nginx
+nunca le entregaría al SPA. Por eso la lista reservada incluye tanto las rutas de Vue como las de
+nginx.
+
+#### Lista única de palabras reservadas, en el backend (adición técnica 1)
+
+Un arreglo `App\Support\SlugsReservados::LISTA` con: `admin`, `api`, `sanctum`, `up`, `gps`,
+`gps-health`, `assets`, `about`, `t`, `index`, `login`, `panel`. `generarSlugUnico` lo consulta
+igual que consulta `Tenant::where('slug', ...)`: si el slug base está reservado o en uso, prueba
+`{base}-2`, `{base}-3`… El frontend no tiene copia de la lista: no la necesita, porque la única
+puerta por la que entra un slug es el alta de tenant, y esa es del backend. Agregar una palabra
+nueva es un cambio de un renglón en un archivo.
+
+`t` se reserva por las redirecciones de compatibilidad (`/t/...` sigue siendo una ruta del SPA);
+`login` y `panel`, para que `/{slug}` y `/{slug}/panel` nunca sean ambiguos con un tenant que se
+llame así.
+
+#### `tenant-login` vive en `/:slug`; la entrada decide sola
+
+- La ruta `{ path: '/:slug', name: 'tenant-login', component: LoginView }` sustituye a
+  `/t/:slug/login` **y** a la redirección `/t/:slug → tenant-panel` de la spec 007 (RN-A2).
+- `beforeEach` gana una rama para `to.name === 'tenant-login'`: llama `auth.fetchMe(slug)` (si no
+  está `checked` o el slug cambió) y, si `auth.isAuthenticated`, devuelve
+  `{ name: 'tenant-panel', params: { slug } }`. El guard de `tenant-panel` hace el resto
+  (operativo → mapa; no operativo → Clientes). Sin sesión, deja pasar y se pinta el login en
+  `/{slug}`.
+- `LoginView.vue` no cambia su formulario ni su destino tras autenticarse (RN-A1 de 007). Solo
+  gana la variante "negocio no encontrado" (abajo).
+- Todo lo que hoy "manda al login" —guard de `requiresTenantAuth`, `TenantLayout` al cerrar
+  sesión, `ResetPasswordView` al terminar— ya usa `{ name: 'tenant-login', params: { slug } }` y
+  resuelve solo a `/{slug}`. Sin cambios en esos archivos.
+
+#### Slug inexistente se distingue de "sin sesión"
+
+Hoy `tenantAuth.fetchMe` traga cualquier error y deja `usuario = null`, así que un slug
+inexistente y una sesión vencida se ven iguales: se pinta el login y, al enviarlo, aparece "Correo
+o contraseña incorrectos" (la API responde `404` desde `IdentificarTenantPorSlug`). Con el slug
+pegado al dominio, cualquier URL mal escrita cae en `/:slug`, así que el caso se vuelve común y
+merece un mensaje propio. `fetchMe` distingue el `404` del resto: guarda `tenantExiste = false`
+(estado nuevo en el store) y `LoginView` muestra "No encontramos ningún negocio en esta dirección.
+Revisa el enlace que te compartieron." en lugar del formulario. `401` y errores de red se siguen
+tratando como "sin sesión".
+
+#### Pantalla neutra hasta que el router resuelva (adición técnica 2)
+
+El guard de `tenant-login` espera a `fetchMe` antes de dejar pintar nada, así que el formulario
+nunca se muestra "un instante" a quien ya tiene sesión. Lo que sí se ve durante esa espera, hoy,
+es un fondo blanco vacío. `App.vue` muestra el logo centrado (mismo `logo.svg` de los logins)
+mientras `router.isReady()` no haya resuelto la navegación inicial, y después monta `<RouterView>`.
+Es un cambio de `App.vue`, no de cada vista, y cubre también al admin central.
+
+#### Redirecciones de compatibilidad
+
+Una sola ruta `/t/:slug/:resto(.*)*` con `redirect` calculado (`'/' + slug` más el resto de
+segmentos, si los hay) cubre `/t/{slug}`, `/t/{slug}/login` y cualquier ruta profunda
+(`/t/{slug}/panel/clientes` → `/{slug}/panel/clientes`). Como `login` deja de existir como
+segmento, se agrega también `/:slug/login` → `/:slug`, de modo que el correo ya enviado con
+`/t/{slug}/login` termina en `/{slug}` en dos saltos y sin `404`. Las redirecciones se quedan
+indefinidamente: no cuestan nada y los correos viejos no caducan.
+
+#### Backend: dos constantes, una lista
+
+- `UrlPanelTenant::login()` devuelve `{FRONTEND_URL}/{slug}` (el nombre del método se conserva: el
+  destino sigue siendo "la pantalla de entrada", que ahora es la raíz del tenant).
+- `AppServiceProvider::boot()`, en `ResetPassword::createUrlUsing`, arma
+  `{FRONTEND_URL}/{slug}/reset-password/{token}?email=...`.
+- `CredencialesAdminCliente::toMail()` reescribe la línea de explicación (ver RN-S6).
+- `SlugsReservados` (nuevo) y `TenantController::generarSlugUnico` (lo consulta).
+
+### Reglas de negocio (de esta enmienda)
+
+- **RN-S1** Toda ruta de frontend del tenant tiene la forma `/{slug}[/...]`; ninguna lleva `/t/`.
+- **RN-S2** `/{slug}` sin sesión muestra el login en esa misma dirección; con sesión redirige a
+  `tenant-panel`, y desde ahí aplican RN-A1/RN-A2 de la spec 007 (operativo → Panel; no operativo
+  → Clientes).
+- **RN-S3** No existe `/{slug}/login` como pantalla; si se escribe, redirige a `/{slug}`.
+- **RN-S4** `/t/{slug}[/...]` redirige a `/{slug}[/...]` conservando el resto de la ruta.
+- **RN-S5** El slug de un tenant nuevo nunca coincide con una palabra de `SlugsReservados::LISTA`;
+  si el nombre comercial la produce, recibe sufijo numérico como cualquier choque de unicidad.
+- **RN-S6** Los correos de credenciales (AdminCliente inicial y usuarios del tenant) enlazan a
+  `{FRONTEND_URL}/{slug}`; el correo del AdminCliente explica que el nombre que va justo después
+  del dominio identifica a su negocio. El correo de restablecimiento enlaza a
+  `{FRONTEND_URL}/{slug}/reset-password/{token}?email=...`.
+- **RN-S7** Un slug que no corresponde a ningún tenant muestra "No encontramos ningún negocio en
+  esta dirección" en `/{slug}`, sin formulario, sin redirigir a `/admin` ni a `/`.
+- **RN-S8** Mientras el router resuelve la navegación inicial se muestra el logo centrado; el login
+  y el Panel nunca se pintan en secuencia para una misma carga.
+- **RN-S9** El admin central, `/` y `/about` no cambian. Los slugs de tenants existentes no cambian.
+
+### Backend (Laravel) — cambios de esta enmienda
+
+- **`App\Support\SlugsReservados`** (nuevo): `const LISTA = [...]` y `static function
+  esReservado(string $slug): bool`.
+- **`App\Http\Controllers\Admin\TenantController::generarSlugUnico`**: la condición del `while`
+  pasa a ser `SlugsReservados::esReservado($slug) || Tenant::where('slug', $slug)->exists()`.
+- **`App\Support\UrlPanelTenant::login`**: `"/{$slug}"` en lugar de `"/t/{$slug}/login"`.
+- **`App\Providers\AppServiceProvider::boot`**: `"{$frontendUrl}/".tenant('slug')."/reset-password/..."`.
+- **`App\Notifications\CredencialesAdminCliente::toMail`**: línea de explicación nueva: "Esa
+  dirección es exclusiva de {nombre comercial}: el nombre que va justo después del dominio
+  (`/{slug}`) identifica a tu negocio. Úsala siempre para entrar y compártela con tus
+  despachadores y conductores; es la misma para todo tu equipo."
+- **`tests/Feature/Admin/TenantTest.php`**: la aserción del correo pasa a
+  `http://localhost:5173/{slug}`; prueba nueva: crear un tenant con `nombre_comercial = 'Admin'`
+  produce slug `admin-2`.
+- **Prueba de la URL de reset** (`UsuarioTest` o el que cubra `forgotPassword`): el enlace del
+  correo contiene `/{slug}/reset-password/`.
+
+### Frontend (Vue 3) — cambios de esta enmienda
+
+- **`router/index.ts`**:
+  - Todas las rutas `'/t/:slug...'` pasan a `'/:slug...'`. Nombres y `meta` sin cambios.
+  - `'/t/:slug/login'` desaparece; `tenant-login` es `{ path: '/:slug' }`.
+  - La redirección `'/t/:slug' → tenant-panel` (spec 007) desaparece; la sustituye la rama de
+    `beforeEach` descrita arriba.
+  - Redirecciones nuevas: `'/t/:slug/:resto(.*)*'` → `'/:slug/:resto'`, y `'/:slug/login'` →
+    `'/:slug'`.
+  - `beforeEach`: rama para `tenant-login` (fetchMe + redirección a `tenant-panel` si hay sesión).
+- **`stores/tenantAuth.ts`**: estado nuevo `tenantExiste` (`true` por defecto); `fetchMe` lo pone
+  en `false` cuando la respuesta es `404`.
+- **`views/tenant/LoginView.vue`**: `v-if="!auth.tenantExiste"` muestra el mensaje de RN-S7 en el
+  lugar del formulario (mismo layout, banner y logo).
+- **`App.vue`**: pantalla neutra con el logo hasta `router.isReady()`.
+- **`layouts/TenantLayout.vue`**: sin cambios (ya navega por nombre de ruta).
+
+### Fuera de alcance (de esta enmienda)
+
+- Renombrar o hacer editable el slug.
+- Un mensaje 404 general para rutas desconocidas fuera del patrón `/:slug` (p. ej.
+  `/admin/lo-que-sea`): sigue comportándose como hoy.
+- Cambios en la app de conductor.
+
+### Criterios de aceptación (de esta enmienda)
+
+1. Visitar `/{slug}` sin sesión muestra el formulario de login y la barra de direcciones sigue
+   diciendo `/{slug}`.
+2. Visitar `/{slug}` con sesión operativa termina en `/{slug}/panel`; con sesión no operativa, en
+   `/{slug}/panel/clientes`. En ninguno de los dos casos se alcanza a ver el formulario de login.
+3. Visitar `/{slug}/login`, `/t/{slug}` y `/t/{slug}/login` termina en `/{slug}`.
+4. Visitar `/t/{slug}/panel/clientes/5/direcciones` termina en `/{slug}/panel/clientes/5/direcciones`.
+5. Cerrar sesión desde el layout del tenant deja en `/{slug}`.
+6. `/admin`, `/admin/login`, `/admin/tenants`, `/` y `/about` se comportan exactamente igual que
+   antes.
+7. Visitar `/un-slug-que-no-existe` muestra "No encontramos ningún negocio en esta dirección" sin
+   formulario; la pestaña Red muestra un solo `GET /api/v1/t/un-slug-que-no-existe/me` con `404`.
+8. Crear un tenant con nombre comercial "Admin" produce slug `admin-2`; con "GPS", `gps-2`; con
+   "Assets", `assets-2`. Un segundo tenant "Admin" produce `admin-3`.
+9. Al crear un tenant con slug `cafe-luna`, el correo en Mailpit contiene
+   `http://localhost:5173/cafe-luna` como texto y como botón "Ir al panel", y la frase "el nombre
+   que va justo después del dominio".
+10. El correo de "olvidé mi contraseña" de un usuario de tenant enlaza a
+    `http://localhost:5173/{slug}/reset-password/{token}?email=...`, y ese enlace abre la pantalla
+    de restablecimiento.
+11. Mientras carga `/{slug}` (throttling de red en DevTools) se ve el logo centrado, no un fondo
+    blanco ni el formulario.
+12. `TenantTest`, `UsuarioTest` y Pint pasan; ESLint/Prettier sin errores.
+
+### Supuestos asumidos (continúa el registro de arriba)
+
+20. **Todas** las rutas de frontend del tenant pierden `/t/`, no solo el login.
+21. ~~`/{slug}` es una puerta que redirige a `/{slug}/login`.~~ **Ajustado al preguntar**:
+    `/{slug}` es la única entrada; sin sesión muestra el login ahí mismo y con sesión va al Panel.
+    `/{slug}/login` deja de existir como ruta propia.
+22. Cualquier lugar que "mande al login" manda a `/{slug}`.
+23. El admin central se queda en `/admin/...`, sin cambios.
+24. Las direcciones viejas `/t/{slug}/...` siguen funcionando y redirigen a su equivalente nuevo.
+25. Los correos de credenciales mandan `/{slug}`, y el texto que explicaba `/t/{slug}/` se
+    reescribe.
+26. Un slug no puede chocar con una ruta del sistema; si el nombre comercial lo produce, recibe
+    sufijo numérico automáticamente.
+27. Un slug inexistente muestra "negocio no encontrado" en `/{slug}`, sin ir al admin central ni a
+    una página en blanco. (Al verificar el código: hoy no existe ese mensaje —se muestra el login
+    y falla con "Correo o contraseña incorrectos"—, así que se agrega en esta enmienda.)
+28. `/` y `/about` no se tocan.
+29. Los tenants ya creados no cambian de slug.
+
+### Adiciones técnicas aceptadas
+
+1. Lista única de palabras reservadas en el backend (`SlugsReservados`), consultada por
+   `generarSlugUnico`; incluye las rutas que atiende nginx además de las de Vue.
+2. Pantalla neutra con el logo mientras se resuelve la sesión al entrar a `/{slug}`, en `App.vue`.

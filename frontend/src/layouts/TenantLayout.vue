@@ -74,25 +74,25 @@ defineExpose({
 
 const items = computed(() => {
   if (esDespachador.value) {
-    return esOperativo.value ? [{ label: 'Panel', to: `/t/${slug.value}/panel` }] : []
+    return esOperativo.value ? [{ label: 'Panel', to: `/${slug.value}/panel` }] : []
   }
 
   const lista: Array<{ label: string; to: string }> = []
 
   if (esOperativo.value) {
-    lista.push({ label: 'Panel', to: `/t/${slug.value}/panel` })
+    lista.push({ label: 'Panel', to: `/${slug.value}/panel` })
   }
 
   lista.push(
-    { label: 'Clientes', to: `/t/${slug.value}/panel/clientes` },
-    { label: 'Usuarios', to: `/t/${slug.value}/panel/usuarios` },
+    { label: 'Clientes', to: `/${slug.value}/panel/clientes` },
+    { label: 'Usuarios', to: `/${slug.value}/panel/usuarios` },
   )
 
   if (usaDespachadores.value) {
-    lista.push({ label: 'Despachadores', to: `/t/${slug.value}/panel/despachadores` })
+    lista.push({ label: 'Despachadores', to: `/${slug.value}/panel/despachadores` })
   }
 
-  lista.push({ label: 'Conductores', to: `/t/${slug.value}/panel/conductores` })
+  lista.push({ label: 'Conductores', to: `/${slug.value}/panel/conductores` })
 
   return lista
 })

@@ -92,132 +92,146 @@ const router = createRouter({
         ]
       : []),
     {
-      path: '/t/:slug/login',
+      // spec tenant/001 (enmienda "el slug va inmediatamente después del dominio", RN-S2): la raíz
+      // del tenant es su única entrada. Sin sesión pinta el login aquí mismo; con sesión, el
+      // `beforeEach` la manda al Panel. Conserva el nombre `tenant-login` para que todo lo que ya
+      // "manda al login" por nombre siga funcionando sin tocarlo.
+      path: '/:slug',
       name: 'tenant-login',
       component: () => import('../views/tenant/LoginView.vue'),
     },
     {
-      path: '/t/:slug/forgot-password',
+      // Compatibilidad con los correos ya enviados (RN-S3/RN-S4): `/t/{slug}/login` cae aquí
+      // después de la redirección de abajo, y `/{slug}/login` a secas también.
+      path: '/:slug/login',
+      redirect: (to) => ({ name: 'tenant-login', params: { slug: to.params.slug } }),
+    },
+    {
+      // Las URLs viejas `/t/{slug}[/...]` siguen funcionando: se les quita el `/t/` y se conserva
+      // el resto de la ruta (RN-S4). Se queda indefinidamente; los marcadores y correos no caducan.
+      path: '/t/:slug/:resto(.*)*',
+      redirect: (to) => {
+        const resto = to.params.resto
+        const cola = Array.isArray(resto) ? resto.join('/') : (resto ?? '')
+        return `/${to.params.slug as string}${cola ? `/${cola}` : ''}`
+      },
+    },
+    {
+      path: '/:slug/forgot-password',
       name: 'tenant-forgot-password',
       component: () => import('../views/tenant/ForgotPasswordView.vue'),
     },
     {
-      path: '/t/:slug/reset-password/:token',
+      path: '/:slug/reset-password/:token',
       name: 'tenant-reset-password',
       component: () => import('../views/tenant/ResetPasswordView.vue'),
     },
     {
-      // spec tenant/007 (RN-A2): "abrir mi sistema" a secas termina en el mapa. El guard de
-      // `tenant-panel` decide después si esa persona puede estar ahí (login o Clientes).
-      path: '/t/:slug',
-      redirect: { name: 'tenant-panel' },
-    },
-    {
-      path: '/t/:slug/panel',
+      path: '/:slug/panel',
       name: 'tenant-panel',
       component: () => import('../views/tenant/panel/PanelView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/usuarios',
+      path: '/:slug/panel/usuarios',
       name: 'tenant-usuarios-lista',
       component: () => import('../views/tenant/usuarios/ListaUsuariosView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/usuarios/crear',
+      path: '/:slug/panel/usuarios/crear',
       name: 'tenant-usuarios-crear',
       component: () => import('../views/tenant/usuarios/CrearUsuarioView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/usuarios/:id/editar',
+      path: '/:slug/panel/usuarios/:id/editar',
       name: 'tenant-usuarios-editar',
       component: () => import('../views/tenant/usuarios/EditarUsuarioView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/despachadores',
+      path: '/:slug/panel/despachadores',
       name: 'tenant-despachadores-lista',
       component: () => import('../views/tenant/despachadores/ListaDespachadoresView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/conductores',
+      path: '/:slug/panel/conductores',
       name: 'tenant-conductores-lista',
       component: () => import('../views/tenant/conductores/ListaConductoresView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/conductores/crear',
+      path: '/:slug/panel/conductores/crear',
       name: 'tenant-conductores-crear',
       component: () => import('../views/tenant/conductores/CrearConductorView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/conductores/:id/editar',
+      path: '/:slug/panel/conductores/:id/editar',
       name: 'tenant-conductores-editar',
       component: () => import('../views/tenant/conductores/EditarConductorView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/clientes',
+      path: '/:slug/panel/clientes',
       name: 'tenant-clientes-lista',
       component: () => import('../views/tenant/clientes/ListaClientesView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/clientes/crear',
+      path: '/:slug/panel/clientes/crear',
       name: 'tenant-clientes-crear',
       component: () => import('../views/tenant/clientes/CrearClienteView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/clientes/:id/editar',
+      path: '/:slug/panel/clientes/:id/editar',
       name: 'tenant-clientes-editar',
       component: () => import('../views/tenant/clientes/EditarClienteView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/clientes/:id/direcciones',
+      path: '/:slug/panel/clientes/:id/direcciones',
       name: 'tenant-direcciones-lista',
       component: () =>
         import('../views/tenant/clientes/direcciones/ListaDireccionesClienteView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/clientes/:id/direcciones/crear',
+      path: '/:slug/panel/clientes/:id/direcciones/crear',
       name: 'tenant-direcciones-crear',
       component: () => import('../views/tenant/clientes/direcciones/CrearDireccionClienteView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/clientes/:id/direcciones/:direccionId/editar',
+      path: '/:slug/panel/clientes/:id/direcciones/:direccionId/editar',
       name: 'tenant-direcciones-editar',
       component: () =>
         import('../views/tenant/clientes/direcciones/EditarDireccionClienteView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/configuracion',
+      path: '/:slug/panel/configuracion',
       name: 'tenant-configuracion',
       component: () => import('../views/tenant/configuracion/ConfiguracionView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/reportes/pagos-conductores',
+      path: '/:slug/panel/reportes/pagos-conductores',
       name: 'tenant-reporte-pagos-conductores',
       component: () => import('../views/tenant/reportes/PagosConductoresView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/comisiones',
+      path: '/:slug/panel/comisiones',
       name: 'tenant-comisiones',
       component: () => import('../views/tenant/comisiones/ComisionesView.vue'),
       meta: { requiresTenantAuth: true },
     },
     {
-      path: '/t/:slug/panel/cambiar-password',
+      path: '/:slug/panel/cambiar-password',
       name: 'tenant-cambiar-password',
       component: () => import('../views/tenant/cuenta/CambiarPasswordView.vue'),
       meta: { requiresTenantAuth: true },
@@ -234,6 +248,22 @@ router.beforeEach(async (to) => {
 
     if (!auth.isAuthenticated) {
       return { name: 'admin-login' }
+    }
+  }
+
+  // spec tenant/001 (enmienda "el slug va inmediatamente después del dominio", RN-S2): la raíz del
+  // tenant decide sola. Se resuelve la sesión antes de dejar pintar nada, así quien ya la tiene
+  // nunca ve el formulario "un instante" (RN-S8); el guard de `tenant-panel` decide después si es
+  // operativo o va a Clientes (spec 007, RN-A1). Antes esto era una redirección `/t/:slug` → Panel.
+  if (to.name === 'tenant-login') {
+    const slug = to.params.slug as string
+    const auth = useTenantAuthStore()
+    if (!auth.checked || auth.slug !== slug) {
+      await auth.fetchMe(slug)
+    }
+
+    if (auth.isAuthenticated) {
+      return { name: 'tenant-panel', params: { slug } }
     }
   }
 

@@ -376,6 +376,11 @@ Deja funcionando:
   `tenant-panel`. El guard ya existente hace el resto: sin sesión manda al login, y con sesión de un
   usuario no operativo manda a Clientes. Así "abrir mi sistema" (escribir la URL del tenant a secas,
   o un marcador viejo) termina en el mapa sin pasos intermedios.
+  > **Enmendado** (tenant/001, "el slug va inmediatamente después del dominio"): la raíz del tenant
+  > es `/:slug` y ya no redirige: es la propia ruta `tenant-login`. Sin sesión pinta el login ahí
+  > mismo; con sesión, el guard la manda a `tenant-panel`. El resultado para quien tiene sesión es
+  > el mismo (termina en el mapa o en Clientes); lo que cambia es que sin sesión la dirección no
+  > se mueve.
 - **Indicador de saldo de viajes del tenant sobre el mapa.** Componente nuevo
   `components/panel/SaldoViajesTenant.vue`, flotante sobre `MapaConductores`, siempre visible
   mientras el Panel esté abierto, con el saldo disponible del tenant como un solo número entero
@@ -435,8 +440,9 @@ actualizada. Clave: `'saldo-tenant'`.
 
 - **RN-A1:** El destino tras el login es `tenant-panel` si y solo si `auth.esOperativo`; en
   cualquier otro caso, `tenant-clientes-lista`.
-- **RN-A2:** `/t/:slug` redirige a `tenant-panel`; el guard existente decide después si esa persona
-  puede estar ahí.
+- **RN-A2:** ~~`/t/:slug` redirige a `tenant-panel`; el guard existente decide después si esa persona
+  puede estar ahí.~~ **Enmendado:** `/:slug` es la ruta `tenant-login`; con sesión, el guard la
+  redirige a `tenant-panel` y ahí decide si esa persona puede estar (RN-S2 de tenant/001).
 - **RN-A3:** El indicador muestra el saldo disponible del tenant (definición en spec 015
   §Corrección) como entero, en singular/plural correcto ("1 viaje", "2 viajes").
 - **RN-A4:** Con saldo `<= 0` el indicador toma la variante de alerta; nunca bloquea ni deshabilita
@@ -450,8 +456,11 @@ actualizada. Clave: `'saldo-tenant'`.
 - **`stores/tenantAuth.ts`**: getter nuevo `esOperativo` con la regla de 011.
 - **`views/tenant/LoginView.vue`**: `const destino = auth.esOperativo ? 'tenant-panel' :
   'tenant-clientes-lista'`.
-- **`router/index.ts`**: ruta nueva `{ path: '/t/:slug', redirect: { name: 'tenant-panel' } }`
-  (antes de las rutas hijas); el `beforeEach` sustituye su cálculo local por `auth.esOperativo`.
+- **`router/index.ts`**: ~~ruta nueva `{ path: '/t/:slug', redirect: { name: 'tenant-panel' } }`
+  (antes de las rutas hijas)~~ **Enmendado:** esa redirección desaparece; `/:slug` es
+  `tenant-login` y la rama de `beforeEach` para esa ruta hace la redirección a `tenant-panel` cuando
+  hay sesión (tenant/001, enmienda). El `beforeEach` sustituye su cálculo local por
+  `auth.esOperativo`.
 - **`layouts/TenantLayout.vue`**: `esOperativo` deja de calcularse ahí y pasa a leer el getter.
 - **`components/panel/SaldoViajesTenant.vue`** (nuevo): lee `panel.saldoViajesTenant` y
   `panel.estaResaltado('saldo-tenant')`; sin props ni eventos.
@@ -470,8 +479,8 @@ actualizada. Clave: `'saldo-tenant'`.
    `/t/{slug}/panel`.
 2. Login como `AdminCliente` en un tenant con `usar_despachadores = Sí` sigue aterrizando en
    Clientes; login como `Despachador` en ese mismo tenant aterriza en el Panel.
-3. Visitar `/t/{slug}` sin sesión lleva al login; con sesión operativa, al Panel; con sesión no
-   operativa, a Clientes.
+3. Visitar `/{slug}` (antes `/t/{slug}`) sin sesión muestra el login en esa misma dirección; con
+   sesión operativa, al Panel; con sesión no operativa, a Clientes.
 4. En el Panel se ve una píldora centrada sobre el mapa con "Saldo: N viajes", visible para
    `AdminCliente` y `Despachador`, en Prepago y en Comisión.
 5. Con saldo `0` la píldora muestra "Sin viajes disponibles" en variante de alerta; con saldo
@@ -481,8 +490,8 @@ actualizada. Clave: `'saldo-tenant'`.
 
 ### Supuestos asumidos (continúa el registro de arriba)
 
-21. "Vista principal al abrir mi sistema" = destino del login **y** de la raíz `/t/{slug}`. No se
-    recuerda la última página visitada.
+21. "Vista principal al abrir mi sistema" = destino del login **y** de la raíz del tenant
+    (`/t/{slug}`, enmendado a `/{slug}` en tenant/001). No se recuerda la última página visitada.
 22. ~~Todos los roles entran al Panel al iniciar sesión.~~ **Ajustado al preguntar**: solo el
     operativo de 011; el `AdminCliente` de un tenant con despachadores no cambia.
 23. El saldo mostrado es un solo número (disponible), no el desglose por paquete comprado.

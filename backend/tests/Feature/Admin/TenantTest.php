@@ -148,17 +148,43 @@ it('creates a tenant, provisions its database, logs the action, and creates the 
     Notification::assertSentOnDemand(
         CredencialesAdminCliente::class,
         function (CredencialesAdminCliente $notification, $channels, $notifiable) use ($tenant) {
-            $url = "http://localhost:5173/t/{$tenant->slug}/login";
+            // Sin `/t/` ni `/login`: la entrada del tenant es su raíz (spec tenant/001, enmienda
+            // "el slug va inmediatamente después del dominio", RN-S6).
+            $url = "http://localhost:5173/{$tenant->slug}";
             $correo = $notification->toMail($notifiable);
             $html = $correo->render()->toHtml();
 
             return $correo->actionUrl === $url
                 && str_contains($html, $url)
                 && str_contains($html, 'Tu dirección de acceso es')
+                && str_contains($html, 'el nombre que va justo después del dominio')
                 && str_contains($html, 'contacto@cafeluna.com')
                 && strpos($html, 'Tu dirección de acceso es') < strpos($html, 'contacto@cafeluna.com');
         },
     );
+});
+
+// spec tenant/001, enmienda "el slug va inmediatamente después del dominio" (RN-S5): un nombre
+// comercial que produce una palabra reservada recibe sufijo, igual que un slug ya ocupado.
+it('never assigns a reserved word as slug', function () {
+    Notification::fake();
+    $admin = makeTenantAdmin();
+
+    $crear = fn (string $nombre, string $email) => $this->actingAs($admin, 'admin')
+        ->postJson('/api/v1/admin/tenants', [
+            'nombre_comercial' => $nombre,
+            'razon_social' => "{$nombre} SA de CV",
+            'email' => $email,
+            'nombre' => 'Laura',
+            'apellido_paterno' => 'Torres',
+        ])
+        ->assertCreated()
+        ->json('slug');
+
+    expect($crear('Admin', 'uno@example.com'))->toBe('admin-2');
+    expect($crear('Admin', 'dos@example.com'))->toBe('admin-3');
+    expect($crear('GPS', 'tres@example.com'))->toBe('gps-2');
+    expect($crear('Assets', 'cuatro@example.com'))->toBe('assets-2');
 });
 
 it('throttles tenant creation after 20 attempts per minute', function () {

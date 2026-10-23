@@ -9,6 +9,7 @@ use App\Http\Resources\Admin\TenantResource;
 use App\Jobs\CrearAdminClienteInicial;
 use App\Models\LogCentral;
 use App\Models\Tenant;
+use App\Support\SlugsReservados;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -186,7 +187,9 @@ class TenantController extends Controller
         $slug = $base;
         $suffix = 2;
 
-        while (Tenant::where('slug', $slug)->exists()) {
+        // Un slug reservado se trata como uno ocupado (spec tenant/001, enmienda "el slug va
+        // inmediatamente después del dominio", RN-S5): "Admin" produce `admin-2`.
+        while (SlugsReservados::esReservado($slug) || Tenant::where('slug', $slug)->exists()) {
             $slug = "{$base}-{$suffix}";
             $suffix++;
         }

@@ -37,7 +37,7 @@ class CredencialesAdminCliente extends Notification
             ->subject("Acceso a tu panel de {$this->nombreComercial}")
             ->greeting("¡Bienvenido, {$this->nombreComercial}!")
             ->line("Tu dirección de acceso es: {$url}")
-            ->line("Esa dirección es exclusiva de {$this->nombreComercial}: la parte `/t/{$this->slug}/` identifica a tu negocio. Úsala siempre para entrar y compártela con tus despachadores y conductores; es la misma para todo tu equipo.")
+            ->line("Esa dirección es exclusiva de {$this->nombreComercial}: el nombre que va justo después del dominio (`/{$this->slug}`) identifica a tu negocio. Úsala siempre para entrar y compártela con tus despachadores y conductores; es la misma para todo tu equipo.")
             ->line('Dentro de esa dirección, tu usuario administrador entra con estas credenciales:')
             ->line("Correo: {$this->email}")
             // La contraseña va dentro de un code span de Markdown: las líneas de un

@@ -167,13 +167,15 @@ le agrega una explicación breve.
 
 Deja funcionando:
 
-- La URL completa del panel del tenant (`{FRONTEND_URL}/t/{slug}/login`) en el correo de
-  bienvenida, **dos veces**: como texto visible (para copiarla o guardarla) y como botón "Ir al
-  panel" (para abrirla de un clic).
+- La URL completa del panel del tenant (`{FRONTEND_URL}/t/{slug}/login`; **enmendado** a
+  `{FRONTEND_URL}/{slug}` en tenant/001, "el slug va inmediatamente después del dominio") en el
+  correo de bienvenida, **dos veces**: como texto visible (para copiarla o guardarla) y como botón
+  "Ir al panel" (para abrirla de un clic).
 - Una explicación breve, en lenguaje llano y **antes** de las credenciales: esa dirección es
-  exclusiva del negocio (la parte `/t/{slug}/` lo identifica), es la que debe usar siempre para
-  entrar y la que debe compartir con sus despachadores y conductores; las credenciales del correo
-  son las de su usuario administrador dentro de esa dirección.
+  exclusiva del negocio (~~la parte `/t/{slug}/` lo identifica~~ **enmendado:** el nombre que va
+  justo después del dominio, `/{slug}`, lo identifica), es la que debe usar siempre para entrar y
+  la que debe compartir con sus despachadores y conductores; las credenciales del correo son las de
+  su usuario administrador dentro de esa dirección.
 - Un solo lugar que arma la URL, compartido por los dos correos de credenciales.
 
 **No incluye:**
@@ -205,8 +207,9 @@ Deja funcionando:
 
 ### Reglas de negocio (de esta enmienda)
 
-- **RN-E1** La URL del correo es exactamente `{FRONTEND_URL}/t/{slug}/login`, con el slug del
-  tenant recién creado y sin barra final duplicada.
+- **RN-E1** La URL del correo es exactamente ~~`{FRONTEND_URL}/t/{slug}/login`~~
+  `{FRONTEND_URL}/{slug}` (enmendado en tenant/001), con el slug del tenant recién creado y sin
+  barra final duplicada.
 - **RN-E2** La URL aparece como texto visible y como botón; ambas idénticas.
 - **RN-E3** La explicación precede a las credenciales; las credenciales no cambian.
 - **RN-E4** Solo afecta a altas nuevas; no hay reenvío.
@@ -222,7 +225,8 @@ Deja funcionando:
 - **`App\Jobs\CrearAdminClienteInicial`**: pasa `$this->tenant->slug` a la notificación.
 - **`tests/Feature/Admin/TenantTest.php`**: en la prueba de alta, además de
   `assertSentOnDemand`, renderiza la notificación capturada y afirma que contiene
-  `http://localhost:5173/t/{slug}/login` y "Tu dirección de acceso".
+  ~~`http://localhost:5173/t/{slug}/login`~~ `http://localhost:5173/{slug}` (enmendado) y "Tu
+  dirección de acceso".
 
 ### Frontend (Vue 3)
 
@@ -231,7 +235,8 @@ Ninguno.
 ### Criterios de aceptación (de esta enmienda)
 
 1. Al crear un tenant con slug `cafe-luna`, el correo recibido en Mailpit contiene el texto
-   `http://localhost:5173/t/cafe-luna/login` y un botón "Ir al panel" que abre esa misma URL.
+   ~~`http://localhost:5173/t/cafe-luna/login`~~ `http://localhost:5173/cafe-luna` (enmendado) y un
+   botón "Ir al panel" que abre esa misma URL.
 2. El correo explica, antes de las credenciales, que esa dirección es la del negocio y la que debe
    compartir con su equipo.
 3. Correo y contraseña siguen apareciendo igual que antes; la contraseña recibida sigue
@@ -244,10 +249,12 @@ Ninguno.
 ### Supuestos asumidos (continúa el registro de arriba)
 
 12. La ruta se construye con el mismo patrón que ya usa el correo de usuarios del tenant:
-    `{FRONTEND_URL}/t/{slug}/login`. No se captura ni configura nada nuevo por tenant.
+    `{FRONTEND_URL}/t/{slug}/login` (enmendado a `{FRONTEND_URL}/{slug}` en tenant/001). No se
+    captura ni configura nada nuevo por tenant.
 13. La ruta aparece dos veces: como texto completo visible y como botón "Ir al panel".
-14. La explicación dice que la dirección es exclusiva del negocio (la parte `/t/{slug}/` lo
-    identifica), que es la que debe usar siempre para entrar y compartir con sus despachadores y
+14. La explicación dice que la dirección es exclusiva del negocio (~~la parte `/t/{slug}/` lo
+    identifica~~ enmendado: el nombre justo después del dominio lo identifica), que es la que debe
+    usar siempre para entrar y compartir con sus despachadores y
     conductores, y que las credenciales del correo son las de su usuario administrador ahí.
 15. La explicación va antes de las credenciales; las credenciales se mantienen exactamente igual.
 16. El resto del correo no cambia: asunto, saludo con el nombre comercial, remitente/SMTP.

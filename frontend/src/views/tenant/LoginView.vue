@@ -47,49 +47,61 @@ async function onSubmit() {
           <span class="text-lg font-bold text-heading">inDriver</span>
         </div>
 
-        <h1 class="text-2xl font-semibold text-heading">Bienvenido de nuevo</h1>
-        <p class="mt-1 text-sm text-gray-500">Ingresa tus datos para continuar.</p>
+        <!-- spec tenant/001 (enmienda "el slug va inmediatamente después del dominio", RN-S7):
+             un slug que no es de ningún tenant no muestra el formulario; el guard ya consultó
+             `/me` y el store guardó el 404. -->
+        <template v-if="!auth.tenantExiste">
+          <h1 class="text-2xl font-semibold text-heading">
+            No encontramos ningún negocio en esta dirección
+          </h1>
+          <p class="mt-1 text-sm text-gray-500">Revisa el enlace que te compartieron.</p>
+        </template>
 
-        <form class="mt-8 space-y-5" @submit.prevent="onSubmit">
-          <label class="block">
-            <span class="mb-1 block text-sm font-medium text-heading">Correo electrónico</span>
-            <input
-              v-model="email"
-              type="email"
-              required
-              autocomplete="email"
-              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-            />
-          </label>
+        <template v-else>
+          <h1 class="text-2xl font-semibold text-heading">Bienvenido de nuevo</h1>
+          <p class="mt-1 text-sm text-gray-500">Ingresa tus datos para continuar.</p>
 
-          <label class="block">
-            <span class="mb-1 block text-sm font-medium text-heading">Contraseña</span>
-            <input
-              v-model="password"
-              type="password"
-              required
-              autocomplete="current-password"
-              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-            />
-          </label>
+          <form class="mt-8 space-y-5" @submit.prevent="onSubmit">
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-heading">Correo electrónico</span>
+              <input
+                v-model="email"
+                type="email"
+                required
+                autocomplete="email"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              />
+            </label>
 
-          <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
+            <label class="block">
+              <span class="mb-1 block text-sm font-medium text-heading">Contraseña</span>
+              <input
+                v-model="password"
+                type="password"
+                required
+                autocomplete="current-password"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              />
+            </label>
 
-          <button
-            type="submit"
-            :disabled="loading"
-            class="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Iniciar sesión
-          </button>
+            <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
 
-          <RouterLink
-            :to="{ name: 'tenant-forgot-password', params: { slug } }"
-            class="block text-center text-sm text-accent hover:underline"
-          >
-            ¿Olvidaste tu contraseña?
-          </RouterLink>
-        </form>
+            <button
+              type="submit"
+              :disabled="loading"
+              class="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-heading disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Iniciar sesión
+            </button>
+
+            <RouterLink
+              :to="{ name: 'tenant-forgot-password', params: { slug } }"
+              class="block text-center text-sm text-accent hover:underline"
+            >
+              ¿Olvidaste tu contraseña?
+            </RouterLink>
+          </form>
+        </template>
       </div>
     </div>
   </main>

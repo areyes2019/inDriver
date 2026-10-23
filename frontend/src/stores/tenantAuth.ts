@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { isAxiosError } from 'axios'
 import http, { ensureCsrfCookie } from '@/lib/http'
 
 export interface CiudadAsignada {
@@ -44,6 +45,11 @@ export const useTenantAuthStore = defineStore('tenantAuth', () => {
   const usuario = ref<UsuarioTenant | null>(null)
   const checked = ref(false)
   const slug = ref('')
+  // Si el slug de la URL corresponde a un tenant real. Con el slug pegado al dominio cualquier
+  // URL mal escrita cae en la entrada del tenant, así que "negocio inexistente" y "sin sesión"
+  // dejan de verse iguales (spec tenant/001, enmienda "el slug va inmediatamente después del
+  // dominio", RN-S7). Lo distingue el 404 de `IdentificarTenantPorSlug`.
+  const tenantExiste = ref(true)
 
   const isAuthenticated = computed(() => usuario.value !== null)
 
@@ -63,12 +69,16 @@ export const useTenantAuthStore = defineStore('tenantAuth', () => {
 
   async function fetchMe(currentSlug: string): Promise<boolean> {
     slug.value = currentSlug
+    tenantExiste.value = true
     try {
       const { data } = await http.get<UsuarioTenant>(`/t/${currentSlug}/me`)
       usuario.value = data
       return true
-    } catch {
+    } catch (e) {
       usuario.value = null
+      if (isAxiosError(e) && e.response?.status === 404) {
+        tenantExiste.value = false
+      }
       return false
     } finally {
       checked.value = true
@@ -112,6 +122,7 @@ export const useTenantAuthStore = defineStore('tenantAuth', () => {
     usuario,
     checked,
     slug,
+    tenantExiste,
     isAuthenticated,
     esOperativo,
     fetchMe,
