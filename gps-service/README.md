@@ -96,7 +96,7 @@ scp ../deploy/vps/gps-service.service ../deploy/vps/gps-buzon.service do-vps:/et
 ssh do-vps 'systemctl daemon-reload && systemctl enable --now gps-service gps-buzon'
 
 # 5. Comprobar
-curl -fsS https://delivery.prosello.com.mx/gps-health
+curl -fsS https://prosello.com.mx/gps-health
 journalctl -u gps-service -f
 ```
 

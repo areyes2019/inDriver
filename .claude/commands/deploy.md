@@ -1,5 +1,5 @@
 ---
-description: Despliega a produccion (delivery.prosello.com.mx) lo que haya cambiado desde el ultimo despliegue
+description: Despliega a produccion (prosello.com.mx) lo que haya cambiado desde el ultimo despliegue
 argument-hint: "[backend | frontend | todo]  (por defecto: detectar solo)"
 ---
 
