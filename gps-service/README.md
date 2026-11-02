@@ -78,11 +78,11 @@ desarrollo y para levantar la prueba de carga en una máquina limpia.
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o gps-service ./cmd/servidor
 
 # 2. Subir el binario
-scp gps-service root@prosello-vps:/usr/local/bin/gps-service
-ssh root@prosello-vps 'chmod 755 /usr/local/bin/gps-service'
+scp gps-service do-vps:/usr/local/bin/gps-service
+ssh do-vps 'chmod 755 /usr/local/bin/gps-service'
 
 # 3. Entorno (una sola vez; contiene el secreto, por eso 600)
-ssh root@prosello-vps 'cat > /etc/gps-service.env <<EOF
+ssh do-vps 'cat > /etc/gps-service.env <<EOF
 GPS_LISTEN=127.0.0.1:8081
 GPS_TOKEN_SECRET=...
 GPS_SERVICE_TOKEN=...
@@ -92,8 +92,8 @@ EOF
 chmod 600 /etc/gps-service.env'
 
 # 4. Unidades de systemd (el servicio y el worker del buzón)
-scp ../deploy/vps/gps-service.service ../deploy/vps/gps-buzon.service root@prosello-vps:/etc/systemd/system/
-ssh root@prosello-vps 'systemctl daemon-reload && systemctl enable --now gps-service gps-buzon'
+scp ../deploy/vps/gps-service.service ../deploy/vps/gps-buzon.service do-vps:/etc/systemd/system/
+ssh do-vps 'systemctl daemon-reload && systemctl enable --now gps-service gps-buzon'
 
 # 5. Comprobar
 curl -fsS https://delivery.prosello.com.mx/gps-health

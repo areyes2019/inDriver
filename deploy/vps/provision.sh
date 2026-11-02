@@ -8,7 +8,7 @@
 #
 #     bash deploy/vps/provision.sh
 #
-# Requiere el alias SSH "prosello-vps" ya configurado en ~/.ssh/config, con
+# Requiere el alias SSH "do-vps" (droplet de DigitalOcean) ya configurado en ~/.ssh/config, con
 # acceso root (ver plan de migración).
 #
 # Qué hace, en orden:
@@ -28,7 +28,7 @@
 
 set -euo pipefail
 
-SSH_ALIAS="prosello-vps"
+SSH_ALIAS="${SSH_ALIAS:-do-vps}"
 APP_DIR="/var/www/delivery.prosello.com.mx"
 DB_NAME="delivery_central"
 DB_USER="delivery_app"

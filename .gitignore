@@ -1,3 +1,10 @@
 # Configuración real del despliegue: tiene la ruta de la cuenta de Hostinger.
 # La plantilla pública equivalente es deploy/config.example.sh.
 /deploy/config.sh
+
+# Llaves SSH: nunca en el repo, viven en ~/.ssh.
+*.pub
+*.pem
+*.key
+id_rsa*
+id_ed25519*

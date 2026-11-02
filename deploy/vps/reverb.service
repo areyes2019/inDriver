@@ -1,0 +1,29 @@
+[Unit]
+Description=Reverb (WebSockets del Panel y la App)
+Documentation=file:///var/www/delivery.prosello.com.mx/specs/tenant/018-protocolo-comunicacion-tiempo-real.md
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/delivery.prosello.com.mx/backend
+# Escucha solo en localhost: al exterior se llega por el location /app/ de nginx
+# (deploy/vps/nginx-delivery.prosello.com.mx.conf), con el certificado del dominio.
+ExecStart=/usr/bin/php artisan reverb:start --host=127.0.0.1 --port=8080
+KillSignal=SIGTERM
+TimeoutStopSec=20
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=reverb
+
+# Primera instalación: `systemctl enable --now reverb`. Con `enable` a secas
+# queda listo para el próximo reinicio pero NO arranca (spec tenant/018, punto 23).
+
+[Install]
+WantedBy=multi-user.target
