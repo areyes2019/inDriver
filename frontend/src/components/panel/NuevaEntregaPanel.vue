@@ -316,34 +316,36 @@ async function onSubmit() {
         </label>
       </div>
 
-      <label class="block">
-        <span class="mb-1 block text-sm font-medium text-heading">Dirección de recogida</span>
-        <UiAddressAutocomplete
-          v-model="form.direccion_recogida"
-          required
-          mostrar-indicador
-          :resuelta="recogidaResuelta"
-          :bounds="coberturaBounds"
-          @select="onSeleccionaRecogida"
-        />
-        <span v-if="fieldErrors.direccion_recogida" class="mt-1 block text-sm text-red-600">
-          {{ fieldErrors.direccion_recogida }}
-        </span>
-      </label>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <label class="block">
+          <span class="mb-1 block text-sm font-medium text-heading">📍 Dirección de recogida</span>
+          <UiAddressAutocomplete
+            v-model="form.direccion_recogida"
+            required
+            mostrar-indicador
+            :resuelta="recogidaResuelta"
+            :bounds="coberturaBounds"
+            @select="onSeleccionaRecogida"
+          />
+          <span v-if="fieldErrors.direccion_recogida" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.direccion_recogida }}
+          </span>
+        </label>
 
-      <label class="block">
-        <span class="mb-1 block text-sm font-medium text-heading">Dirección de entrega</span>
-        <UiAddressAutocomplete
-          v-model="form.direccion_entrega"
-          required
-          mostrar-indicador
-          :bounds="coberturaBounds"
-          @select="onSeleccionaEntrega"
-        />
-        <span v-if="fieldErrors.direccion_entrega" class="mt-1 block text-sm text-red-600">
-          {{ fieldErrors.direccion_entrega }}
-        </span>
-      </label>
+        <label class="block">
+          <span class="mb-1 block text-sm font-medium text-heading">🏁 Dirección de entrega</span>
+          <UiAddressAutocomplete
+            v-model="form.direccion_entrega"
+            required
+            mostrar-indicador
+            :bounds="coberturaBounds"
+            @select="onSeleccionaEntrega"
+          />
+          <span v-if="fieldErrors.direccion_entrega" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.direccion_entrega }}
+          </span>
+        </label>
+      </div>
 
       <UiVistaPreviaRuta :origen="recogidaCoord" :destino="entregaCoord" @distancia="onDistancia" />
 
