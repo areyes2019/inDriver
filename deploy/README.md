@@ -94,13 +94,14 @@ configuración cacheada es la causa habitual de "cambié el `.env` y no pasó na
 
 ## Tarea programada
 
-**Obligatoria.** `routes/console.php` ya declara cuatro tareas y sin el cron ninguna corre:
+**Obligatoria.** `routes/console.php` ya declara cinco tareas y sin el cron ninguna corre:
 
 | Tarea | Cada | Si no corre |
 | --- | --- | --- |
 | `conductor:apagar-inactivos` | minuto | Un conductor que cerró la app sigue "en línea" para siempre y se le siguen ofreciendo envíos (spec `tenant/019`, RN-04) |
 | `pedidos:publicar-agendados` | minuto | Un envío agendado nunca se le ofrece a nadie (spec `tenant/024`, RN-02) |
 | `queue:work --max-time=55` | minuto | Las ofertas no expiran ni se reofertan y el aviso de "sin confirmar" no sale (spec `tenant/024`, RN-06) |
+| `simulacion:avanzar` | minuto | Los envíos de prueba (modo TEST) no se mueven en el mapa y se quedan clavados en `TOMADO` o `EN_CAMINO`, porque nadie dispara los hitos de llegada (spec `tenant/025`, RN-07) |
 | `conductor:purgar-posiciones-antiguas` | día | Las posiciones históricas crecen sin tope (spec `tenant/021`, RN-08) |
 
 A diferencia del hosting compartido de antes, aquí sí hay `crontab` real. Como `root` (o el usuario
@@ -110,7 +111,10 @@ que corra PHP-FPM), `crontab -e` y una sola línea:
 * * * * * php8.3 /var/www/<dominio>/backend/artisan schedule:run >> /dev/null 2>&1
 ```
 
-Esa única línea dispara las cuatro: `schedule:run` decide cuáles tocan en ese minuto.
+Esa única línea dispara las cinco: `schedule:run` decide cuáles tocan en ese minuto.
+
+**Al cambiar de servidor, el crontab no viaja con el código**: hay que volver a agregar esta línea
+en la máquina nueva. Se comprueba con `crontab -l`.
 
 ### Por qué el worker de colas vive dentro del `schedule`
 
