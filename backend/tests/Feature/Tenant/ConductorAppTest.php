@@ -5,10 +5,12 @@ use App\Events\Tenant\PedidoDisponible;
 use App\Events\Tenant\PedidoEntregado;
 use App\Events\Tenant\PedidoYaTomado;
 use App\Models\Tenant;
+use App\Models\Tenant\ComisionConductor;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConductorPosicion;
 use App\Models\Tenant\ConfiguracionTenant;
+use App\Models\Tenant\LiquidacionComision;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\PedidoOferta;
 use App\Models\Tenant\Usuario;
@@ -563,4 +565,97 @@ it('returns a null balance for Comision modalidad', function () {
         ->getJson('/api/v1/t/cafe-luna/conductor/saldo-viajes')
         ->assertOk()
         ->assertJsonPath('saldo', null);
+});
+
+it('builds the Comision wallet from real commissions and payouts, respecting the period', function () {
+    $tenant = conductorAppTenant();
+    conductorAppConfigurar($tenant);
+    $datos = conductorAppCrear($tenant);
+    $otro = conductorAppCrear($tenant, ['email' => 'otro@cafeluna.com']);
+    $token = conductorAppToken('beto@cafeluna.com', 'Password123!');
+    $idConductor = $datos['conductor']->id_conductor;
+
+    $reciente = conductorAppPedidoPublicado($tenant, ['numero_pedido' => 'PED-1', 'id_conductor' => $idConductor]);
+    $viejo = conductorAppPedidoPublicado($tenant, ['numero_pedido' => 'PED-2', 'id_conductor' => $idConductor]);
+    $ajeno = conductorAppPedidoPublicado($tenant, ['numero_pedido' => 'PED-3', 'id_conductor' => $otro['conductor']->id_conductor]);
+
+    tenancy()->initialize($tenant);
+    ConfiguracionTenant::establecer(ConfiguracionTenant::MODALIDAD, 'Comision');
+    $comision = fn (Pedido $p, float $monto) => ComisionConductor::create([
+        'id_pedido' => $p->id_pedido,
+        'id_conductor' => $p->id_conductor,
+        'importe_envio' => 100,
+        'porcentaje_aplicado' => 10,
+        'importe_comision' => $monto,
+        'estado' => ComisionConductor::ESTADO_PENDIENTE,
+    ]);
+    $comision($reciente, 30);
+    $comision($viejo, 20);
+    $comision($ajeno, 99);
+    ComisionConductor::where('id_pedido', $viejo->id_pedido)->update(['created_at' => now()->subDays(10)]);
+    LiquidacionComision::create([
+        'id_conductor' => $idConductor,
+        'id_usuario' => $datos['usuario']->id_usuario,
+        'monto' => 5,
+    ]);
+    tenancy()->end();
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->getJson('/api/v1/t/cafe-luna/conductor/monedero?desde='.urlencode(now()->subDay()->toIso8601String()))
+        ->assertOk()
+        ->assertJsonPath('modalidad', 'Comision')
+        ->assertJsonPath('entradas', 30)
+        ->assertJsonPath('salidas', 5)
+        // Pendiente histórico: incluye la comisión fuera del periodo, igual que el Panel.
+        ->assertJsonPath('balance', 45)
+        ->assertJsonPath('viajes_prepagados', null)
+        ->assertJsonCount(2, 'movimientos');
+});
+
+it('builds the Prepago wallet from delivered orders and trip purchases', function () {
+    $tenant = conductorAppTenant();
+    conductorAppConfigurar($tenant);
+    $datos = conductorAppCrear($tenant);
+    $token = conductorAppToken('beto@cafeluna.com', 'Password123!');
+    $idConductor = $datos['conductor']->id_conductor;
+
+    conductorAppPedidoPublicado($tenant, [
+        'numero_pedido' => 'PED-1',
+        'id_conductor' => $idConductor,
+        'estado' => 'ENTREGADO',
+        'fecha_entrega' => now(),
+        'importe_envio' => 80,
+    ]);
+    conductorAppPedidoPublicado($tenant, ['numero_pedido' => 'PED-2', 'id_conductor' => $idConductor, 'estado' => 'CANCELADO']);
+
+    tenancy()->initialize($tenant);
+    VentaViajeConductor::create([
+        'id_conductor' => $idConductor,
+        'cantidad_viajes' => 3,
+        'monto_pagado' => 150,
+        'id_usuario' => $datos['usuario']->id_usuario,
+        'fecha_venta' => now(),
+    ]);
+    tenancy()->end();
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->getJson('/api/v1/t/cafe-luna/conductor/monedero?desde='.urlencode(now()->subDay()->toIso8601String()))
+        ->assertOk()
+        ->assertJsonPath('modalidad', 'Prepago')
+        ->assertJsonPath('entradas', 80)
+        ->assertJsonPath('salidas', 150)
+        ->assertJsonPath('balance', -70)
+        ->assertJsonPath('viajes_prepagados', 3)
+        ->assertJsonCount(2, 'movimientos');
+});
+
+it('requires a start date for the wallet', function () {
+    $tenant = conductorAppTenant();
+    conductorAppConfigurar($tenant);
+    conductorAppCrear($tenant);
+    $token = conductorAppToken('beto@cafeluna.com', 'Password123!');
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->getJson('/api/v1/t/cafe-luna/conductor/monedero')
+        ->assertUnprocessable();
 });

@@ -8,6 +8,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Tenant\VentaViajeConductorController;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\MovimientoSaldo;
+use App\Support\MonederoConductor;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -40,6 +42,20 @@ class SaldoController extends Controller
         $conductor = $request->user('conductor-token')->conductor;
 
         return response()->json(['saldo' => (float) $conductor->saldo]);
+    }
+
+    /**
+     * Monedero de la app. `desde` lo manda la app porque "hoy" o "esta semana" dependen de la hora
+     * local del teléfono, y el servidor corre en UTC.
+     */
+    public function monedero(Request $request): JsonResponse
+    {
+        $datos = $request->validate(['desde' => ['required', 'date']]);
+
+        return response()->json(MonederoConductor::desde(
+            $request->user('conductor-token')->conductor,
+            Carbon::parse($datos['desde'])->utc(),
+        ));
     }
 
     public function movimientos(Request $request): JsonResponse

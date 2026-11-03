@@ -189,6 +189,7 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
         Route::get('/saldo-viajes', [ConductorSaldoController::class, 'show']);
         Route::get('/saldo', [ConductorSaldoController::class, 'dinero']);
         Route::get('/movimientos-saldo', [ConductorSaldoController::class, 'movimientos']);
+        Route::get('/monedero', [ConductorSaldoController::class, 'monedero']);
 
         // Registro del token de push (FCM, spec tenant/018) y endpoint de sincronización al
         // reconectar (RN-02/RN-07): junta pedido activo + pool + saldo en una sola respuesta.
