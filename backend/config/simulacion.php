@@ -9,7 +9,7 @@ return [
     | Simulación de envíos TEST (spec tenant/025)
     |--------------------------------------------------------------------------
     |
-    | RN-09 fija 70 km/h como la velocidad "realista" del modo TEST, y ese sigue siendo el valor
+    | RN-09 fija 120 km/h como la velocidad "realista" del modo TEST, y ese sigue siendo el valor
     | por omisión. Se hace configurable solo para desarrollo: esperar en tiempo real a que un móvil
     | recorra 8 km vuelve impracticable probar el flujo completo varias veces seguidas.
     |
@@ -19,7 +19,7 @@ return [
     |
     */
 
-    'velocidad_kmh' => env('SIMULACION_VELOCIDAD_KMH', 70),
+    'velocidad_kmh' => env('SIMULACION_VELOCIDAD_KMH', 120),
 
     'paso_segundos' => env('SIMULACION_PASO_SEGUNDOS', 2),
 

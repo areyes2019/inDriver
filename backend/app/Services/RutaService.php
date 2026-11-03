@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
  *
  * Devuelve la polilínea ya decodificada y con la **distancia acumulada** en cada vértice
  * (`{lat, lng, m}`). Ese acumulado es lo que permite a `SimulacionEnvioService` interpolar la
- * posición por metros y sostener 70 km/h de verdad, independientemente de qué tan larga sea la
+ * posición por metros y sostener 120 km/h de verdad, independientemente de qué tan larga sea la
  * ruta. El simulador anterior muestreaba a 40 puntos fijos y por eso un viaje de 1 km y uno de
  * 15 km tardaban lo mismo.
  *
