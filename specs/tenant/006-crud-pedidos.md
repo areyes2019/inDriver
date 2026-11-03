@@ -70,11 +70,14 @@ Deja funcionando:
   del formulario. `Escape` con el foco dentro del formulario lo cierra y devuelve el foco al botón.
 - El formulario, en este orden, incluye:
   1. **Cliente frecuente** (select, opcional): lista los clientes activos del tenant. Elegir uno
-     autocompleta nombre y teléfono del solicitante y, si ese cliente tiene una única dirección
-     guardada, también la dirección de recogida (ver "Selección de cliente frecuente" en Decisión
-     técnica). Los campos autocompletados siguen siendo editables.
-  2. **Nombre del solicitante** y **teléfono del solicitante**, en una misma fila (dos columnas en
-     escritorio, una columna en pantallas angostas).
+     autocompleta la dirección de recogida si ese cliente tiene una única dirección guardada (ver
+     "Selección de cliente frecuente" en Decisión técnica). La dirección autocompletada sigue siendo
+     editable.
+  2. **Nombre de quien recibe** y **teléfono de quien recibe**, en una misma fila (dos columnas en
+     escritorio, una columna en pantallas angostas). Se guardan en `nombre_solicitante` /
+     `telefono_solicitante`, pero son los datos del receptor: es lo que el repartidor necesita para
+     entregar. El despachador los captura a mano; el cliente frecuente no los autocompleta, porque
+     el cliente es quien pide el servicio, no quien recibe.
   3. **Dirección de recogida** y **dirección de entrega**, cada una con un indicador visual (ícono
      de check) que aparece cuando la dirección quedó resuelta contra Google Maps (ver "Indicador de
      dirección resuelta").
@@ -166,8 +169,8 @@ spec no la usa — el select carga la lista completa de clientes con `estado` ac
 
 Al elegir un cliente en el select:
 
-- `nombre_solicitante` y `telefono_solicitante` se autocompletan siempre con `Cliente.nombre` y
-  `Cliente.telefono` (ambos campos obligatorios en el modelo `Cliente`, así que siempre existen).
+- `nombre_solicitante` y `telefono_solicitante` **no** se autocompletan: guardan los datos de quien
+  recibe, no los del cliente que pide el servicio.
 - Se pide `GET /clientes/{cliente}/direcciones`. Si la respuesta trae **exactamente una** dirección,
   se arma un texto de dirección legible a partir de sus columnas (`calle`, `numero`, `colonia`,
   `ciudad`) y se autocompleta `direccion_recogida` con ese texto; si además esa dirección tiene
@@ -180,8 +183,8 @@ Al elegir un cliente en el select:
 - Si el cliente tiene **cero o más de una** dirección guardada, no se autocompleta ninguna dirección
   — el despachador la captura a mano, como hoy.
 - La dirección de entrega **nunca** se autocompleta desde el cliente.
-- Todos los campos autocompletados (nombre, teléfono, dirección de recogida) siguen siendo
-  editables; el despachador puede sobrescribirlos sin que eso desvincule al cliente seleccionado del
+- La dirección de recogida autocompletada sigue siendo editable; el despachador puede
+  sobrescribirla sin que eso desvincule al cliente seleccionado del
   pedido (`id_cliente` viaja igual en el `POST`).
 - Cambiar la selección del select (a otro cliente, o de vuelta a "Ninguno / solicitante ocasional")
   no limpia campos que el despachador ya haya editado a mano — solo vuelve a aplicar el

@@ -110,9 +110,6 @@ async function onClienteChange() {
   const cliente = clientes.value.find((c) => c.id_cliente === form.id_cliente)
   if (!cliente) return
 
-  form.nombre_solicitante = cliente.nombre
-  form.telefono_solicitante = cliente.telefono
-
   try {
     const { data } = await http.get(`/t/${slug}/clientes/${cliente.id_cliente}/direcciones`)
     const direcciones = data.data as DireccionClienteApi[]
@@ -290,7 +287,7 @@ async function onSubmit() {
 
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-heading">Nombre del solicitante</span>
+          <span class="mb-1 block text-sm font-medium text-heading">👤 Nombre de quien recibe</span>
           <input
             v-model="form.nombre_solicitante"
             type="text"
@@ -303,7 +300,7 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-heading">Teléfono del solicitante</span>
+          <span class="mb-1 block text-sm font-medium text-heading">📞 Teléfono de quien recibe</span>
           <input
             v-model="form.telefono_solicitante"
             type="tel"
