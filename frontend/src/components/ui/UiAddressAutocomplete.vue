@@ -81,8 +81,8 @@ onBeforeUnmount(() => clearTimeout(timeoutId))
       :placeholder="placeholder"
       :required="required"
       autocomplete="off"
-      class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-      :class="mostrarIndicador && direccionResuelta ? 'pr-9' : ''"
+      class="w-full rounded-none border border-gray-300 px-4 py-3 text-base text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+      :class="mostrarIndicador && direccionResuelta ? 'pr-10' : ''"
       @input="onInput"
       @focus="mostrarLista = sugerencias.length > 0"
       @blur="mostrarLista = false"
@@ -92,7 +92,7 @@ onBeforeUnmount(() => clearTimeout(timeoutId))
       icon="flat-color-icons:checkmark"
       width="18"
       height="18"
-      class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2"
+      class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
       aria-label="Ubicación encontrada"
     />
     <ul

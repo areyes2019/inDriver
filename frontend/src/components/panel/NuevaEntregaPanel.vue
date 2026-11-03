@@ -278,7 +278,7 @@ async function onSubmit() {
         <select
           ref="primerCampoRef"
           v-model="form.id_cliente"
-          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          class="w-full rounded-none border border-gray-300 px-4 py-3 text-base text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           @change="onClienteChange"
         >
           <option :value="null">Ninguno / solicitante ocasional</option>
@@ -295,7 +295,7 @@ async function onSubmit() {
             v-model="form.nombre_solicitante"
             type="text"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+            class="w-full rounded-none border border-gray-300 px-4 py-3 text-base text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.nombre_solicitante" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.nombre_solicitante }}
@@ -308,7 +308,7 @@ async function onSubmit() {
             v-model="form.telefono_solicitante"
             type="tel"
             required
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+            class="w-full rounded-none border border-gray-300 px-4 py-3 text-base text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.telefono_solicitante" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.telefono_solicitante }}
@@ -354,7 +354,7 @@ async function onSubmit() {
         <input
           v-model="form.fecha_servicio"
           type="date"
-          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          class="w-full rounded-none border border-gray-300 px-4 py-3 text-base text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
         />
         <span v-if="fieldErrors.fecha_servicio" class="mt-1 block text-sm text-red-600">
           {{ fieldErrors.fecha_servicio }}
@@ -372,7 +372,7 @@ async function onSubmit() {
           <input
             v-model="form.hora_desde"
             type="time"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+            class="w-full rounded-none border border-gray-300 px-4 py-3 text-base text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.hora_desde" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.hora_desde }}
@@ -383,7 +383,7 @@ async function onSubmit() {
           <input
             v-model="form.hora_hasta"
             type="time"
-            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+            class="w-full rounded-none border border-gray-300 px-4 py-3 text-base text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
           />
           <span v-if="fieldErrors.hora_hasta" class="mt-1 block text-sm text-red-600">
             {{ fieldErrors.hora_hasta }}
@@ -406,7 +406,7 @@ async function onSubmit() {
           type="number"
           step="0.01"
           min="0"
-          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          class="w-full rounded-none border border-gray-300 px-4 py-3 text-base text-heading focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
         />
         <span v-if="fieldErrors.importe_cobro" class="mt-1 block text-sm text-red-600">
           {{ fieldErrors.importe_cobro }}
