@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
  *
  * Devuelve la polilínea ya decodificada y con la **distancia acumulada** en cada vértice
  * (`{lat, lng, m}`). Ese acumulado es lo que permite a `SimulacionEnvioService` interpolar la
- * posición por metros y sostener 60 km/h de verdad, independientemente de qué tan larga sea la
+ * posición por metros y sostener 70 km/h de verdad, independientemente de qué tan larga sea la
  * ruta. El simulador anterior muestreaba a 40 puntos fijos y por eso un viaje de 1 km y uno de
  * 15 km tardaban lo mismo.
  *
@@ -53,14 +53,15 @@ class RutaService
                 'key' => $llave,
             ]);
 
-            $polilinea = $respuesta->json('routes.0.overview_polyline.points');
+            $decodificada = $this->trazoDetallado($respuesta->json('routes.0.legs') ?? []);
 
-            if (is_string($polilinea) && $polilinea !== '') {
-                $decodificada = $this->decodificar($polilinea);
+            if (count($decodificada) < 2) {
+                $polilinea = $respuesta->json('routes.0.overview_polyline.points');
+                $decodificada = is_string($polilinea) && $polilinea !== '' ? $this->decodificar($polilinea) : [];
+            }
 
-                if (count($decodificada) >= 2) {
-                    return $decodificada;
-                }
+            if (count($decodificada) >= 2) {
+                return $decodificada;
             }
         } catch (\Throwable $e) {
             Log::warning('No se pudo calcular la ruta simulada, se usa línea recta', [
@@ -79,6 +80,40 @@ class RutaService
         ]);
 
         return [$origen, $destino];
+    }
+
+    /**
+     * Une las polilíneas de cada paso (`legs[].steps[].polyline`). `overview_polyline` viene
+     * simplificada —en una ruta urbana trae un tercio de los vértices— y al interpolar sobre ella el
+     * móvil corta esquinas y atraviesa manzanas. Cada paso empieza donde terminó el anterior, así
+     * que ese primer vértice repetido se omite.
+     *
+     * @param  array<int, mixed>  $legs
+     * @return array<int, array{lat: float, lng: float}>
+     */
+    private function trazoDetallado(array $legs): array
+    {
+        $puntos = [];
+
+        foreach ($legs as $leg) {
+            foreach ($leg['steps'] ?? [] as $paso) {
+                $polilinea = $paso['polyline']['points'] ?? null;
+
+                if (! is_string($polilinea) || $polilinea === '') {
+                    continue;
+                }
+
+                $tramo = $this->decodificar($polilinea);
+
+                if ($puntos !== [] && $tramo !== [] && end($puntos) == $tramo[0]) {
+                    array_shift($tramo);
+                }
+
+                array_push($puntos, ...$tramo);
+            }
+        }
+
+        return $puntos;
     }
 
     /**

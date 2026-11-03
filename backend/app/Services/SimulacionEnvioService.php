@@ -27,16 +27,16 @@ use Illuminate\Support\Facades\Log;
  */
 class SimulacionEnvioService
 {
-    /** RN-09: 60 km/h constantes, sin tráfico ni semáforos. */
-    public const VELOCIDAD_KMH_POR_DEFECTO = 60.0;
+    /** RN-09: 70 km/h constantes, sin tráfico ni semáforos. */
+    public const VELOCIDAD_KMH_POR_DEFECTO = 70.0;
 
-    /** RN-09: cada cuántos segundos simulados se escribe un punto (unos 33 m a 60 km/h). */
+    /** RN-09: cada cuántos segundos simulados se escribe un punto (unos 39 m a 70 km/h). */
     public const PASO_SEGUNDOS_POR_DEFECTO = 2;
 
     /**
      * Configurable (`SIMULACION_VELOCIDAD_KMH`) solo por comodidad de desarrollo: esperar en tiempo
      * real a que el móvil recorra el trayecto vuelve impracticable probar el flujo varias veces
-     * seguidas. Producción se queda en los 60 km/h de RN-09.
+     * seguidas. Producción se queda en los 70 km/h de RN-09.
      */
     public static function velocidadKmh(): float
     {

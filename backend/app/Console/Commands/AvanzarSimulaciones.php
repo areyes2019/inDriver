@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Log;
  * perdida se recupera sola en la siguiente.
  */
 #[Signature('simulacion:avanzar {--segundos=55 : Cuánto vive esta corrida}')]
-#[Description('Avanza los envíos TEST por su ruta simulada a 60 km/h')]
+#[Description('Avanza los envíos TEST por su ruta simulada a 70 km/h')]
 class AvanzarSimulaciones extends Command
 {
     public function handle(SimulacionEnvioService $simulaciones): int

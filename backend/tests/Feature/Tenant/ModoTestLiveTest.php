@@ -13,10 +13,12 @@ use App\Models\Tenant\SimulacionEnvio;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\VentaViajeConductor;
 use App\Services\PedidoEstadoService;
+use App\Services\RutaService;
 use App\Services\SimulacionEnvioService;
 use App\Support\ContextoAmbiente;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
@@ -282,12 +284,12 @@ it('writes simulated positions through the same tracking door and broadcasts the
     app(PedidoEstadoService::class)->transicionar($pedido, 'TOMADO');
     $pedido->save();
 
-    // 60 km/h = 1000 m/min: a los 30 segundos el móvil lleva unos 500 m recorridos.
+    // 70 km/h ≈ 1167 m/min: a los 30 segundos el móvil lleva unos 583 m recorridos.
     $this->travel(30)->seconds();
     app(SimulacionEnvioService::class)->avanzarPendientes();
 
     $simulacion = SimulacionEnvio::where('id_pedido', $pedido->id_pedido)->first();
-    expect($simulacion->avanzada_hasta_m)->toBeGreaterThan(450.0)->toBeLessThan(550.0);
+    expect($simulacion->avanzada_hasta_m)->toBeGreaterThan(530.0)->toBeLessThan(640.0);
     expect(ConductorPosicion::where('id_pedido', $pedido->id_pedido)->count())->toBeGreaterThan(10);
     expect(ConductorEstado::where('id_conductor', $datos['conductor']->id_conductor)->first()->ultima_latitud)
         ->not->toBeNull();
@@ -312,7 +314,7 @@ it('advances the envío to ARRIBADO by itself when the approach leg finishes', f
     app(PedidoEstadoService::class)->transicionar($pedido, 'TOMADO');
     $pedido->save();
 
-    // La ruta simulada mide ~1113 m: a 60 km/h son poco más de un minuto.
+    // La ruta simulada mide ~1113 m: a 70 km/h es menos de un minuto.
     $this->travel(5)->minutes();
     app(SimulacionEnvioService::class)->avanzarPendientes();
 
@@ -366,7 +368,7 @@ it('recovers on its own after a missed run, because the position comes from the 
     tenancy()->end();
 });
 
-it('keeps a constant 60 km/h regardless of how long the route is', function () {
+it('keeps a constant 70 km/h regardless of how long the route is', function () {
     $tenant = ambienteTenant();
     $datos = ambienteConductor($tenant);
 
@@ -388,12 +390,12 @@ it('keeps a constant 60 km/h regardless of how long the route is', function () {
     $simulacion = SimulacionEnvio::where('id_pedido', $pedido->id_pedido)->where('tramo', 'ENTREGA')->first();
     expect($simulacion->distancia_m)->toBeGreaterThan(10000.0);
 
-    // Un minuto de reloj son 1000 metros, mida lo que mida la ruta. El simulador anterior repartía
+    // Un minuto de reloj son ~1167 metros, mida lo que mida la ruta. El simulador anterior repartía
     // 40 puntos fijos y por eso la velocidad dependía del largo del viaje.
     $this->travel(60)->seconds();
     app(SimulacionEnvioService::class)->avanzarPendientes();
 
-    expect($simulacion->fresh()->avanzada_hasta_m)->toBeGreaterThan(950.0)->toBeLessThan(1050.0);
+    expect($simulacion->fresh()->avanzada_hasta_m)->toBeGreaterThan(1100.0)->toBeLessThan(1230.0);
     expect($pedido->fresh()->estado)->toBe('EN_CAMINO');
     tenancy()->end();
 });
@@ -425,6 +427,30 @@ it('falls back to a straight line when Directions is down', function () {
 
     expect($pedido->fresh()->estado)->toBe('ARRIBADO');
     tenancy()->end();
+});
+
+it('follows the detailed step geometry instead of the simplified overview', function () {
+    // La vista general corta en diagonal; los pasos doblan en la esquina (19.405, -99.10). Se
+    // cambia la fábrica porque el primer `Http::fake()` que coincide gana, y el de `beforeEach`
+    // trae solo la vista general.
+    Http::swap(new HttpFactory);
+    Http::fake([
+        'maps.googleapis.com/*' => Http::response([
+            'routes' => [[
+                'overview_polyline' => ['points' => '_aluB~mz{Qg^f^'],
+                'legs' => [['steps' => [
+                    ['polyline' => ['points' => '_aluB~mz{Qg^?']],
+                    ['polyline' => ['points' => 'g`muB~mz{Q?f^']],
+                ]]],
+            ]],
+        ]),
+    ]);
+
+    $ruta = app(RutaService::class)->calcular(['lat' => 19.40, 'lng' => -99.10], ['lat' => 19.405, 'lng' => -99.105]);
+
+    expect($ruta)->toHaveCount(3);
+    expect($ruta[1]['lat'])->toBe(19.405);
+    expect($ruta[1]['lng'])->toBe(-99.1);
 });
 
 it('stops the simulation when the envío is cancelled', function () {

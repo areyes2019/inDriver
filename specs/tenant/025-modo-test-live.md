@@ -25,7 +25,7 @@ Deja funcionando:
 - Un interruptor TEST/LIVE por tenant en la cabecera del Panel, al estilo Facturapi/Stripe.
 - Cada envío sella su ambiente al nacer y lo conserva para siempre.
 - En TEST, cuando el conductor acepta desde su app real, el servidor lo desplaza por una ruta real
-  de calles a 60 km/h, desde donde está hasta la recogida y de la recogida a la entrega.
+  de calles a 70 km/h, desde donde está hasta la recogida y de la recogida a la entrega.
 - Esas coordenadas entran por el mismo `TrackingService`, escriben en la misma tabla y emiten los
   mismos eventos Reverb que el GPS real. El Panel y la app no distinguen la diferencia.
 - Los envíos de prueba avanzan solos por los dos hitos de llegada (`ARRIBADO`,
@@ -40,7 +40,7 @@ Deja funcionando:
 - Una segunda aplicación, un segundo flujo de tracking o una segunda máquina de estados.
 - Saldos separados por ambiente: el dinero de prueba es dinero real (ver "El dinero no se simula").
 - Cualquier cambio en `panda_express`. La app del conductor no se entera de que existen ambientes.
-- Tráfico, semáforos, paradas o variación de velocidad. La simulación es un móvil a 60 km/h.
+- Tráfico, semáforos, paradas o variación de velocidad. La simulación es un móvil a 70 km/h.
 - Un botón para limpiar o revertir los datos de prueba.
 
 ## Decisión técnica
@@ -216,7 +216,7 @@ que en LIVE: son acciones humanas, no llegadas geográficas.
   lectura—, el tramo de acercamiento arranca en el punto de recogida mismo: dura un instante y
   `ARRIBADO` cae de inmediato. Es el último recurso, no el caso normal: antes de RN-01b lo era
   siempre, porque en TEST el GPS real se descarta (RN-11) y la posición no llegaba a existir.
-- **RN-09**: La velocidad simulada es 60 km/h constante (16.667 m/s). No hay tráfico, semáforos ni
+- **RN-09**: La velocidad simulada es 70 km/h constante (19.444 m/s). No hay tráfico, semáforos ni
   paradas. Se escribe un punto cada 2 segundos, unos 33 metros.
 - **RN-10**: Las coordenadas simuladas entran por `TrackingService::registrarPosicion()`, el mismo
   método que usa el GPS real, y emiten los mismos eventos Reverb.
@@ -366,7 +366,7 @@ Sin cambios de ningún tipo.
 19. La simulación arranca al aceptar (`TOMADO`), no antes.
 20. Son dos tramos: acercamiento y entrega.
 21. Mientras la simulación corre, el GPS real del teléfono se descarta.
-22. La velocidad es 60 km/h constante, sin tráfico ni paradas.
+22. La velocidad es 70 km/h constante, sin tráfico ni paradas.
 23. La ruta se calcula con Google Directions; línea recta si falla.
 24. Al terminar cada tramo el envío avanza solo de estado, sin que el conductor toque nada.
 25. El paso a `ENTREGADO` lo confirma el conductor. Por derivación, `EN_CAMINO` también: son
