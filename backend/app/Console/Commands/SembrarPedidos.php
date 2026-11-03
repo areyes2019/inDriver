@@ -9,11 +9,13 @@ use App\Models\Tenant as TenantCentral;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
 use App\Services\PedidoEstadoService;
+use App\Services\RutaService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 /**
  * Siembra envíos ya publicados, para no llenar el formulario del Panel una y otra vez cuando lo que
@@ -29,14 +31,20 @@ use Illuminate\Support\Facades\DB;
  * lo que crea el pool de ofertas (spec tenant/020) y dispara los avisos. Un `INSERT` directo en
  * `pedidos` deja el envío invisible para las apps de conductor.
  *
+ * Con `--google` las direcciones dejan de salir del catálogo: se piden a Google Places lugares
+ * reales alrededor del centro (Celaya por omisión) y el importe se calcula con la distancia por
+ * calle de Directions, igual que la vista previa del formulario del Panel. Para correrlo en el
+ * servidor sin abrir SSH: `deploy/sembrar.sh`.
+ *
  * Herramienta de desarrollo: en producción exige `--force`.
  */
 #[Signature('pedidos:sembrar
     {cantidad=5 : Cuántos envíos crear}
     {--tenant= : Slug del tenant; obligatorio si hay más de uno activo}
     {--ambiente= : live|test; por omisión, el interruptor del tenant}
-    {--centro= : "lat,lng"; con esto los puntos se sortean al azar alrededor y se deja de usar el callejero de Celaya}
-    {--radio=4 : Radio en km del sorteo. Solo tiene efecto junto con --centro}
+    {--centro= : "lat,lng"; con esto los puntos se sortean al azar alrededor y se deja de usar el callejero de Celaya. Con --google, es el centro de la búsqueda}
+    {--radio=4 : Radio en km del sorteo o de la búsqueda en Google}
+    {--google : Lugares reales de Google Places y distancia por calle de Directions}
     {--sin-publicar : Dejarlos en PENDIENTE en vez de publicarlos}
     {--force : Permitir la siembra en producción}')]
 #[Description('Crea N envíos publicados de golpe, con direcciones reales de Celaya')]
@@ -83,11 +91,27 @@ class SembrarPedidos extends Command
         'RECEPTOR_PAGA_ENVIO_PRODUCTOS',
     ];
 
+    /** Centro de la búsqueda en Google cuando no se pasa --centro: el Jardín Principal de Celaya. */
+    private const CENTRO_CELAYA = ['lat' => 20.5214843, 'lng' => -100.8144210];
+
     /** Pares recogida-entrega ya usados en esta corrida, para no repetir el mismo trayecto. */
     private array $paresUsados = [];
 
-    public function __construct(private readonly PedidoEstadoService $estados)
-    {
+    /**
+     * De dónde salen las parejas: el callejero de Celaya o, con --google, los lugares que devolvió
+     * Places en esta corrida.
+     *
+     * @var array<int, array{direccion: string, lat: float, lng: float}>
+     */
+    private array $catalogo = self::DIRECCIONES_CELAYA;
+
+    /** Distancia del último envío creado, solo para la tabla de la consola. */
+    private float $ultimaDistanciaKm = 0.0;
+
+    public function __construct(
+        private readonly PedidoEstadoService $estados,
+        private readonly RutaService $rutas,
+    ) {
         parent::__construct();
     }
 
@@ -121,16 +145,33 @@ class SembrarPedidos extends Command
 
             $ambiente = $this->resolverAmbiente();
             $centro = $this->centroDelSorteo();
-            $origen = $centro === null
-                ? 'callejero de Celaya'
-                : "sorteo alrededor de {$centro['lat']},{$centro['lng']} (radio {$radioKm} km)";
+            $google = (bool) $this->option('google');
+
+            if ($google) {
+                $centroGoogle = $centro ?? self::CENTRO_CELAYA;
+                $lugares = $this->lugaresDeGoogle($centroGoogle, $radioKm);
+
+                if (count($lugares) < 2) {
+                    $this->error('Google Places no devolvió lugares suficientes (revisa la API key y que tenga habilitada Places API (New)).');
+
+                    return self::FAILURE;
+                }
+
+                $this->catalogo = $lugares;
+                $centro = null;
+                $origen = count($lugares)." lugares de Google Places alrededor de {$centroGoogle['lat']},{$centroGoogle['lng']} (radio {$radioKm} km)";
+            } else {
+                $origen = $centro === null
+                    ? 'callejero de Celaya'
+                    : "sorteo alrededor de {$centro['lat']},{$centro['lng']} (radio {$radioKm} km)";
+            }
 
             $this->line("Tenant <info>{$tenant->slug}</info> · ambiente <info>{$ambiente}</info> · {$origen}");
 
             $filas = [];
 
             for ($i = 1; $i <= $cantidad; $i++) {
-                $pedido = $this->crear($ambiente, $centro, $radioKm, $tarifas, $i);
+                $pedido = $this->crear($ambiente, $centro, $radioKm, $tarifas, $i, $google);
 
                 if (! $this->option('sin-publicar')) {
                     $this->publicar($pedido);
@@ -143,6 +184,7 @@ class SembrarPedidos extends Command
                 $filas[] = [
                     $pedido->numero_pedido,
                     $pedido->estado,
+                    number_format($this->ultimaDistanciaKm, 1),
                     number_format((float) $pedido->importe_envio, 2),
                     $pedido->nombre_solicitante,
                     $this->resumir($pedido->direccion_recogida),
@@ -150,7 +192,7 @@ class SembrarPedidos extends Command
                 ];
             }
 
-            $this->table(['Envío', 'Estado', 'Importe', 'Solicitante', 'Recogida', 'Entrega'], $filas);
+            $this->table(['Envío', 'Estado', 'Km', 'Importe', 'Solicitante', 'Recogida', 'Entrega'], $filas);
         } finally {
             tenancy()->end();
         }
@@ -241,13 +283,16 @@ class SembrarPedidos extends Command
      * @param  array{lat: float, lng: float}|null  $centro
      * @param  array{banderazo: float, km_incluidos: float, km_adicional: float}  $tarifas
      */
-    private function crear(string $ambiente, ?array $centro, float $radioKm, array $tarifas, int $indice): Pedido
+    private function crear(string $ambiente, ?array $centro, float $radioKm, array $tarifas, int $indice, bool $google): Pedido
     {
         [$recogida, $entrega] = $centro === null
             ? $this->parDeDirecciones()
             : $this->parSorteado($centro, $radioKm, $indice);
 
-        $km = $this->distanciaKm($recogida, $entrega);
+        // Con --google se cobra lo mismo que cobraría el Panel: kilómetros por calle, no en línea
+        // recta. Si Directions falla, RutaService devuelve la línea recta y el importe sale igual.
+        $km = $google ? $this->distanciaPorCalleKm($recogida, $entrega) : $this->distanciaKm($recogida, $entrega);
+        $this->ultimaDistanciaKm = $km;
         $importe = $tarifas['banderazo'] + (max(0.0, $km - $tarifas['km_incluidos']) * $tarifas['km_adicional']);
 
         // Igual que el formulario del Panel: `importe_cobro` solo tiene sentido cuando el receptor
@@ -289,6 +334,96 @@ class SembrarPedidos extends Command
         });
     }
 
+    /**
+     * Lugares reales alrededor del centro, de Places API (New). Se hacen tres búsquedas en puntos
+     * sorteados dentro del radio —una sola en el centro devolvería siempre los mismos 20 lugares,
+     * ordenados por popularidad— y se juntan sin repetir dirección.
+     *
+     * @param  array{lat: float, lng: float}  $centro
+     * @return array<int, array{direccion: string, lat: float, lng: float}>
+     */
+    private function lugaresDeGoogle(array $centro, float $radioKm): array
+    {
+        $llave = config('services.google_maps.key');
+
+        if (! is_string($llave) || $llave === '') {
+            $this->error('Falta GOOGLE_MAPS_API_KEY en el .env.');
+
+            return [];
+        }
+
+        $lugares = [];
+
+        for ($busqueda = 0; $busqueda < 3; $busqueda++) {
+            $punto = $this->puntoCercano($centro, $radioKm * 0.6);
+
+            try {
+                $respuesta = Http::timeout(10)
+                    ->withHeaders([
+                        'X-Goog-Api-Key' => $llave,
+                        'X-Goog-FieldMask' => 'places.displayName,places.formattedAddress,places.location',
+                    ])
+                    ->post('https://places.googleapis.com/v1/places:searchNearby', [
+                        'maxResultCount' => 20,
+                        'languageCode' => 'es',
+                        'regionCode' => 'MX',
+                        'locationRestriction' => ['circle' => [
+                            'center' => ['latitude' => $punto['lat'], 'longitude' => $punto['lng']],
+                            'radius' => min(50000.0, $radioKm * 500),
+                        ]],
+                    ]);
+            } catch (\Throwable $e) {
+                $this->warn("Places no respondió: {$e->getMessage()}");
+
+                continue;
+            }
+
+            if ($respuesta->failed()) {
+                $this->warn('Places respondió '.$respuesta->status().': '.($respuesta->json('error.message') ?? 'sin detalle'));
+
+                continue;
+            }
+
+            foreach ($respuesta->json('places') ?? [] as $lugar) {
+                $direccion = $lugar['formattedAddress'] ?? null;
+                $lat = $lugar['location']['latitude'] ?? null;
+                $lng = $lugar['location']['longitude'] ?? null;
+
+                // Con menos de dos comas es una zona ("Celaya, Gto., México"), no un sitio al que ir.
+                if (! is_string($direccion) || substr_count($direccion, ',') < 2 || $lat === null || $lng === null) {
+                    continue;
+                }
+
+                $direccion = (string) preg_replace('/,\s*México$/u', '', $direccion);
+                $nombre = $lugar['displayName']['text'] ?? null;
+
+                $lugares[$direccion] = [
+                    'direccion' => is_string($nombre) && $nombre !== '' && ! str_starts_with($direccion, $nombre)
+                        ? "{$nombre}, {$direccion}"
+                        : $direccion,
+                    'lat' => round((float) $lat, 7),
+                    'lng' => round((float) $lng, 7),
+                ];
+            }
+        }
+
+        return array_values($lugares);
+    }
+
+    /**
+     * @param  array{lat: float, lng: float}  $desde
+     * @param  array{lat: float, lng: float}  $hasta
+     */
+    private function distanciaPorCalleKm(array $desde, array $hasta): float
+    {
+        $ruta = $this->rutas->calcular(
+            ['lat' => $desde['lat'], 'lng' => $desde['lng']],
+            ['lat' => $hasta['lat'], 'lng' => $hasta['lng']],
+        );
+
+        return round((float) (end($ruta)['m'] ?? 0.0) / 1000, 2);
+    }
+
     /** Un envío de 200 metros no lo captura nadie: dos puntos más cerca que esto no hacen pareja. */
     private const DISTANCIA_MINIMA_KM = 1.0;
 
@@ -301,7 +436,7 @@ class SembrarPedidos extends Command
      */
     private function parDeDirecciones(): array
     {
-        $total = count(self::DIRECCIONES_CELAYA);
+        $total = count($this->catalogo);
 
         for ($intento = 0; $intento < 60; $intento++) {
             $i = random_int(0, $total - 1);
@@ -311,19 +446,19 @@ class SembrarPedidos extends Command
                 continue;
             }
 
-            if ($this->distanciaKm(self::DIRECCIONES_CELAYA[$i], self::DIRECCIONES_CELAYA[$j]) < self::DISTANCIA_MINIMA_KM) {
+            if ($this->distanciaKm($this->catalogo[$i], $this->catalogo[$j]) < self::DISTANCIA_MINIMA_KM) {
                 continue;
             }
 
             $this->paresUsados[] = "{$i}-{$j}";
 
-            return [self::DIRECCIONES_CELAYA[$i], self::DIRECCIONES_CELAYA[$j]];
+            return [$this->catalogo[$i], $this->catalogo[$j]];
         }
 
         $i = random_int(0, $total - 1);
         $j = ($i + random_int(1, $total - 1)) % $total;
 
-        return [self::DIRECCIONES_CELAYA[$i], self::DIRECCIONES_CELAYA[$j]];
+        return [$this->catalogo[$i], $this->catalogo[$j]];
     }
 
     /**
