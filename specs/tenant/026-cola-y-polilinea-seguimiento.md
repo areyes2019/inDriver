@@ -7,7 +7,7 @@
 | ID | SPEC-026 |
 | Módulo | Logística / Seguimiento |
 | Autor | A. Rivas |
-| Versión | 1.0 |
+| Versión | 1.1 |
 | Estado | Borrador |
 | Sprint | S-11 |
 | Depende de | SPEC-018 (Protocolo realtime), SPEC-019 (Disponibilidad), SPEC-020 (Oferta y aceptación), SPEC-021 (Live tracking) |
@@ -23,17 +23,20 @@ Dos correcciones sobre el envío en curso:
    bandeja queda vacía: mientras estuvo ocupado no era elegible para las ofertas (SPEC-020, RN-06),
    y al liberarse nadie vuelve a ofertarle nada.
 2. Que la **línea del mapa cuente en qué va el envío**: a dónde se dirige el conductor, con qué
-   estilo de trazo, y de qué color según quién sea.
+   estilo de trazo, de qué color según quién sea y **cuánto le falta**: en el Panel, la línea se va
+   acortando conforme el conductor avanza. Al final del recorrido y al terminar la entrega no debe quedar ninguna linea de mapa de este conductor. 
 
 ## 2. Alcance
 
 **Incluye:** reactivación de la cola cuando un conductor queda libre, rescate de los pedidos que
 cayeron a asignación manual, orden del pool por antigüedad, los dos hitos de la polilínea, estilo de
-trazo por hito y color estable por conductor en el Panel y en `panda_express`.
+trazo por hito y color estable por conductor en el Panel y en `panda_express`, y el recorte de la
+línea H2 conforme avanza el conductor en el Panel.
 
 **No incluye:** ordenamiento del pool por cercanía, cálculo de ETA, elección manual del color desde
-el Panel, historial del recorrido (`route_snapshot`, ya definido en SPEC-021), y asignación manual de
-un pedido a un conductor concreto desde el Panel.
+el Panel, historial del recorrido (`route_snapshot`, ya definido en SPEC-021), asignación manual de
+un pedido a un conductor concreto desde el Panel, recorte de la línea H2 en `panda_express` y
+recálculo de la ruta H2 cuando el conductor se desvía.
 
 ## 3. Actores y permisos
 
@@ -93,7 +96,8 @@ Viaja dentro del pedido, en `PedidoResource` (app del conductor) y en el `pedido
 - `estilo` — `GUIONES` en H1, `SOLIDO` en H2.
 - `color` — el color del conductor asignado al pedido.
 - `origen` — `null` en H1: el origen es la **posición viva** del conductor, que la app ya tiene y el
-  Panel recibe por `ubicacion.actualizada`. En H2 son las coordenadas fijas de recogida.
+  Panel recibe por `ubicacion.actualizada`. En H2 son las coordenadas fijas de recogida, a partir de
+  las que se calcula el trazo; el recorte (RN-23) lo aplica el Panel y `seguimiento` no cambia.
 - `destino` — recogida en H1, entrega en H2.
 
 `seguimiento` es `null` cuando el pedido está en un estado final o todavía no tiene conductor.
@@ -172,9 +176,10 @@ recarga su pool una sola vez.
   recogida. Se redibuja cuando el conductor se movió más de 50 m o cada 15 s, lo que ocurra primero
   (misma cadencia de SPEC-021, RN-02). Redibujar en cada punto sería una llamada a Directions cada
   pocos segundos por conductor.
-- **RN-15:** **H2** — línea sólida, desde el punto de recogida registrado hasta el punto de entrega.
-  Se dibuja una vez al entrar al hito y no se recalcula aunque el conductor se mueva. Solo se
-  redibuja si cambia el destino (SPEC-022, `DELIVERY_ADDRESS_UPDATED`).
+- **RN-15:** **H2** — línea sólida, calculada desde el punto de recogida registrado hasta el punto de
+  entrega. La ruta se pide a Directions una vez al entrar al hito y no se vuelve a pedir aunque el
+  conductor se mueva: lo que cambia es cuánta se ve (RN-23). Solo se recalcula si cambia el destino
+  (SPEC-022, `DELIVERY_ADDRESS_UPDATED`).
 - **RN-16:** Una sola línea por conductor a la vez. Entrar a H2 borra la de H1.
 - **RN-17:** El color es `PALETA[id_conductor % 10]`. Determinista, sin columna en base de datos: el
   mismo conductor conserva su color entre recargas, entre sesiones y entre las dos apps.
@@ -189,6 +194,25 @@ recarga su pool una sola vez.
   `CANCELADO`.
 - **RN-22:** `panda_express` aplica las mismas reglas de color y estilo aunque el conductor solo se
   vea a sí mismo, para que lo que él ve y lo que ve el despachador sean la misma imagen.
+
+### Recorte de la línea H2 en el Panel
+
+- **RN-23:** En H2, cada `ubicacion.actualizada` acorta la línea en el Panel: se deja de dibujar lo
+  que el conductor ya recorrió y la línea queda desde el punto del trazo donde va hasta la entrega.
+  El recorte se calcula en el navegador sobre el trazo ya recibido y **no consulta Directions**, sin
+  importar cuántas posiciones lleguen. El destino nunca se recorta.
+- **RN-24:** Solo se recorta si el conductor está a **80 m o menos** del trazo. Si se desvía más, la
+  línea se queda como estaba y el recorte continúa cuando vuelve a acercarse. Con la recta de
+  respaldo de RN-20 aplica la misma regla, así que puede no recortarse mientras el conductor circule
+  lejos de ella.
+- **RN-25:** La línea **solo se acorta**. El avance se busca del punto actual hacia adelante, así que
+  un brinco del GPS hacia atrás no la hace crecer. En una ruta que pasa dos veces cerca del mismo
+  lugar se toma la primera pasada pendiente, para no saltarse lo que hay entre ambas.
+- **RN-26:** Al volver a trazar la línea (recargar el Panel o cambiar el conjunto de conductores
+  visibles) se recorta en cuanto llega la ruta, usando la última posición conocida, para no mostrar
+  de nuevo el tramo ya recorrido. Si cambia el destino se recorta igual sobre la ruta nueva. Una
+  respuesta de Directions que ya fue sustituida por otro trazado o cuya línea ya se borró no se
+  pinta: dejaría en el mapa una línea que ya nadie puede recortar ni quitar.
 
 ## 7. Errores
 
@@ -223,7 +247,11 @@ registra como `warning` (RN-02).
 - [ ] Con el pedido en `TOMADO`, la línea va de la moto al punto de recogida y está **punteada**.
 - [ ] Al marcar llegada a recogida (`ARRIBADO`), la línea punteada desaparece y aparece una línea
       **sólida** de recogida a entrega, sin esperar a "iniciar viaje".
-- [ ] La línea de H2 no se mueve mientras el conductor avanza hacia la entrega.
+- [ ] En H2, la línea del Panel se acorta conforme el conductor avanza hacia la entrega, sin nuevas
+      llamadas a Directions, y al llegar queda solo el extremo de entrega.
+- [ ] Un conductor a más de 80 m del trazo no recorta la línea, y al volver a él se reanuda el recorte.
+- [ ] Una posición de GPS anterior a la ya registrada no hace crecer la línea.
+- [ ] Recargar el Panel a medio tramo H2 muestra solo lo que falta por recorrer.
 - [ ] Con dos conductores activos en el Panel, cada uno tiene su color y su marcador va del mismo
       color que su línea.
 - [ ] Recargar el Panel no cambia el color de ningún conductor.
@@ -243,6 +271,8 @@ registra como `warning` (RN-02).
 | 5b | La polilínea se dibuja a mano, no con `DirectionsRenderer` | `DirectionsRenderer` solo traslada a su línea las propiedades de trazo —color, opacidad, grosor— y descarta `icons`, así que con él el tramo H1 quedaba en la línea base invisible y sin los símbolos encima: no se veía nada. `GoogleProvider.drawRoute()` crea su propia `google.maps.Polyline` sobre el `overview_path` que devuelve Directions —igual que la rama de respaldo de RN-20 y que `panda_express`, que por eso sí pintaban los guiones— y el encuadre que hacía el renderer con `preserveViewport: false` pasa a un `map.fitBounds(route.bounds)` explícito |
 | 6 | Adelantar el cambio de línea a `ARRIBADO` | Consecuencia directa de RN-11: al derivarlo el servidor, las dos apps cambian a la vez |
 | 7 | Un solo lugar que decida qué línea dibujar | El bloque `seguimiento` de §4, calculado en el backend y consumido igual por el Panel y por `panda_express` |
+| 8 | Recorte de la línea H2 sin Directions | `services/maps/recorteRuta.ts` calcula el avance y lo que falta; `GoogleProvider.trimRoute()` guarda el trazo completo y hace `setPath` sobre la misma `Polyline`; `MapaConductores.vue` lo invoca en cada posición y al terminar cada trazado |
+| 9 | Descarte de respuestas tardías de Directions | `GoogleProvider.drawRoute()` numera cada trazado por línea; `clearRoute`/`clearRoutes` invalidan los que sigan en curso. El resultado se sigue devolviendo a quien lo pidió, solo deja de pintarse (RN-26) |
 
 ## 10. Impacto en el código existente
 
@@ -259,8 +289,11 @@ registra como `warning` (RN-02).
 
 - `src/services/maps/types.ts` y `GoogleProvider.ts` — opción `estilo` en `drawRoute`, color en el
   marcador, y la ruta trazada con `Polyline` propia en lugar de `DirectionsRenderer` (§9, adición 5b).
+- `src/services/maps/recorteRuta.ts` — archivo nuevo con la geometría del recorte (RN-23 a RN-25).
+- `src/services/maps/BaseProvider.ts`, `MapService.ts` y `GoogleProvider.ts` — operación `trimRoute`
+  y descarte de trazados vencidos (§9, adiciones 8 y 9).
 - `src/components/panel/MapaConductores.vue` — dibuja según `seguimiento` en vez de deducir el
-  destino a partir del estado.
+  destino a partir del estado, y recorta la línea H2 con cada posición del conductor.
 
 **App del conductor (`panda_express`)**
 

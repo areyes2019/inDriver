@@ -1,5 +1,6 @@
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader'
 import BaseProvider from './BaseProvider'
+import { AVANCE_INICIAL, calcularAvance, trazoRestante, type AvanceRuta } from './recorteRuta'
 import type {
   AddressSuggestion,
   EstiloRuta,
@@ -19,6 +20,11 @@ interface MapInstance {
   map: google.maps.Map
   markers: Map<string, google.maps.Marker>
   routes: Map<string, google.maps.Polyline>
+  /** Trazo completo de cada línea y hasta dónde va recortado (spec tenant/026, RN-23). */
+  recortes: Map<string, { trazo: LatLngLike[]; avance: AvanceRuta }>
+  /** Último dibujo pedido por línea: una respuesta tardía de Directions no debe pintarse (RN-26). */
+  dibujosVigentes: Map<string, number>
+  ultimoDibujo: number
   directionsService: google.maps.DirectionsService
   polygon?: google.maps.Polygon
   polygonListeners: google.maps.MapsEventListener[]
@@ -97,6 +103,9 @@ export default class GoogleProvider extends BaseProvider {
       map,
       markers: new Map(),
       routes: new Map(),
+      recortes: new Map(),
+      dibujosVigentes: new Map(),
+      ultimoDibujo: 0,
       directionsService: new google.maps.DirectionsService(),
       polygonListeners: [],
     })
@@ -150,6 +159,12 @@ export default class GoogleProvider extends BaseProvider {
     if (!instance || points.length < 2) return null
 
     instance.routes.get(routeId)?.setMap(null)
+    instance.routes.delete(routeId)
+    instance.recortes.delete(routeId)
+
+    const dibujo = ++instance.ultimoDibujo
+    instance.dibujosVigentes.set(routeId, dibujo)
+    const sigueVigente = () => instance.dibujosVigentes.get(routeId) === dibujo
 
     const origin = points[0] as LatLngLike
     const destination = points[points.length - 1] as LatLngLike
@@ -164,6 +179,8 @@ export default class GoogleProvider extends BaseProvider {
       })
 
       const route = response.routes[0]
+      const trazoCompleto =
+        route?.overview_path.map((point) => ({ lat: point.lat(), lng: point.lng() })) ?? points
 
       // La línea se dibuja a mano en vez de con `DirectionsRenderer`: el renderer solo traslada a
       // su polilínea las propiedades de trazo (color, opacidad, grosor) y descarta `icons`, que es
@@ -171,17 +188,13 @@ export default class GoogleProvider extends BaseProvider {
       // invisible (`strokeOpacity: 0`) y sin los símbolos encima — o sea, sin nada. Con `Polyline`
       // propia el trazo se aplica entero, igual que en la rama de respaldo de abajo y que en
       // `panda_express`.
-      const polilinea = new google.maps.Polyline({
-        map: instance.map,
-        path: route?.overview_path ?? points,
-        geodesic: true,
-        ...trazo,
-      })
-      instance.routes.set(routeId, polilinea)
+      if (sigueVigente()) {
+        this.pintarLinea(instance, routeId, trazoCompleto, trazo)
 
-      // Lo que hacía `preserveViewport: false` del renderer: encuadrar la ruta recién trazada.
-      if (!(options.preserveViewport ?? false) && route?.bounds) {
-        instance.map.fitBounds(route.bounds)
+        // Lo que hacía `preserveViewport: false` del renderer: encuadrar la ruta recién trazada.
+        if (!(options.preserveViewport ?? false) && route?.bounds) {
+          instance.map.fitBounds(route.bounds)
+        }
       }
 
       const leg = route?.legs[0]
@@ -191,20 +204,48 @@ export default class GoogleProvider extends BaseProvider {
         distance: leg.distance.text,
         duration: leg.duration.text,
         distanceKm: leg.distance.value / 1000,
-        path: (route?.overview_path ?? []).map((point) => ({ lat: point.lat(), lng: point.lng() })),
+        path: trazoCompleto,
       }
     } catch {
       // RN-20: si Directions no contesta, recta entre los extremos con el MISMO color y el mismo
       // estilo — degradar el trazo escondería que la ruta es aproximada.
-      const polyline = new google.maps.Polyline({
-        map: instance.map,
-        path: points,
-        geodesic: true,
-        ...trazo,
-      })
-      instance.routes.set(routeId, polyline)
+      if (sigueVigente()) {
+        this.pintarLinea(instance, routeId, points, trazo)
+      }
       return null
     }
+  }
+
+  private pintarLinea(
+    instance: MapInstance,
+    routeId: string,
+    path: LatLngLike[],
+    trazo: google.maps.PolylineOptions,
+  ): void {
+    instance.routes.get(routeId)?.setMap(null)
+    instance.routes.set(
+      routeId,
+      new google.maps.Polyline({ map: instance.map, path, geodesic: true, ...trazo }),
+    )
+    instance.recortes.set(routeId, { trazo: path, avance: AVANCE_INICIAL })
+  }
+
+  /**
+   * Borra de la línea lo que el conductor ya recorrió (spec tenant/026, RN-23). Trabaja sobre el
+   * trazo ya calculado, sin consultar Directions; si la línea aún no llega o el conductor va fuera
+   * de ella, no hace nada.
+   */
+  trimRoute(containerId: string, routeId: string, position: LatLngLike): void {
+    const instance = this.instances.get(containerId)
+    const recorte = instance?.recortes.get(routeId)
+    const polilinea = instance?.routes.get(routeId)
+    if (!recorte || !polilinea) return
+
+    const avance = calcularAvance(recorte.trazo, recorte.avance, position)
+    if (!avance) return
+
+    recorte.avance = avance
+    polilinea.setPath(trazoRestante(recorte.trazo, avance))
   }
 
   /**
@@ -252,6 +293,8 @@ export default class GoogleProvider extends BaseProvider {
     if (!instance) return
     instance.routes.get(routeId)?.setMap(null)
     instance.routes.delete(routeId)
+    instance.recortes.delete(routeId)
+    instance.dibujosVigentes.delete(routeId)
   }
 
   clearRoutes(containerId: string): void {
@@ -259,6 +302,8 @@ export default class GoogleProvider extends BaseProvider {
     if (!instance) return
     instance.routes.forEach((route) => route.setMap(null))
     instance.routes.clear()
+    instance.recortes.clear()
+    instance.dibujosVigentes.clear()
   }
 
   centerOn(containerId: string, position: LatLngLike, zoom?: number): void {

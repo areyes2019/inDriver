@@ -51,6 +51,10 @@ export default class BaseProvider {
     throw new Error('Method "drawRoute" must be implemented')
   }
 
+  trimRoute(_containerId: string, _routeId: string, _position: LatLngLike): void {
+    throw new Error('Method "trimRoute" must be implemented')
+  }
+
   clearRoutes(_containerId: string): void {
     throw new Error('Method "clearRoutes" must be implemented')
   }

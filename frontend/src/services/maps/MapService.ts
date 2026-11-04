@@ -55,6 +55,11 @@ class MapService {
     return this.provider.drawRoute(containerId, routeId, points, options)
   }
 
+  /** Acorta la línea hasta donde va el conductor, sin consultar Directions (spec tenant/026, RN-23). */
+  trimRoute(containerId: string, routeId: string, position: LatLngLike): void {
+    this.provider.trimRoute(containerId, routeId, position)
+  }
+
   /** Borra la línea de un solo conductor sin tocar las de los demás (spec tenant/026, RN-21). */
   clearRoute(containerId: string, routeId: string): void {
     this.provider.clearRoute(containerId, routeId)

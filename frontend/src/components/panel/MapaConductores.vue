@@ -52,6 +52,19 @@ function metrosEntre(a: LatLngLike, b: LatLngLike): number {
 }
 
 /**
+ * Acorta el tramo H2 hasta donde va el conductor (spec tenant/026, RN-23). Lee la posición del store
+ * porque también corre al terminar un trazado, y mientras Directions contestaba pudo haberse movido:
+ * recargar el Panel a medio viaje debe mostrar solo lo que falta, no la ruta entera.
+ */
+function recortarHastaConductor(idConductor: number) {
+  const conductor = panel.conductores.get(idConductor)
+  if (!conductor || conductor.pedido_asignado?.seguimiento?.hito !== 'H2') return
+
+  const posicion = posicionDe(conductor)
+  if (posicion) mapService.trimRoute(CONTAINER_ID, rutaId(idConductor), posicion)
+}
+
+/**
  * Una línea por conductor (spec tenant/026, RN-16): `drawRoute` reusa el mismo `routeId`, así que
  * entrar a H2 borra la de H1 sin que haya que limpiarla aparte. Sin envío activo no hay línea (RN-21).
  */
@@ -67,16 +80,13 @@ function dibujarTramo(conductor: ConductorActivo) {
   const origen = seguimiento.origen ?? posicionDe(conductor)
   if (!origen) return
 
-  mapService.drawRoute(
-    CONTAINER_ID,
-    rutaId(conductor.id_conductor),
-    [origen, seguimiento.destino],
-    {
+  mapService
+    .drawRoute(CONTAINER_ID, rutaId(conductor.id_conductor), [origen, seguimiento.destino], {
       color: seguimiento.color,
       estilo: seguimiento.estilo,
       preserveViewport: true,
-    },
-  )
+    })
+    .then(() => recortarHastaConductor(conductor.id_conductor))
 
   ultimoTrazo.set(conductor.id_conductor, {
     hito: seguimiento.hito,
@@ -87,8 +97,9 @@ function dibujarTramo(conductor: ConductorActivo) {
 
 /**
  * Redibuja solo cuando hace falta. Un cambio de hito o de destino manda siempre; si la línea es la
- * misma, únicamente el tramo H1 sigue a la moto, y con la cadencia de la spec tenant/026 (RN-14):
- * repedirle una ruta a Directions en cada punto sería absurdo cuando el dibujo casi no cambia.
+ * misma, el tramo H1 sigue a la moto con la cadencia de la spec tenant/026 (RN-14), porque repedirle
+ * una ruta a Directions en cada punto sería absurdo cuando el dibujo casi no cambia. El tramo H2 no
+ * se repide: se acorta sobre el trazo que ya se tiene (RN-15).
  */
 function dibujarTramoSiCambio(conductor: ConductorActivo, forzar: boolean) {
   const seguimiento = conductor.pedido_asignado?.seguimiento ?? null
@@ -106,9 +117,10 @@ function dibujarTramoSiCambio(conductor: ConductorActivo, forzar: boolean) {
     return
   }
 
-  // El tramo H2 arranca en el punto de recogida, que no se mueve (RN-15): no hay nada que
-  // recalcular. Solo el H1, que sale de donde está el conductor ahora mismo.
-  if (seguimiento.hito !== 'H1') return
+  if (seguimiento.hito !== 'H1') {
+    recortarHastaConductor(conductor.id_conductor)
+    return
+  }
 
   const ahora = posicionDe(conductor)
   if (!ahora) return
