@@ -544,3 +544,24 @@ conectarla.
 
 Cubierto en `GpsTest.php`, `BuzonGpsRedisTest.php`, `TrackingTest.php`, `buzon_test.go` y
 `presencia_test.go`.
+
+## 19. Movimiento fluido en el Panel (2026-11-03)
+
+El marcador brincaba de una posición a otra, llegaran por el servicio o por el POST directo. Ahora se
+desliza. No depende del servicio GPS: la lógica vive en `frontend/src/services/maps/`, y el evento y
+el canal no cambian. El criterio 8 de §10 sigue valiendo para la integración con el servicio; este
+cambio es aparte.
+
+- La animación arranca desde donde se ve el marcador, no desde el destino anterior.
+- Dura el intervalo observado entre posiciones, entre 500 ms y 4 s. La primera, 1 s.
+- Coloca el marcador sin animar en estos casos: más de 500 m de distancia, más de 30 s sin posiciones,
+  pestaña oculta o `prefers-reduced-motion`.
+- Una posición repetida no reinicia la animación, porque el mapa sincroniza a todos los conductores
+  cada vez que llega la posición de uno.
+- Un solo ciclo de `requestAnimationFrame` por mapa, que se detiene si nada se mueve.
+
+Costo aceptado: el marcador va hasta un intervalo por detrás de la posición real, mientras que la
+polilínea H2 se recorta con la posición real, así que puede acortarse un poco antes de que llegue.
+
+Cubierto en `interpolacionMarcador.test.ts`, que corre con `npm run test:unit`. La integración con
+Google Maps se comprueba a ojo con un envío TEST.

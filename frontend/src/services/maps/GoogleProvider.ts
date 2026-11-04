@@ -1,5 +1,11 @@
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader'
 import BaseProvider from './BaseProvider'
+import {
+  iniciarMovimiento,
+  planearMovimiento,
+  posicionEnTramo,
+  type MovimientoMarcador,
+} from './interpolacionMarcador'
 import { AVANCE_INICIAL, calcularAvance, trazoRestante, type AvanceRuta } from './recorteRuta'
 import type {
   AddressSuggestion,
@@ -19,6 +25,10 @@ import type {
 interface MapInstance {
   map: google.maps.Map
   markers: Map<string, google.maps.Marker>
+  /** Hacia dónde se desliza cada marcador (spec tenant/028, §19). */
+  movimientos: Map<string, MovimientoMarcador>
+  /** Cuadro de animación pendiente; `null` si no hay ningún marcador en movimiento. */
+  cuadroPendiente: number | null
   routes: Map<string, google.maps.Polyline>
   /** Trazo completo de cada línea y hasta dónde va recortado (spec tenant/026, RN-23). */
   recortes: Map<string, { trazo: LatLngLike[]; avance: AvanceRuta }>
@@ -102,6 +112,8 @@ export default class GoogleProvider extends BaseProvider {
     this.instances.set(containerId, {
       map,
       markers: new Map(),
+      movimientos: new Map(),
+      cuadroPendiente: null,
       routes: new Map(),
       recortes: new Map(),
       dibujosVigentes: new Map(),
@@ -132,19 +144,83 @@ export default class GoogleProvider extends BaseProvider {
       icon: options.color ? this.puntoDeColor(options.color) : undefined,
     })
     instance.markers.set(markerId, marker)
+    instance.movimientos.set(markerId, iniciarMovimiento(position))
   }
 
+  /** Desliza el marcador hasta la posición nueva en vez de brincar (spec tenant/028, §19). */
   updateMarker(containerId: string, markerId: string, position: LatLngLike): void {
     const instance = this.instances.get(containerId)
     const marker = instance?.markers.get(markerId)
-    if (marker) {
+    const actual = instance?.movimientos.get(markerId)
+    if (!instance || !marker || !actual) return
+
+    const siguiente = planearMovimiento(
+      actual,
+      marker.getPosition()?.toJSON() ?? actual.destino,
+      position,
+      performance.now(),
+      this.puedeAnimar(),
+    )
+    if (!siguiente) return
+
+    instance.movimientos.set(markerId, siguiente)
+
+    if (!siguiente.tramo) {
       marker.setPosition(position)
+      return
+    }
+
+    this.pedirCuadro(instance)
+  }
+
+  /**
+   * Con la pestaña oculta el navegador pausa los cuadros, así que el marcador se coloca directo y al
+   * volver ya está donde debe. `prefers-reduced-motion` es una preferencia de accesibilidad.
+   */
+  private puedeAnimar(): boolean {
+    return !document.hidden && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  }
+
+  private pedirCuadro(instance: MapInstance): void {
+    if (instance.cuadroPendiente !== null) return
+
+    instance.cuadroPendiente = requestAnimationFrame((ahora) =>
+      this.avanzarMarcadores(instance, ahora),
+    )
+  }
+
+  /** Un solo ciclo por mapa, que se detiene en cuanto no queda ningún marcador en movimiento. */
+  private avanzarMarcadores(instance: MapInstance, ahora: number): void {
+    instance.cuadroPendiente = null
+
+    let quedanEnMovimiento = false
+
+    instance.movimientos.forEach((movimiento, markerId) => {
+      if (!movimiento.tramo) return
+
+      const { posicion, terminado } = posicionEnTramo(movimiento.destino, movimiento.tramo, ahora)
+      instance.markers.get(markerId)?.setPosition(posicion)
+
+      if (terminado) {
+        movimiento.tramo = null
+      } else {
+        quedanEnMovimiento = true
+      }
+    })
+
+    if (quedanEnMovimiento) {
+      this.pedirCuadro(instance)
     }
   }
 
   clearMarkers(containerId: string): void {
     const instance = this.instances.get(containerId)
     if (!instance) return
+    if (instance.cuadroPendiente !== null) {
+      cancelAnimationFrame(instance.cuadroPendiente)
+      instance.cuadroPendiente = null
+    }
+    instance.movimientos.clear()
     instance.markers.forEach((marker) => marker.setMap(null))
     instance.markers.clear()
   }
