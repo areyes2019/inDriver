@@ -50,7 +50,13 @@ export GPS_LISTEN=127.0.0.1:8081
 ```
 
 Los mismos valores de `GPS_TOKEN_SECRET` y `GPS_SERVICE_TOKEN` tienen que estar en el `.env` de
-`backend/`, o los dos lados no se reconocen.
+`backend/`, o los dos lados no se reconocen. `GPS_SERVICE_URL`, también en ese `.env`, es la dirección
+que recibe el teléfono: en producción `https://prosello.com.mx`, y desde el emulador de Android
+`http://10.0.2.2:8081`. `127.0.0.1` no le sirve a ninguno de los dos.
+
+Hace falta Redis 6.2 o superior: publicar en el buzón usa `XADD ... MINID`. Las pruebas de `buzon` y
+`presencia` hablan con un Redis en `127.0.0.1:6379` (contraseña en `REDIS_PASSWORD`, si la tiene) y
+se saltan si no hay uno; solo usan comandos disponibles desde Redis 5.
 
 Para probar un ping a mano hace falta que el conductor tenga envío en curso, que en producción abre
 Laravel por el buzón (RN-01, RN-02):

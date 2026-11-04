@@ -61,8 +61,29 @@ func (p *Presencia) AbrirEnvio(ctx context.Context, tenant string, conductor int
 	return p.mem.Cliente.Set(ctx, memoria.ClaveEnvio(tenant, conductor), pedido, p.envioTTL).Err()
 }
 
-func (p *Presencia) CerrarEnvio(ctx context.Context, tenant string, conductor int64) error {
-	return p.mem.Cliente.Del(ctx, memoria.ClaveEnvio(tenant, conductor)).Err()
+// cerrarEnvio borra la marca salvo que sea de otro pedido. Es una sola operación indivisible para que
+// nadie abra un envío entre la comparación y el borrado.
+var cerrarEnvio = redis.NewScript(`
+local actual = redis.call('GET', KEYS[1])
+if ARGV[1] ~= '' and actual and actual ~= ARGV[1] then
+  return 0
+end
+
+redis.call('DEL', KEYS[1])
+
+return 1
+`)
+
+// CerrarEnvio devuelve false si la marca pertenece a otro pedido. Pasa cuando se reintenta un
+// ENVIO_TERMINADO viejo y el conductor ya tomó su siguiente envío: cerrar aquí lo dejaría rodando
+// sin que se le guarde el recorrido.
+func (p *Presencia) CerrarEnvio(ctx context.Context, tenant string, conductor int64, pedido string) (bool, error) {
+	cerrado, err := cerrarEnvio.Run(ctx, p.mem.Cliente, []string{memoria.ClaveEnvio(tenant, conductor)}, pedido).Int()
+	if err != nil {
+		return false, err
+	}
+
+	return cerrado == 1, nil
 }
 
 // TocaLatido usa la propia clave como acelerador: solo el primero en crearla dentro de la ventana

@@ -45,6 +45,9 @@ class BuzonGps
     /** Tope aproximado del stream de salida: un buzón sin poda crece hasta llenar la memoria. */
     public const MAX_MENSAJES = 100_000;
 
+    /** Tras estas entregas sin poder aplicarse, un aviso se descarta: atascaría el buzón (RN-17). */
+    public const MAX_ENTREGAS = 5;
+
     /**
      * Sin URL del servicio la integración está apagada y todo esto es una función vacía. Es lo que
      * permite que el paquete de Hostinger y el entorno de pruebas sigan como si nada (§14).
@@ -155,8 +158,59 @@ class BuzonGps
             'STREAMS', config('gps.streams.hacia_laravel'), '>',
         ]);
 
-        // Sin avisos en la ventana de espera Redis responde nil, que llega como false o null segun
-        // el cliente. No es un error: es que no paso nada en esos segundos.
+        return $this->interpretar($respuesta);
+    }
+
+    /**
+     * Avisos que este consumidor recibió y no alcanzó a confirmar, con cuántas veces se le han
+     * entregado ya (RN-17). Leer con `>` nunca los devuelve: sin esto, un aviso que falló una vez se
+     * quedaba pendiente para siempre.
+     *
+     * El consumidor se identifica por el nombre de la máquina y no por el proceso: si cambiara en
+     * cada arranque, lo pendiente quedaría a nombre de un consumidor que ya no existe.
+     *
+     * @return array<int, array{id: string, tipo: string, datos: array<string, mixed>, entregas: int}>
+     */
+    public function leerPendientes(string $consumidor, int $cantidad = 50): array
+    {
+        $stream = config('gps.streams.hacia_laravel');
+        $grupo = config('gps.grupo');
+
+        $detalle = $this->crudo(['XPENDING', $stream, $grupo, '-', '+', (string) $cantidad, $consumidor]);
+
+        if (! is_array($detalle) || $detalle === []) {
+            return [];
+        }
+
+        // Forma cruda de XPENDING: [[id, consumidor, ms_inactivo, entregas], ...]. Se lee antes de
+        // XREADGROUP porque volver a entregar el aviso también incrementa la cuenta.
+        $entregas = [];
+
+        foreach ($detalle as $fila) {
+            $entregas[(string) $fila[0]] = (int) $fila[3];
+        }
+
+        $avisos = $this->interpretar($this->crudo([
+            'XREADGROUP',
+            'GROUP', $grupo, $consumidor,
+            'COUNT', (string) $cantidad,
+            'STREAMS', $stream, '0',
+        ]));
+
+        return array_map(
+            fn (array $aviso) => $aviso + ['entregas' => $entregas[$aviso['id']] ?? 1],
+            $avisos,
+        );
+    }
+
+    /**
+     * Sin avisos en la ventana de espera Redis responde nil, que llega como false o null segun el
+     * cliente. No es un error: es que no paso nada en esos segundos.
+     *
+     * @return array<int, array{id: string, tipo: string, datos: array<string, mixed>}>
+     */
+    private function interpretar(mixed $respuesta): array
+    {
         if (! is_array($respuesta)) {
             return [];
         }
@@ -166,7 +220,8 @@ class BuzonGps
         // Forma cruda de XREADGROUP: [[nombre_stream, [[id, [campo, valor, campo, valor]], ...]]].
         foreach ($respuesta as $flujo) {
             foreach ($flujo[1] ?? [] as $mensaje) {
-                $campos = $this->aClaveValor($mensaje[1] ?? []);
+                // Un aviso pendiente que la poda ya borró del stream llega sin campos.
+                $campos = $this->aClaveValor(is_array($mensaje[1] ?? null) ? $mensaje[1] : []);
                 $datos = json_decode((string) ($campos['datos'] ?? ''), true);
 
                 $avisos[] = [

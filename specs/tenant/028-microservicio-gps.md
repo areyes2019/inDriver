@@ -162,7 +162,7 @@ configuración.
 
 | Método | Ruta | Descripción | Éxito |
 |---|---|---|---|
-| POST | `/api/{slug}/conductor/gps-token` | Emite o renueva el permiso GPS | 200 |
+| POST | `/api/v1/t/{slug}/conductor/gps-token` | Emite o renueva el permiso GPS | 200 |
 
 Autenticado con `auth:conductor-token` (Sanctum, como todo el resto de la App).
 
@@ -171,12 +171,17 @@ Autenticado con `auth:conductor-token` (Sanctum, como todo el resto de la App).
   "token": "…",
   "expira_en": "2026-09-08T10:44:22Z",
   "renovar_en": "2026-09-08T10:34:22Z",
-  "url": "https://delivery.prosello.com.mx/gps/v1/ping"
+  "renovar_en_segundos": 1200,
+  "url": "https://prosello.com.mx/gps/v1/ping"
 }
 ```
 
-`POST /api/{slug}/conductor/ubicacion` y
-`POST /api/{slug}/conductor/pedidos/{pedido}/ubicaciones/lote` **se conservan** (§12).
+`renovar_en_segundos` es la misma espera que `renovar_en`, para contarla desde que llegó la respuesta:
+el reloj del teléfono puede estar mal puesto. `url` sale de `GPS_SERVICE_URL`, que por eso tiene que
+ser la dirección **pública** del servicio (§14).
+
+`POST /api/v1/t/{slug}/conductor/ubicacion` y
+`POST /api/v1/t/{slug}/conductor/pedidos/{pedido}/ubicaciones/lote` **se conservan** (§12).
 
 ### 6.3 Buzón Laravel → servicio (`gps:hacia-servicio`)
 
@@ -190,9 +195,9 @@ Autenticado con `auth:conductor-token` (Sanctum, como todo el resto de la App).
 
 | Aviso | Cuándo | Efecto en Laravel |
 |---|---|---|
-| `POSICION` | En cada posición aceptada, con envío en curso | Dispara `UbicacionActualizada` por Reverb, igual que hoy |
-| `POSICION_SIN_ENVIO` | En cada posición aceptada, sin envío en curso (§16) | Actualiza `conductor_estados.ultima_latitud/longitud`, sin difundir ni generar historia |
-| `RECORRIDO` | Cada 10 s o 50 puntos | Inserta la tanda en `conductor_posiciones` |
+| `POSICION` | En cada posición aceptada, con envío en curso | Actualiza la posición actual y dispara `UbicacionActualizada` por Reverb, igual que hoy, salvo que tenga más de 60 s (§18) |
+| `POSICION_SIN_ENVIO` | En cada posición aceptada, sin marca de envío | Depende del pedido activo que vea Laravel (§18): sin pedido, actualiza `conductor_estados.ultima_latitud/longitud` sin difundir ni generar historia; en TEST, solo latido; en LIVE, se trata como `POSICION` y se reenvía `ENVIO_INICIADO` |
+| `RECORRIDO` | Cada 10 s o 50 puntos | Inserta la tanda en `conductor_posiciones`, sin mover la posición actual y sin duplicar (§18) |
 | `LATIDO` | Cada 60 s por conductor | Actualiza `conductor_estados.ultima_actualizacion` |
 
 Ambos buzones son **buzón, no megáfono**: un reinicio del servicio o del worker no pierde avisos
@@ -301,7 +306,9 @@ prioridad. Si el servicio no responde, Laravel cae a la consulta actual sobre `c
 - **RN-16:** El servicio devuelve geografía, no decisiones. Nunca elige a quién asignar, quién tiene
   prioridad, quién tiene saldo ni quién puede aceptar.
 - **RN-17:** La comunicación entre Laravel y el servicio es por buzón con acuse: un aviso no se
-  descarta hasta que se procesó.
+  descarta hasta que se procesó o agotó sus **5 entregas**. Lo que queda sin confirmar se reintenta
+  al arrancar y cada 30 s. Excepción: si Reverb no contesta, `POSICION` se confirma igual, porque la
+  siguiente la reemplaza.
 - **RN-18:** Si el servicio no responde, Laravel cae a `conductor_estados` para la cercanía y a su
   endpoint actual para la posición. La operación nunca se detiene por el servicio GPS.
 - **RN-19:** La App detecta que el servicio no responde y vuelve al endpoint de Laravel mientras
@@ -410,6 +417,10 @@ worker `gps:consumir-buzon` supervisado igual que los demás.
 Variables nuevas compartidas: `GPS_TOKEN_SECRET`, `GPS_SERVICE_TOKEN`, `GPS_SERVICE_URL`,
 `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`.
 
+`GPS_SERVICE_URL` es la dirección pública (`https://prosello.com.mx`), nunca `127.0.0.1`: se le
+entrega al teléfono dentro del permiso. Hace falta **Redis 6.2 o superior**: `Publicar` usa
+`XADD ... MINID` y la cercanía usa `GEOSEARCH`.
+
 Docker se usa **solo para desarrollo y pruebas de carga**. No es requisito de producción, y migrar
 producción a contenedores es, si se decide, una fase aparte.
 
@@ -511,3 +522,25 @@ curso, en `web.go`. Sin envío, el servicio ahora avisa a Laravel con un mensaje
 `POSICION_SIN_ENVIO` (§6.4), que solo actualiza `conductor_estados` — no dispara
 `UbicacionActualizada` ni genera historia, respetando RN-01 en lo que sí importaba conservar. Cubierto
 por una prueba nueva en `GpsTest.php`.
+
+## 18. Correcciones antes de conectar la App (2026-11-03)
+
+Una auditoría encontró que la App todavía no le envía posiciones al servicio: producción registraba
+cero `POST /gps/v1/ping`, y las afirmaciones de §16 y §17 sobre el teléfono hablándole al servicio no
+describen la App actual. Estos defectos no se manifestaban por esa razón, y se corrigieron antes de
+conectarla.
+
+| Defecto | Consecuencia | Corrección |
+|---|---|---|
+| `POSICION_SIN_ENVIO` escribía la posición sin mirar si había pedido activo | En un envío TEST el servicio no tiene marca (RN-13), así que el GPS real competía con el simulador: el mismo incidente de §16 por otra puerta | El worker consulta el pedido activo. En TEST solo registra latido |
+| Un envío LIVE sin marca en el servicio (Redis reiniciado, o abierto antes de conectar) se trataba como "sin envío" | El Panel dejaba de ver al conductor | El worker lo trata como `POSICION` y reenvía `ENVIO_INICIADO`. Se pierde del recorrido solo lo que llegó antes de restablecer la marca |
+| `RECORRIDO` usaba `registrarLote()`, que fija el último punto como posición actual sin pasar por RN-03 | Un punto rechazado en `POSICION` volvía a entrar como base en la siguiente tanda | `registrarRecorrido()` guarda solo historia y mide cada punto contra la base vigente |
+| Leer con `>` nunca devuelve lo pendiente, y el consumidor de Laravel cambiaba de nombre con cada PID | Un aviso que fallaba una vez se perdía, contra lo que decía RN-17 | Consumidor con nombre estable, relectura con `XREADGROUP ... 0` y tope de 5 entregas. Hay un solo consumidor por lado, así que no hace falta `XAUTOCLAIM` |
+| Un reintento de `RECORRIDO` podía duplicar filas | Distancia inflada | Se ignoran los puntos cuya fecha ya existe en ese pedido, con resolución de segundos |
+| El resumen se calcula al entregar, y la última tanda sale después de `ENVIO_TERMINADO` | Faltaban hasta 10 s de recorrido, contra el criterio 7 | Si una tanda llega con el pedido `ENTREGADO`, se recalcula. La liquidación no usa esos datos |
+| Un `ENVIO_TERMINADO` reintentado podía borrar la marca del envío siguiente | El conductor rodaba sin que se guardara su recorrido | `CerrarEnvio` solo borra si la marca es de ese pedido |
+| Una lectura vieja podía mover la base hacia atrás | Marcador retrocediendo al vaciar un buzón atrasado | RN-03e de spec tenant/021. `POSICION_SIN_ENVIO` ahora lleva `fecha_ms` |
+| Al vaciar un buzón atrasado se difundía cada posición | El marcador repetía el viaje en cámara rápida | Una `POSICION` de más de 60 s actualiza el dato sin difundirse |
+
+Cubierto en `GpsTest.php`, `BuzonGpsRedisTest.php`, `TrackingTest.php`, `buzon_test.go` y
+`presencia_test.go`.

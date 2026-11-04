@@ -354,6 +354,48 @@ it('measures the implied speed between capture times, not processing times', fun
     tenancy()->end();
 });
 
+it('ignores a reading captured before the current base without counting it as a rejection', function () {
+    $tenant = trackingTenant();
+    $datos = trackingConductor($tenant);
+    tenancy()->initialize($tenant);
+    ConductorEstado::create([
+        'id_conductor' => $datos['conductor']->id_conductor,
+        'estado' => 'ONLINE',
+        'ultima_latitud' => 19.4326,
+        'ultima_longitud' => -99.1332,
+        'ultima_posicion_en' => now(),
+        'ultima_actualizacion' => now(),
+    ]);
+
+    $aceptada = app(TrackingService::class)
+        ->filtrarPosicionEnVivo($datos['conductor']->fresh(), 19.4330, -99.1340, now()->subSeconds(30));
+
+    $estado = ConductorEstado::where('id_conductor', $datos['conductor']->id_conductor)->first();
+
+    expect($aceptada)->toBeFalse()
+        ->and((float) $estado->ultima_latitud)->toEqualWithDelta(19.4326, 0.0001)
+        ->and($estado->rechazos_consecutivos)->toBe(0);
+    tenancy()->end();
+});
+
+it('does not freeze a conductor whose base comes from a clock set in the future', function () {
+    $tenant = trackingTenant();
+    $datos = trackingConductor($tenant);
+    tenancy()->initialize($tenant);
+    ConductorEstado::create([
+        'id_conductor' => $datos['conductor']->id_conductor,
+        'estado' => 'ONLINE',
+        'ultima_latitud' => 19.4326,
+        'ultima_longitud' => -99.1332,
+        'ultima_posicion_en' => now()->addHour(),
+        'ultima_actualizacion' => now(),
+    ]);
+
+    expect(app(TrackingService::class)->filtrarPosicionEnVivo($datos['conductor']->fresh(), 19.4327, -99.1333, now()))
+        ->toBeTrue();
+    tenancy()->end();
+});
+
 it('uploads a batch of offline points without broadcasting, updating the current position', function () {
     Event::fake([UbicacionActualizada::class]);
 

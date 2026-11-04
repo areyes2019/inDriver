@@ -102,18 +102,25 @@ class TrackingService
      *
      * Se escribe con `update()` y solo sobre un conductor ONLINE: si la fila no existe —nunca se
      * conectó— no se inventa ninguna, igual que en `registrarLatido()`.
+     *
+     * RN-03e: una lectura más vieja que la base no la reemplaza. Pasa al vaciar un buzón atrasado.
      */
-    public function registrarPosicionSinEnvio(Conductor $conductor, float $latitud, float $longitud): void
+    public function registrarPosicionSinEnvio(Conductor $conductor, float $latitud, float $longitud, ?CarbonInterface $capturadaEn = null): void
     {
+        $capturadaEn ??= now();
+
         ConductorEstado::where('id_conductor', $conductor->id_conductor)
             ->where('estado', 'ONLINE')
+            ->where(fn ($query) => $query
+                ->whereNull('ultima_posicion_en')
+                ->orWhere('ultima_posicion_en', '<=', $capturadaEn)
+                // Una base "del futuro" es un reloj mal puesto y no puede congelar al conductor.
+                ->orWhere('ultima_posicion_en', '>', now()))
             ->update([
                 'ultima_latitud' => $latitud,
                 'ultima_longitud' => $longitud,
                 'ultima_actualizacion' => now(),
-                // El aviso POSICION_SIN_ENVIO no trae hora de captura, así que aquí sí es la de
-                // proceso. Sigue siendo mejor denominador que `ultima_actualizacion` (RN-03d).
-                'ultima_posicion_en' => now(),
+                'ultima_posicion_en' => $capturadaEn,
                 // Esta vía no pasa por RN-03 y reemplaza la base entera: una racha de rechazos
                 // contra la base anterior ya no dice nada de la nueva (RN-03b).
                 'rechazos_consecutivos' => 0,
@@ -130,18 +137,7 @@ class TrackingService
     {
         $ahora = now();
 
-        $filas = array_map(fn (array $punto) => [
-            'id_conductor' => $conductor->id_conductor,
-            'id_pedido' => $pedido->id_pedido,
-            'latitud' => $punto['latitud'],
-            'longitud' => $punto['longitud'],
-            'precision' => $punto['precision'] ?? null,
-            'velocidad' => $punto['velocidad'] ?? null,
-            'rumbo' => $punto['rumbo'] ?? null,
-            'bateria' => $punto['bateria'] ?? null,
-            'fecha_posicion' => $punto['fecha_posicion'],
-            'created_at' => $ahora,
-        ], $puntos);
+        $filas = array_map(fn (array $punto) => $this->filaDePosicion($conductor, $pedido, $punto, $ahora), $puntos);
 
         ConductorPosicion::insert($filas);
 
@@ -154,6 +150,60 @@ class TrackingService
             // que no le corresponde y falsearía el siguiente cálculo de RN-03 (RN-03d).
             Carbon::parse($ultimo['fecha_posicion']),
         );
+    }
+
+    /**
+     * Tanda de recorrido que manda el microservicio GPS (spec tenant/028, §7.4). Es solo historia:
+     * a diferencia de `registrarLote()`, no toca la posición actual, que en este camino es de
+     * `POSICION` y ya pasó por RN-03. Si la moviera, un punto recién rechazado volvería a entrar
+     * como base unos segundos después, en la siguiente tanda.
+     *
+     * - Los puntos se miden contra la base vigente con la misma regla RN-03, sin llevar otra cuenta
+     *   de rechazos: la recuperación de RN-03b ya ocurre al procesar `POSICION`.
+     * - Es idempotente (spec tenant/028, RN-17): un reintento tras morir antes del acuse no duplica
+     *   filas. La clave es la fecha, con resolución de segundos, igual que la columna.
+     * - La última tanda llega después de `ENVIO_TERMINADO`, y por tanto después de que
+     *   `calcularResumenRuta()` corrió al entregar: por eso aquí se vuelve a calcular.
+     *
+     * @param  array<int, array<string, mixed>>  $puntos  con `fecha_posicion` como `CarbonInterface`
+     */
+    public function registrarRecorrido(Conductor $conductor, Pedido $pedido, array $puntos): void
+    {
+        $fechas = array_map(fn (array $punto) => $punto['fecha_posicion']->format('Y-m-d H:i:s'), $puntos);
+
+        $vistas = ConductorPosicion::where('id_pedido', $pedido->id_pedido)
+            ->whereIn('fecha_posicion', $fechas)
+            ->get(['fecha_posicion'])
+            ->mapWithKeys(fn (ConductorPosicion $posicion) => [$posicion->fecha_posicion->format('Y-m-d H:i:s') => true])
+            ->all();
+
+        $ahora = now();
+        $filas = [];
+
+        foreach ($puntos as $indice => $punto) {
+            if (isset($vistas[$fechas[$indice]])) {
+                continue;
+            }
+
+            $vistas[$fechas[$indice]] = true;
+
+            if ($this->esSaltoImposible($conductor, (float) $punto['latitud'], (float) $punto['longitud'], $punto['fecha_posicion'])) {
+                continue;
+            }
+
+            $filas[] = $this->filaDePosicion($conductor, $pedido, $punto, $ahora);
+        }
+
+        if ($filas === []) {
+            return;
+        }
+
+        ConductorPosicion::insert($filas);
+
+        if ($pedido->estado === 'ENTREGADO') {
+            $this->calcularResumenRuta($pedido);
+            $pedido->saveQuietly();
+        }
     }
 
     /**
@@ -222,6 +272,12 @@ class TrackingService
     {
         $capturadaEn ??= now();
 
+        // RN-03e: no es un rechazo ni cuenta para RN-03b, porque la lectura no contradice a la base,
+        // solo llegó tarde.
+        if ($this->llegoFueraDeOrden($conductor, $capturadaEn)) {
+            return false;
+        }
+
         if ($this->esSaltoImposible($conductor, $latitud, $longitud, $capturadaEn)) {
             $rechazos = $this->contarRechazo($conductor);
             $baseEnvenenada = $rechazos > self::MAX_RECHAZOS_CONSECUTIVOS;
@@ -246,6 +302,40 @@ class TrackingService
         $this->actualizarPosicionActual($conductor, $latitud, $longitud, $capturadaEn);
 
         return true;
+    }
+
+    /**
+     * RN-03e: una lectura capturada antes que la base no puede moverla hacia atrás. Pasa cuando el
+     * worker vacía un buzón atrasado o cuando se alterna entre el servicio GPS y el POST directo.
+     *
+     * Una base "del futuro" es un reloj mal puesto y se ignora: si no, congelaría al conductor hasta
+     * que el tiempo la alcanzara.
+     */
+    private function llegoFueraDeOrden(Conductor $conductor, CarbonInterface $capturadaEn): bool
+    {
+        $anterior = $conductor->estadoActual?->ultima_posicion_en;
+
+        return $anterior !== null && ! $anterior->isFuture() && $capturadaEn->lt($anterior);
+    }
+
+    /**
+     * @param  array<string, mixed>  $punto
+     * @return array<string, mixed>
+     */
+    private function filaDePosicion(Conductor $conductor, Pedido $pedido, array $punto, CarbonInterface $creadaEn): array
+    {
+        return [
+            'id_conductor' => $conductor->id_conductor,
+            'id_pedido' => $pedido->id_pedido,
+            'latitud' => $punto['latitud'],
+            'longitud' => $punto['longitud'],
+            'precision' => $punto['precision'] ?? null,
+            'velocidad' => $punto['velocidad'] ?? null,
+            'rumbo' => $punto['rumbo'] ?? null,
+            'bateria' => $punto['bateria'] ?? null,
+            'fecha_posicion' => $punto['fecha_posicion'],
+            'created_at' => $creadaEn,
+        ];
     }
 
     /**

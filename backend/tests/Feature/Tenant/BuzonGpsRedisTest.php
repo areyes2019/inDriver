@@ -105,6 +105,58 @@ it('conserva el aviso sin confirmar para que otro consumidor lo recoja', functio
     expect((int) $pendientes[0])->toBe(1);
 });
 
+it('vuelve a entregar lo que quedó sin confirmar, con su cuenta de entregas', function () {
+    $buzon = buzonEnUnSoloStream();
+    $buzon->asegurarGrupo();
+
+    $buzon->envioTerminado('cafe-luna', 41, 500);
+
+    expect($buzon->leer('worker', 10, 200))->toHaveCount(1);
+
+    $pendientes = $buzon->leerPendientes('worker');
+
+    expect($pendientes)->toHaveCount(1)
+        ->and($pendientes[0]['tipo'])->toBe(BuzonGps::ENVIO_TERMINADO)
+        ->and($pendientes[0]['datos']['id_pedido'])->toBe(500)
+        ->and($pendientes[0]['entregas'])->toBe(1);
+
+    // La relectura también cuenta: es lo que hace que un aviso imposible termine por descartarse.
+    expect($buzon->leerPendientes('worker')[0]['entregas'])->toBe(2);
+
+    $buzon->confirmar($pendientes[0]['id']);
+
+    expect($buzon->leerPendientes('worker'))->toBeEmpty();
+});
+
+it('no entrega como pendiente lo que aún no se ha leído ni lo de otro consumidor', function () {
+    $buzon = buzonEnUnSoloStream();
+    $buzon->asegurarGrupo();
+
+    $buzon->envioIniciado('cafe-luna', 41, 500);
+
+    expect($buzon->leerPendientes('worker'))->toBeEmpty();
+
+    $buzon->leer('otro-worker', 10, 200);
+
+    expect($buzon->leerPendientes('worker'))->toBeEmpty();
+});
+
+it('soporta un pendiente que la poda ya borró del stream', function () {
+    $buzon = buzonEnUnSoloStream();
+    $buzon->asegurarGrupo();
+
+    $buzon->envioIniciado('cafe-luna', 41, 500);
+    $id = $buzon->leer('worker', 10, 200)[0]['id'];
+
+    Redis::connection(config('gps.conexion'))->client()->executeRaw(['XDEL', 'gps:prueba:hacia-laravel', $id]);
+
+    $pendientes = $buzon->leerPendientes('worker');
+
+    expect($pendientes)->toHaveCount(1)
+        ->and($pendientes[0]['tipo'])->toBe('')
+        ->and($pendientes[0]['datos'])->toBe([]);
+});
+
 it('devuelve vacío cuando no hay nada que leer', function () {
     $buzon = buzonEnUnSoloStream();
     $buzon->asegurarGrupo();

@@ -18,6 +18,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
+use Mockery\MockInterface;
 
 /**
  * spec tenant/028 — microservicio GPS.
@@ -202,6 +203,17 @@ it('no emite permiso si la integración está apagada', function () {
         ->assertJson(['error' => 'GPS_SERVICE_DISABLED']);
 });
 
+it('dice en segundos cuándo renovar, para no depender del reloj del teléfono', function () {
+    $tenant = gpsTenant();
+    gpsConductor($tenant);
+    $token = gpsToken();
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->postJson('/api/v1/t/cafe-luna/conductor/gps-token')
+        ->assertOk()
+        ->assertJsonPath('renovar_en_segundos', 1200);
+});
+
 it('exige haber iniciado sesión para pedir un permiso', function () {
     $tenant = gpsTenant();
     gpsConductor($tenant);
@@ -349,6 +361,7 @@ it('guarda el recorrido que manda el servicio', function () {
     $buzon = $this->mock(BuzonGps::class);
     $buzon->shouldReceive('habilitado')->andReturnTrue();
     $buzon->shouldReceive('asegurarGrupo');
+    $buzon->shouldReceive('leerPendientes')->andReturn([]);
     $buzon->shouldReceive('confirmar')->once();
     $buzon->shouldReceive('leer')->once()->andReturn([[
         'id' => '1-0',
@@ -379,9 +392,10 @@ it('guarda el recorrido que manda el servicio', function () {
         ->and($puntos[1]->bateria)->toBe(74)
         ->and($puntos[1]->rumbo)->toBeNull();
 
-    // RN-04 de SPEC-021: el recorrido también deja la posición "actual" al día.
-    expect((float) ConductorEstado::where('id_conductor', $conductor->id_conductor)->value('ultima_latitud'))
-        ->toBe(19.4330);
+    // La posición actual es de `POSICION`, que ya pasó por RN-03. Si una tanda la moviera, un punto
+    // recién rechazado volvería a entrar como base en la tanda siguiente.
+    expect(ConductorEstado::where('id_conductor', $conductor->id_conductor)->value('ultima_latitud'))
+        ->toBeNull();
 
     tenancy()->end();
 });
@@ -395,6 +409,7 @@ it('difunde la posición al Panel con el evento de siempre', function () {
     $buzon = $this->mock(BuzonGps::class);
     $buzon->shouldReceive('habilitado')->andReturnTrue();
     $buzon->shouldReceive('asegurarGrupo');
+    $buzon->shouldReceive('leerPendientes')->andReturn([]);
     $buzon->shouldReceive('confirmar')->once();
     $buzon->shouldReceive('leer')->once()->andReturn([[
         'id' => '1-0',
@@ -430,6 +445,7 @@ it('guarda la posición sin envío para que la próxima simulación TEST tenga u
     $buzon = $this->mock(BuzonGps::class);
     $buzon->shouldReceive('habilitado')->andReturnTrue();
     $buzon->shouldReceive('asegurarGrupo');
+    $buzon->shouldReceive('leerPendientes')->andReturn([]);
     $buzon->shouldReceive('confirmar')->once();
     $buzon->shouldReceive('leer')->once()->andReturn([[
         'id' => '1-0',
@@ -471,6 +487,7 @@ it('descarta una posición del microservicio que implica un salto imposible sin 
     $buzon = $this->mock(BuzonGps::class);
     $buzon->shouldReceive('habilitado')->andReturnTrue();
     $buzon->shouldReceive('asegurarGrupo');
+    $buzon->shouldReceive('leerPendientes')->andReturn([]);
     $buzon->shouldReceive('confirmar')->once();
     $buzon->shouldReceive('leer')->once()->andReturn([[
         'id' => '1-0',
@@ -510,6 +527,7 @@ it('mantiene vivo al conductor con el latido del servicio', function () {
     $buzon = $this->mock(BuzonGps::class);
     $buzon->shouldReceive('habilitado')->andReturnTrue();
     $buzon->shouldReceive('asegurarGrupo');
+    $buzon->shouldReceive('leerPendientes')->andReturn([]);
     $buzon->shouldReceive('confirmar')->once();
     $buzon->shouldReceive('leer')->once()->andReturn([[
         'id' => '1-0',
@@ -533,6 +551,7 @@ it('descarta un aviso de un tenant que no existe sin dejarlo pendiente', functio
     $buzon = $this->mock(BuzonGps::class);
     $buzon->shouldReceive('habilitado')->andReturnTrue();
     $buzon->shouldReceive('asegurarGrupo');
+    $buzon->shouldReceive('leerPendientes')->andReturn([]);
     $buzon->shouldReceive('leer')->once()->andReturn([[
         'id' => '1-0',
         'tipo' => BuzonGps::LATIDO,
@@ -543,6 +562,384 @@ it('descarta un aviso de un tenant que no existe sin dejarlo pendiente', functio
     $buzon->shouldReceive('confirmar')->once();
 
     $this->artisan('gps:consumir-buzon', ['--ciclos' => 1])->assertSuccessful();
+});
+
+/**
+ * El worker con un buzón de mentira que entrega estos avisos una vez.
+ *
+ * @param  array<int, array<string, mixed>>  $avisos
+ */
+function gpsBuzonConAvisos(array $avisos, array $pendientes = []): MockInterface
+{
+    $buzon = test()->mock(BuzonGps::class);
+    $buzon->shouldReceive('habilitado')->andReturnTrue();
+    $buzon->shouldReceive('asegurarGrupo');
+    $buzon->shouldReceive('leerPendientes')->andReturn($pendientes);
+    $buzon->shouldReceive('leer')->andReturn($avisos);
+    $buzon->shouldReceive('confirmar')->times(count($avisos) + count($pendientes));
+
+    return $buzon;
+}
+
+function gpsCorrerWorker(): void
+{
+    test()->artisan('gps:consumir-buzon', ['--ciclos' => 1])->assertSuccessful();
+}
+
+function gpsBase(Tenant $tenant, Conductor $conductor, array $cambios = []): void
+{
+    tenancy()->initialize($tenant);
+    ConductorEstado::where('id_conductor', $conductor->id_conductor)->update($cambios + [
+        'ultima_latitud' => 19.4326,
+        'ultima_longitud' => -99.1332,
+        'ultima_posicion_en' => now(),
+        'ultima_actualizacion' => now(),
+    ]);
+    tenancy()->end();
+}
+
+it('descarta el GPS real de un envío TEST que el servicio cree sin envío', function () {
+    // spec tenant/028, §16: en TEST no se avisa al servicio (RN-13), así que para él este conductor
+    // no tiene envío. Si la posición se guardara, el teléfono competiría con el simulador.
+    Event::fake([UbicacionActualizada::class]);
+
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+    $pedido = gpsPedido($tenant, $conductor, 'EN_CAMINO');
+
+    tenancy()->initialize($tenant);
+    Pedido::where('id_pedido', $pedido->id_pedido)->update(['ambiente' => Pedido::AMBIENTE_TEST]);
+    tenancy()->end();
+
+    gpsBase($tenant, $conductor, ['ultima_actualizacion' => now()->subMinutes(5)]);
+
+    $buzon = gpsBuzonConAvisos([[
+        'id' => '1-0',
+        'tipo' => BuzonGps::POSICION_SIN_ENVIO,
+        'datos' => [
+            'tenant' => 'cafe-luna',
+            'id_conductor' => $conductor->id_conductor,
+            'latitud' => 20.5248,
+            'longitud' => -100.8132,
+            'fecha_ms' => now()->getTimestampMs(),
+        ],
+    ]]);
+    $buzon->shouldNotReceive('envioIniciado');
+
+    gpsCorrerWorker();
+
+    tenancy()->initialize($tenant);
+    $estado = ConductorEstado::where('id_conductor', $conductor->id_conductor)->first();
+    expect((float) $estado->ultima_latitud)->toEqualWithDelta(19.4326, 0.0001)
+        // Se descarta la posición, no al conductor: sin el latido, se apagaría a media simulación.
+        ->and($estado->ultima_actualizacion->greaterThan(now()->subMinute()))->toBeTrue();
+    tenancy()->end();
+
+    Event::assertNotDispatched(UbicacionActualizada::class);
+});
+
+it('recupera un envío LIVE cuando el servicio perdió la marca', function () {
+    // Redis reiniciado o envío abierto antes de conectar el servicio: el Panel no debe dejar de ver
+    // al conductor, y el servicio tiene que volver a enterarse.
+    Event::fake([UbicacionActualizada::class]);
+
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+    $pedido = gpsPedido($tenant, $conductor, 'EN_CAMINO');
+
+    $buzon = gpsBuzonConAvisos([[
+        'id' => '1-0',
+        'tipo' => BuzonGps::POSICION_SIN_ENVIO,
+        'datos' => [
+            'tenant' => 'cafe-luna',
+            'id_conductor' => $conductor->id_conductor,
+            'latitud' => 19.4326,
+            'longitud' => -99.1332,
+            'fecha_ms' => now()->getTimestampMs(),
+        ],
+    ]]);
+    $buzon->shouldReceive('envioIniciado')
+        ->once()
+        ->with('cafe-luna', $conductor->id_conductor, $pedido->id_pedido);
+
+    gpsCorrerWorker();
+
+    Event::assertDispatched(UbicacionActualizada::class, fn (UbicacionActualizada $e) => $e->idConductor === $conductor->id_conductor);
+});
+
+it('no retrocede la última posición con un aviso sin envío más viejo', function () {
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+    gpsBase($tenant, $conductor);
+
+    gpsBuzonConAvisos([[
+        'id' => '1-0',
+        'tipo' => BuzonGps::POSICION_SIN_ENVIO,
+        'datos' => [
+            'tenant' => 'cafe-luna',
+            'id_conductor' => $conductor->id_conductor,
+            'latitud' => 19.5,
+            'longitud' => -99.2,
+            'fecha_ms' => now()->subSeconds(30)->getTimestampMs(),
+        ],
+    ]]);
+
+    gpsCorrerWorker();
+
+    tenancy()->initialize($tenant);
+    expect((float) ConductorEstado::where('id_conductor', $conductor->id_conductor)->value('ultima_latitud'))
+        ->toEqualWithDelta(19.4326, 0.0001);
+    tenancy()->end();
+});
+
+it('no guarda en el recorrido un punto que implica un salto imposible', function () {
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+    $pedido = gpsPedido($tenant, $conductor, 'EN_CAMINO');
+    gpsBase($tenant, $conductor);
+
+    gpsBuzonConAvisos([[
+        'id' => '1-0',
+        'tipo' => BuzonGps::RECORRIDO,
+        'datos' => [
+            'tenant' => 'cafe-luna',
+            'id_conductor' => $conductor->id_conductor,
+            'id_pedido' => $pedido->id_pedido,
+            'puntos' => [
+                ['latitud' => 19.4327, 'longitud' => -99.1333, 'fecha_ms' => now()->getTimestampMs()],
+                // San Francisco, dos segundos después de CDMX.
+                ['latitud' => 37.7749, 'longitud' => -122.4194, 'fecha_ms' => now()->addSeconds(2)->getTimestampMs()],
+            ],
+        ],
+    ]]);
+
+    gpsCorrerWorker();
+
+    tenancy()->initialize($tenant);
+    $puntos = ConductorPosicion::where('id_pedido', $pedido->id_pedido)->get();
+    expect($puntos)->toHaveCount(1)
+        ->and((float) $puntos[0]->latitud)->toEqualWithDelta(19.4327, 0.0001)
+        ->and((float) ConductorEstado::where('id_conductor', $conductor->id_conductor)->value('ultima_latitud'))
+        ->toEqualWithDelta(19.4326, 0.0001);
+    tenancy()->end();
+});
+
+it('no duplica el recorrido si una tanda se vuelve a entregar', function () {
+    // RN-17: si el worker muere entre insertar y confirmar, la tanda se reintenta entera.
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+    $pedido = gpsPedido($tenant, $conductor, 'EN_CAMINO');
+
+    $tanda = [
+        'id' => '1-0',
+        'tipo' => BuzonGps::RECORRIDO,
+        'datos' => [
+            'tenant' => 'cafe-luna',
+            'id_conductor' => $conductor->id_conductor,
+            'id_pedido' => $pedido->id_pedido,
+            'puntos' => [
+                ['latitud' => 19.4326, 'longitud' => -99.1332, 'fecha_ms' => now()->getTimestampMs()],
+                ['latitud' => 19.4330, 'longitud' => -99.1340, 'fecha_ms' => now()->addSeconds(5)->getTimestampMs()],
+            ],
+        ],
+    ];
+
+    gpsBuzonConAvisos([$tanda]);
+    gpsCorrerWorker();
+
+    gpsBuzonConAvisos([], [$tanda + ['entregas' => 2]]);
+    gpsCorrerWorker();
+
+    tenancy()->initialize($tenant);
+    expect(ConductorPosicion::where('id_pedido', $pedido->id_pedido)->count())->toBe(2);
+    tenancy()->end();
+});
+
+it('recalcula el resumen de ruta si la última tanda llega después de entregar', function () {
+    // `calcularResumenRuta()` corre al entregar, y el aviso que suelta la última tanda sale después.
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+    $pedido = gpsPedido($tenant, $conductor, 'ENTREGADO');
+
+    tenancy()->initialize($tenant);
+    ConductorPosicion::create([
+        'id_conductor' => $conductor->id_conductor,
+        'id_pedido' => $pedido->id_pedido,
+        'latitud' => 19.4300,
+        'longitud' => -99.1300,
+        'fecha_posicion' => now()->subMinute(),
+    ]);
+    tenancy()->end();
+
+    gpsBuzonConAvisos([[
+        'id' => '1-0',
+        'tipo' => BuzonGps::RECORRIDO,
+        'datos' => [
+            'tenant' => 'cafe-luna',
+            'id_conductor' => $conductor->id_conductor,
+            'id_pedido' => $pedido->id_pedido,
+            // Unos 1.1 km desde el punto anterior (0.01 grados de latitud).
+            'puntos' => [['latitud' => 19.4400, 'longitud' => -99.1300, 'fecha_ms' => now()->getTimestampMs()]],
+        ],
+    ]]);
+
+    gpsCorrerWorker();
+
+    tenancy()->initialize($tenant);
+    $pedido = Pedido::find($pedido->id_pedido);
+    expect((float) $pedido->distancia_recorrida_km)->toEqualWithDelta(1.11, 0.02)
+        ->and($pedido->resumen_ruta)->toHaveCount(2);
+    tenancy()->end();
+});
+
+it('no recalcula el resumen de un envío que sigue en curso', function () {
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+    $pedido = gpsPedido($tenant, $conductor, 'EN_CAMINO');
+
+    gpsBuzonConAvisos([[
+        'id' => '1-0',
+        'tipo' => BuzonGps::RECORRIDO,
+        'datos' => [
+            'tenant' => 'cafe-luna',
+            'id_conductor' => $conductor->id_conductor,
+            'id_pedido' => $pedido->id_pedido,
+            'puntos' => [['latitud' => 19.4400, 'longitud' => -99.1300, 'fecha_ms' => now()->getTimestampMs()]],
+        ],
+    ]]);
+
+    gpsCorrerWorker();
+
+    tenancy()->initialize($tenant);
+    expect(Pedido::find($pedido->id_pedido)->resumen_ruta)->toBeNull();
+    tenancy()->end();
+});
+
+it('ignora una posición más vieja que la vigente, sin moverla ni difundirla', function () {
+    Event::fake([UbicacionActualizada::class]);
+
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+    gpsBase($tenant, $conductor);
+
+    gpsBuzonConAvisos([[
+        'id' => '1-0',
+        'tipo' => BuzonGps::POSICION,
+        'datos' => [
+            'tenant' => 'cafe-luna',
+            'id_conductor' => $conductor->id_conductor,
+            'latitud' => 19.4330,
+            'longitud' => -99.1340,
+            'fecha_ms' => now()->subSeconds(30)->getTimestampMs(),
+        ],
+    ]]);
+
+    gpsCorrerWorker();
+
+    tenancy()->initialize($tenant);
+    $estado = ConductorEstado::where('id_conductor', $conductor->id_conductor)->first();
+    expect((float) $estado->ultima_latitud)->toEqualWithDelta(19.4326, 0.0001)
+        // No contradice a la base, solo llegó tarde: no cuenta para RN-03b.
+        ->and($estado->rechazos_consecutivos)->toBe(0);
+    tenancy()->end();
+
+    Event::assertNotDispatched(UbicacionActualizada::class);
+});
+
+it('guarda sin difundir una posición atrasada, para no reproducir el viaje en cámara rápida', function () {
+    Event::fake([UbicacionActualizada::class]);
+
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+
+    gpsBuzonConAvisos([[
+        'id' => '1-0',
+        'tipo' => BuzonGps::POSICION,
+        'datos' => [
+            'tenant' => 'cafe-luna',
+            'id_conductor' => $conductor->id_conductor,
+            'latitud' => 19.4330,
+            'longitud' => -99.1340,
+            'fecha_ms' => now()->subMinutes(2)->getTimestampMs(),
+        ],
+    ]]);
+
+    gpsCorrerWorker();
+
+    tenancy()->initialize($tenant);
+    expect((float) ConductorEstado::where('id_conductor', $conductor->id_conductor)->value('ultima_latitud'))
+        ->toEqualWithDelta(19.4330, 0.0001);
+    tenancy()->end();
+
+    Event::assertNotDispatched(UbicacionActualizada::class);
+});
+
+it('confirma la posición aunque Reverb no conteste', function () {
+    // La siguiente posición reemplaza a esta (spec tenant/018, RN-05): reintentarla solo atrasaría
+    // al Panel. `gpsBuzonConAvisos` exige la confirmación.
+    Event::listen(UbicacionActualizada::class, fn () => throw new RuntimeException('Reverb caído'));
+
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+
+    gpsBuzonConAvisos([[
+        'id' => '1-0',
+        'tipo' => BuzonGps::POSICION,
+        'datos' => [
+            'tenant' => 'cafe-luna',
+            'id_conductor' => $conductor->id_conductor,
+            'latitud' => 19.4330,
+            'longitud' => -99.1340,
+            'fecha_ms' => now()->getTimestampMs(),
+        ],
+    ]]);
+
+    gpsCorrerWorker();
+
+    tenancy()->initialize($tenant);
+    expect((float) ConductorEstado::where('id_conductor', $conductor->id_conductor)->value('ultima_latitud'))
+        ->toEqualWithDelta(19.4330, 0.0001);
+    tenancy()->end();
+});
+
+it('reintenta un aviso que quedó sin confirmar', function () {
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+    gpsBase($tenant, $conductor, ['ultima_actualizacion' => now()->subMinutes(30)]);
+
+    gpsBuzonConAvisos([], [[
+        'id' => '1-0',
+        'tipo' => BuzonGps::LATIDO,
+        'datos' => ['tenant' => 'cafe-luna', 'id_conductor' => $conductor->id_conductor],
+        'entregas' => 1,
+    ]]);
+
+    gpsCorrerWorker();
+
+    tenancy()->initialize($tenant);
+    expect(ConductorEstado::where('id_conductor', $conductor->id_conductor)->value('ultima_actualizacion'))
+        ->toBeGreaterThan(now()->subMinute());
+    tenancy()->end();
+});
+
+it('descarta un aviso que agotó sus reintentos sin volver a aplicarlo', function () {
+    $tenant = gpsTenant();
+    ['conductor' => $conductor] = gpsConductor($tenant);
+    gpsBase($tenant, $conductor, ['ultima_actualizacion' => now()->subMinutes(30)]);
+
+    gpsBuzonConAvisos([], [[
+        'id' => '1-0',
+        'tipo' => BuzonGps::LATIDO,
+        'datos' => ['tenant' => 'cafe-luna', 'id_conductor' => $conductor->id_conductor],
+        'entregas' => BuzonGps::MAX_ENTREGAS,
+    ]]);
+
+    gpsCorrerWorker();
+
+    tenancy()->initialize($tenant);
+    expect(ConductorEstado::where('id_conductor', $conductor->id_conductor)->value('ultima_actualizacion'))
+        ->toBeLessThan(now()->subMinutes(29));
+    tenancy()->end();
 });
 
 it('no hace nada si la integración está apagada', function () {

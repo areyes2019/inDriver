@@ -27,6 +27,15 @@ use Illuminate\Support\Facades\Log;
 #[Description('Aplica los avisos que manda el microservicio GPS: posición, recorrido y latido')]
 class ConsumirBuzonGps extends Command
 {
+    /** Cada cuánto se vuelve a intentar lo que quedó sin confirmar (RN-17). */
+    private const REVISAR_PENDIENTES_CADA = 30;
+
+    /**
+     * Una posición más vieja que esto ya no se difunde al Panel: al vaciar un buzón atrasado, el
+     * marcador repetiría el viaje en cámara rápida. Se sigue guardando como última conocida.
+     */
+    private const DIFUSION_MAX_SEGUNDOS = 60;
+
     private bool $seguir = true;
 
     /** Slug del tenant activo ahora mismo, para no reinicializar tenancy en cada aviso. */
@@ -53,12 +62,20 @@ class ConsumirBuzonGps extends Command
 
         $buzon->asegurarGrupo();
 
-        $consumidor = gethostname().':'.getmypid();
+        // Sin el PID a propósito: lo pendiente queda a nombre del consumidor, y el siguiente arranque
+        // tiene que poder recogerlo. Corre un solo worker por máquina (`gps-buzon.service`).
+        $consumidor = (string) gethostname();
         $ciclos = (int) $this->option('ciclos');
         $vuelta = 0;
+        $proximaRevision = 0;
 
         while ($this->seguir) {
             try {
+                if (time() >= $proximaRevision) {
+                    $this->reintentarPendientes($buzon, $tracking, $consumidor);
+                    $proximaRevision = time() + self::REVISAR_PENDIENTES_CADA;
+                }
+
                 $avisos = $buzon->leer($consumidor);
             } catch (\Throwable $e) {
                 // Redis se cayó, o se reinició y con él el grupo. Se recrea y se reintenta con una
@@ -71,7 +88,7 @@ class ConsumirBuzonGps extends Command
             }
 
             foreach ($avisos as $aviso) {
-                if ($this->aplicar($aviso, $tracking)) {
+                if ($this->aplicar($aviso, $tracking, $buzon)) {
                     $buzon->confirmar($aviso['id']);
                 }
             }
@@ -89,12 +106,37 @@ class ConsumirBuzonGps extends Command
     }
 
     /**
+     * RN-17: un aviso no se pierde porque falló una vez, pero tampoco se reintenta sin fin.
+     */
+    private function reintentarPendientes(BuzonGps $buzon, TrackingService $tracking, string $consumidor): void
+    {
+        foreach ($buzon->leerPendientes($consumidor) as $aviso) {
+            if ($aviso['entregas'] >= BuzonGps::MAX_ENTREGAS) {
+                Log::error('Aviso GPS descartado tras agotar sus reintentos.', [
+                    'tipo' => $aviso['tipo'],
+                    'id' => $aviso['id'],
+                    'entregas' => $aviso['entregas'],
+                ]);
+                $buzon->confirmar($aviso['id']);
+
+                continue;
+            }
+
+            if ($this->aplicar($aviso, $tracking, $buzon)) {
+                $buzon->confirmar($aviso['id']);
+            }
+        }
+
+        $this->terminarTenant();
+    }
+
+    /**
      * Devuelve false para dejar el aviso sin confirmar y que se reintente. Un aviso mal formado se
      * da por procesado: reintentarlo para siempre solo atasca el buzón.
      *
      * @param  array{id: string, tipo: string, datos: array<string, mixed>}  $aviso
      */
-    private function aplicar(array $aviso, TrackingService $tracking): bool
+    private function aplicar(array $aviso, TrackingService $tracking, BuzonGps $buzon): bool
     {
         $slug = (string) ($aviso['datos']['tenant'] ?? '');
         $idConductor = (int) ($aviso['datos']['id_conductor'] ?? 0);
@@ -112,7 +154,7 @@ class ConsumirBuzonGps extends Command
 
             return match ($aviso['tipo']) {
                 BuzonGps::POSICION => $this->difundir($tracking, $slug, $idConductor, $aviso['datos']),
-                BuzonGps::POSICION_SIN_ENVIO => $this->registrarSinEnvio($tracking, $idConductor, $aviso['datos']),
+                BuzonGps::POSICION_SIN_ENVIO => $this->registrarSinEnvio($tracking, $buzon, $slug, $idConductor, $aviso['datos']),
                 BuzonGps::RECORRIDO => $this->guardarRecorrido($tracking, $idConductor, $aviso['datos']),
                 BuzonGps::LATIDO => $this->latir($tracking, $idConductor),
                 default => true,
@@ -150,14 +192,7 @@ class ConsumirBuzonGps extends Command
 
         $latitud = (float) $datos['latitud'];
         $longitud = (float) $datos['longitud'];
-
-        // La hora a la que el teléfono tomó la lectura, que el aviso ya traía. Sin ella RN-03 medía
-        // contra el momento de procesarla, y al vaciar una cola atrasada varias posiciones
-        // capturadas con minutos de diferencia se evaluaban como si hubieran llegado en el mismo
-        // segundo: movimiento normal que parecía imposible (RN-03d).
-        $capturadaEn = isset($datos['fecha_ms'])
-            ? Carbon::createFromTimestampMs((int) $datos['fecha_ms'])
-            : null;
+        $capturadaEn = $this->capturadaEn($datos);
 
         // El descarte lo registra `filtrarPosicionEnVivo`, que es el punto compartido con el camino
         // HTTP directo: duplicarlo aquí daría dos líneas por la misma posición.
@@ -165,9 +200,37 @@ class ConsumirBuzonGps extends Command
             return true;
         }
 
-        UbicacionActualizada::dispatch($idConductor, $latitud, $longitud, $slug);
+        if ($capturadaEn !== null && $capturadaEn->lt(now()->subSeconds(self::DIFUSION_MAX_SEGUNDOS))) {
+            return true;
+        }
+
+        // Si Reverb no contesta se pierde este refresco y nada más (spec tenant/018, RN-05): la
+        // posición ya quedó guardada y la siguiente lo reemplaza. Reintentarlo solo atrasaría al
+        // Panel con posiciones viejas.
+        try {
+            UbicacionActualizada::dispatch($idConductor, $latitud, $longitud, $slug);
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo difundir la posición al Panel.', [
+                'tenant' => $slug,
+                'id_conductor' => $idConductor,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return true;
+    }
+
+    /**
+     * La hora a la que se tomó la lectura, que el aviso ya trae. Sin ella RN-03 medía contra el
+     * momento de procesarla, y al vaciar una cola atrasada varias posiciones capturadas con minutos
+     * de diferencia se evaluaban como si hubieran llegado en el mismo segundo: movimiento normal que
+     * parecía imposible (RN-03d).
+     *
+     * @param  array<string, mixed>  $datos
+     */
+    private function capturadaEn(array $datos): ?Carbon
+    {
+        return isset($datos['fecha_ms']) ? Carbon::createFromTimestampMs((int) $datos['fecha_ms']) : null;
     }
 
     /**
@@ -179,9 +242,19 @@ class ConsumirBuzonGps extends Command
      * de acercamiento en la recogida misma (spec tenant/025, RN-08), cayendo en `ARRIBADO` al
      * instante.
      *
+     * El servicio dice "sin envío" porque no tiene la marca, y eso no siempre es cierto. Laravel es
+     * el dueño de esa verdad, así que aquí se comprueba:
+     *
+     * - **Envío TEST:** es el caso normal, porque en TEST no se avisa al servicio (RN-13). Manda el
+     *   simulador: se descarta la posición y queda el latido, igual que en
+     *   `Conductor\UbicacionController::actualizar()`. Sin esto reaparece el incidente de §16.
+     * - **Envío LIVE:** la marca se perdió (Redis reiniciado, o el envío abrió antes de conectar el
+     *   servicio). Se trata como la posición en vivo que es y se vuelve a avisar al servicio. Al
+     *   recibirlo, sus siguientes puntos ya vienen como `POSICION`.
+     *
      * @param  array<string, mixed>  $datos
      */
-    private function registrarSinEnvio(TrackingService $tracking, int $idConductor, array $datos): bool
+    private function registrarSinEnvio(TrackingService $tracking, BuzonGps $buzon, string $slug, int $idConductor, array $datos): bool
     {
         $conductor = Conductor::find($idConductor);
 
@@ -190,15 +263,28 @@ class ConsumirBuzonGps extends Command
             return true;
         }
 
-        $tracking->registrarPosicionSinEnvio($conductor, (float) $datos['latitud'], (float) $datos['longitud']);
+        $activo = $tracking->pedidoActivo($conductor);
+
+        if ($activo?->esTest()) {
+            $tracking->registrarLatido($conductor);
+
+            return true;
+        }
+
+        if ($activo !== null) {
+            $buzon->envioIniciado($slug, $idConductor, $activo->id_pedido);
+
+            return $this->difundir($tracking, $slug, $idConductor, $datos);
+        }
+
+        $tracking->registrarPosicionSinEnvio($conductor, (float) $datos['latitud'], (float) $datos['longitud'], $this->capturadaEn($datos));
 
         return true;
     }
 
     /**
-     * Una tanda de hasta 50 puntos entra con una sola escritura, por `TrackingService` — el mismo
-     * que ya insertaba el respaldo por lotes (spec tenant/021, RN-05). No se difunde nada: la
-     * posición en vivo viaja por `POSICION`, esto es historia.
+     * Una tanda de hasta 50 puntos entra con una sola escritura, por `TrackingService`. No se difunde
+     * nada ni se mueve la posición actual: la posición en vivo viaja por `POSICION`, esto es historia.
      *
      * @param  array<string, mixed>  $datos
      */
@@ -222,7 +308,7 @@ class ConsumirBuzonGps extends Command
             return true;
         }
 
-        $tracking->registrarLote($conductor, $pedido, $puntos);
+        $tracking->registrarRecorrido($conductor, $pedido, $puntos);
 
         return true;
     }

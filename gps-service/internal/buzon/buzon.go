@@ -43,6 +43,14 @@ const (
 // Retencion es lo que se conserva de cada stream. Un buzón sin poda crece hasta llenar la memoria.
 const Retencion = 24 * time.Hour
 
+const (
+	// RevisarPendientesCada es cada cuánto se reintenta lo que quedó sin confirmar (RN-17).
+	RevisarPendientesCada = 30 * time.Second
+
+	// MaxEntregas es el tope de reintentos: un aviso imposible de aplicar atascaría el buzón.
+	MaxEntregas = 5
+)
+
 type Emisor struct {
 	mem    *memoria.Memoria
 	stream string
@@ -88,13 +96,20 @@ func NuevoConsumidor(mem *memoria.Memoria, stream, grupo, consumidor string, bit
 }
 
 // Escuchar bloquea hasta que se cancele el contexto. Un aviso solo se confirma (XACK) después de
-// procesarse sin error: si el servicio muere a medias, otro consumidor lo vuelve a recibir.
+// procesarse sin error: si falla o el servicio muere a medias, lo recoge RevisarPendientes.
 func (c *Consumidor) Escuchar(ctx context.Context, manejar func(context.Context, Aviso) error) {
 	c.asegurarGrupo(ctx)
+
+	var ultimaRevision time.Time
 
 	for {
 		if ctx.Err() != nil {
 			return
+		}
+
+		if time.Since(ultimaRevision) >= RevisarPendientesCada {
+			c.RevisarPendientes(ctx, manejar)
+			ultimaRevision = time.Now()
 		}
 
 		flujos, err := c.mem.Cliente.XReadGroup(ctx, &redis.XReadGroupArgs{
@@ -128,6 +143,65 @@ func (c *Consumidor) Escuchar(ctx context.Context, manejar func(context.Context,
 			for _, mensaje := range flujo.Messages {
 				c.procesar(ctx, mensaje, manejar)
 			}
+		}
+	}
+}
+
+// RevisarPendientes reintenta lo que este consumidor recibió y no alcanzó a confirmar (RN-17). Leer
+// con ">" nunca lo devuelve. El nombre del consumidor es el de la máquina, así que sigue siendo suyo
+// después de un reinicio.
+func (c *Consumidor) RevisarPendientes(ctx context.Context, manejar func(context.Context, Aviso) error) {
+	pendientes, err := c.mem.Cliente.XPendingExt(ctx, &redis.XPendingExtArgs{
+		Stream:   c.stream,
+		Group:    c.grupo,
+		Start:    "-",
+		End:      "+",
+		Count:    50,
+		Consumer: c.consumidor,
+	}).Result()
+	if err != nil {
+		if ctx.Err() == nil {
+			c.bitacora.Warn("no se pudieron revisar los avisos pendientes", "error", err)
+		}
+
+		return
+	}
+
+	if len(pendientes) == 0 {
+		return
+	}
+
+	for _, pendiente := range pendientes {
+		if pendiente.RetryCount < MaxEntregas {
+			continue
+		}
+
+		c.bitacora.Error("aviso descartado tras agotar sus reintentos", "id", pendiente.ID, "entregas", pendiente.RetryCount)
+
+		if err := c.mem.Cliente.XAck(ctx, c.stream, c.grupo, pendiente.ID).Err(); err != nil {
+			c.bitacora.Warn("no se pudo confirmar el aviso", "id", pendiente.ID, "error", err)
+		}
+	}
+
+	// Block negativo: sin esto go-redis manda BLOCK 0, que espera para siempre.
+	flujos, err := c.mem.Cliente.XReadGroup(ctx, &redis.XReadGroupArgs{
+		Group:    c.grupo,
+		Consumer: c.consumidor,
+		Streams:  []string{c.stream, "0"},
+		Count:    50,
+		Block:    -1,
+	}).Result()
+	if err != nil {
+		if ctx.Err() == nil && !errors.Is(err, redis.Nil) {
+			c.bitacora.Warn("no se pudieron leer los avisos pendientes", "error", err)
+		}
+
+		return
+	}
+
+	for _, flujo := range flujos {
+		for _, mensaje := range flujo.Messages {
+			c.procesar(ctx, mensaje, manejar)
 		}
 	}
 }

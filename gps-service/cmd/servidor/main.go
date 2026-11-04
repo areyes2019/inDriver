@@ -162,8 +162,14 @@ func manejador(
 			// borra la marca del envío, para que ningún punto se quede sin pedido al que pertenecer.
 			acumulador.Cerrar(ctx, datos.Tenant, datos.Conductor)
 
-			if err := pre.CerrarEnvio(ctx, datos.Tenant, datos.Conductor); err != nil {
+			cerrado, err := pre.CerrarEnvio(ctx, datos.Tenant, datos.Conductor, texto(datos.Pedido))
+			if err != nil {
 				return err
+			}
+
+			// El conductor ya va en otro envío: sigue en el mapa.
+			if !cerrado {
+				return nil
 			}
 
 			return almacen.Olvidar(ctx, datos.Tenant, datos.Conductor)

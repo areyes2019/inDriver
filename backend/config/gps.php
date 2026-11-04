@@ -15,7 +15,10 @@ return [
     /** Token fijo con el que Laravel llama a /gps/v1/nearby. */
     'token_servicio' => env('GPS_SERVICE_TOKEN'),
 
-    /** Base del servicio, sin barra final. Vacío = integración apagada (RN-18, RN-19). */
+    /**
+     * Base PÚBLICA del servicio, sin barra final. Vacío = integración apagada (RN-18, RN-19).
+     * Se le entrega al teléfono dentro del permiso: `127.0.0.1` lo dejaría hablándose a sí mismo.
+     */
     'url' => rtrim((string) env('GPS_SERVICE_URL', ''), '/'),
 
     /** RN-07: el permiso dura 30 minutos y la App lo renueva a los 20. */

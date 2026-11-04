@@ -260,6 +260,7 @@ func (s *Servidor) difundirSinEnvio(ctx context.Context, tenant string, conducto
 		"id_conductor": conductor,
 		"latitud":      p.Latitud,
 		"longitud":     p.Longitud,
+		"fecha_ms":     p.FechaMs,
 	})
 	if err != nil {
 		s.bitacora.Warn("no se pudo avisar la posición sin envío", "tenant", tenant, "conductor", conductor, "error", err)

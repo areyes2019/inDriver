@@ -19,7 +19,7 @@ class PermisoGpsService
      * Devuelve null cuando la integración está apagada: la App lo entiende como "sigue mandando la
      * posición a Laravel" (RN-19), que es exactamente el comportamiento de hoy.
      *
-     * @return array{token: string, expira_en: string, renovar_en: string, url: string}|null
+     * @return array{token: string, expira_en: string, renovar_en: string, renovar_en_segundos: int, url: string}|null
      */
     public function emitir(Conductor $conductor): ?array
     {
@@ -46,6 +46,8 @@ class PermisoGpsService
             'token' => $token,
             'expira_en' => $expira->toIso8601String(),
             'renovar_en' => $ahora->clone()->addSeconds((int) config('gps.renovar_en'))->toIso8601String(),
+            // Para contar desde que llegó la respuesta: el reloj del teléfono puede estar mal puesto.
+            'renovar_en_segundos' => (int) config('gps.renovar_en'),
             'url' => config('gps.url').'/gps/v1/ping',
         ];
     }
