@@ -565,3 +565,42 @@ polilínea H2 se recorta con la posición real, así que puede acortarse un poco
 
 Cubierto en `interpolacionMarcador.test.ts`, que corre con `npm run test:unit`. La integración con
 Google Maps se comprueba a ojo con un envío TEST.
+
+## 20. Cliente GPS en la App (2026-11-03)
+
+La App (`panda_expess`) ahora le envía sus posiciones al servicio. Vive en
+`src/services/location/`: `politicaEnvio.js` (cuándo se envía), `emisorGps.js` (a dónde va cada punto)
+y `GpsEmisor.js` (la red real). Este apartado **sustituye** lo que §7.1, §7.2, §7.7, §9, §13, RN-03 y
+RN-19 digan en contrario.
+
+**Cada punto va a un solo destino.** No hay fase "sombra" de envío doble (§13, paso 1): la marcha atrás
+es vaciar `GPS_SERVICE_URL`, y al no haber aún clientes finales no hace falta activar por etapas.
+
+| Respuesta de Go | Qué hace la App |
+|---|---|
+| `2xx` | Listo |
+| `401` | Renueva el permiso y reintenta una vez ese punto; si sigue fallando, lo manda a Laravel y no vuelve a pedir permiso durante 1 min. **Nunca cierra la sesión** |
+| `429` | Descarta el punto y respeta `Retry-After` |
+| Otro `4xx` | Descarta el punto |
+| `5xx`, sin red, o más de 3 s | Manda **ese mismo punto** a Laravel y deja a Go por caído 30 s, duplicando hasta 5 min. Al vencer, prueba con el siguiente punto real |
+
+| `POST /gps-token` | Qué hace la App |
+|---|---|
+| `200` | Usa el permiso y lo renueva a los `renovar_en_segundos`, contados desde que llegó la respuesta |
+| `503` | Deja de usar Go de inmediato, aunque su permiso siga vivo, y vuelve a preguntar a los 10 min |
+| Otro fallo | Sigue con el permiso mientras viva, y reintenta al minuto |
+
+**Cadencia.** Con viaje, cada 4 s si se movió al menos 5 m (15 por minuto, la mitad del freno de
+RN-12). Sin viaje, cada 30 s. Nunca más de 60 s callado, aunque esté detenido. Una lectura con precisión
+peor que 100 m solo se envía al cumplirse esos 60 s. La geocerca sigue evaluando **todas** las lecturas.
+
+**Detalles de la conexión.**
+
+- Va por `CapacitorHttp`, porque el servicio no atiende CORS y el interceptor de `api` cerraría la sesión
+  ante un 401. Por eso en el navegador todo sigue yendo a Laravel.
+- Un solo envío a la vez, y en vivo sin `fecha_posicion`: pone la hora el servidor, así un reloj mal
+  puesto en el teléfono no desordena nada.
+- El permiso se guarda solo en memoria y se olvida al cerrar sesión.
+
+Cubierto en `src/services/location/__tests__/`, que corre con `npm run test:unit` en `panda_expess`.
+Los APK anteriores siguen funcionando contra `POST /conductor/ubicacion`.
