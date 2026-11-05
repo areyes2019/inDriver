@@ -158,7 +158,7 @@ Evento DELIVERY_ADDRESS_UPDATED hacia private-courier.{courier_id}:
 
 ## 6. Reglas de negocio
 
-- **RN-01:** Solo se avisa por evento si el envío tiene `courier_id`. Cancelar un envío sin repartidor solo cambia el estado.
+- **RN-01:** El aviso con push y confirmación es solo para el envío con `courier_id`. Cancelar un envío sin repartidor emite `pedido.cancelado` únicamente por socket (`PedidoCanceladoSinConductor`), para que el Panel y las listas de los conductores lo quiten al instante.
 - **RN-02:** Cancelación y reprogramación se emiten por socket **y** por push simultáneamente (SPEC-018, RN-04). Es el caso que justifica esa regla.
 - **RN-03:** La App confirma con `POST /notified`. Si a los 60 segundos no hay confirmación, el Panel muestra el envío en rojo con la etiqueta "repartidor no confirmado" y habilita llamada telefónica. No hay reintentos automáticos; a partir de ahí es intervención humana.
 - **RN-04:** Si el envío estaba en `IN_TRANSIT` al cancelarse, `compensation_eligible` es verdadero y se dispara el flujo de SPEC-023.

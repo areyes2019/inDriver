@@ -2,7 +2,9 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Icon } from '@iconify/vue'
+import axios from 'axios'
 import http from '@/lib/http'
+import { usePanelStore } from '@/stores/panel'
 import UiConfirmDialog from '@/components/ui/UiConfirmDialog.vue'
 import type { ViajeEnTurno } from '@/stores/panel'
 
@@ -15,7 +17,8 @@ const slug = route.params.slug as string
 
 const confirmando = ref(false)
 const cancelando = ref(false)
-const errorCancelar = ref(false)
+const errorCancelar = ref<string | null>(null)
+const panel = usePanelStore()
 
 const formatoImporte = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' })
 
@@ -52,7 +55,7 @@ watch(
   () => props.viaje?.id_pedido,
   () => {
     confirmando.value = false
-    errorCancelar.value = false
+    errorCancelar.value = null
   },
 )
 
@@ -62,7 +65,7 @@ async function cancelarViaje() {
 
   confirmando.value = false
   cancelando.value = true
-  errorCancelar.value = false
+  errorCancelar.value = null
 
   try {
     await http.patch(`/t/${slug}/pedidos/${viaje.id_pedido}/estado`, {
@@ -70,8 +73,15 @@ async function cancelarViaje() {
       cancelado_por: 'ADMIN',
     })
     emit('cancelado')
-  } catch {
-    errorCancelar.value = true
+  } catch (err) {
+    // 422: el viaje ya no se puede cancelar porque cambió de estado y esta pantalla no se enteró.
+    // Reintentar daría el mismo error; lo que hace falta es poner la lista al día.
+    if (axios.isAxiosError(err) && err.response?.status === 422) {
+      errorCancelar.value = 'Este viaje ya cambió de estado. Actualizamos la lista.'
+      void panel.sincronizar()
+    } else {
+      errorCancelar.value = 'No se pudo cancelar el viaje.'
+    }
   } finally {
     cancelando.value = false
   }
@@ -219,7 +229,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         </button>
 
         <div v-if="errorCancelar" class="mt-3 flex flex-col items-start gap-1">
-          <p class="text-sm text-red-600">No se pudo cancelar el viaje.</p>
+          <p class="text-sm text-red-600">{{ errorCancelar }}</p>
           <button
             type="button"
             class="text-sm font-semibold text-heading underline"

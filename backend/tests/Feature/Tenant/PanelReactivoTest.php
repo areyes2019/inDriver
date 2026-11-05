@@ -1,6 +1,8 @@
 <?php
 
 use App\Events\Tenant\ConductorDisponibilidadCambiada;
+use App\Events\Tenant\PedidoCanceladoParaConductor;
+use App\Events\Tenant\PedidoCanceladoSinConductor;
 use App\Events\Tenant\PedidoCreado;
 use App\Events\Tenant\PedidoDisponible;
 use App\Events\Tenant\PedidoEntregado;
@@ -266,6 +268,56 @@ it('does not consume a tenant viaje when a pedido is cancelled', function () {
     expect(ConsumoViajeTenant::count())->toBe(0);
     Event::assertNotDispatched(SaldoTenantCambiado::class);
     tenancy()->end();
+});
+
+it('announces the cancellation of a pedido that nobody took', function (string $estado) {
+    $tenant = panelTenant();
+    $admin = panelAdmin($tenant);
+
+    tenancy()->initialize($tenant);
+    $pedido = panelPedido(['estado' => $estado]);
+    tenancy()->end();
+
+    Event::fake([PedidoCanceladoSinConductor::class, PedidoCanceladoParaConductor::class]);
+
+    $this->actingAs($admin, 'usuario')
+        ->patchJson("/api/v1/t/panel-express/pedidos/{$pedido->id_pedido}/estado", [
+            'estado' => 'CANCELADO',
+            'cancelado_por' => 'ADMIN',
+        ])
+        ->assertOk();
+
+    Event::assertDispatched(PedidoCanceladoSinConductor::class, fn ($event) => $event->idPedido === $pedido->id_pedido);
+    Event::assertNotDispatched(PedidoCanceladoParaConductor::class);
+})->with(['PENDIENTE', 'PUBLICADO']);
+
+it('sends the panel what it needs to drop a cancelled pedido without a conductor', function () {
+    $tenant = panelTenant();
+
+    tenancy()->initialize($tenant);
+    $pedido = panelPedido(['estado' => 'CANCELADO']);
+    $evento = new PedidoCanceladoSinConductor($pedido->id_pedido, 'panel-express');
+
+    expect($evento->broadcastAs())->toBe('pedido.cancelado')
+        ->and($evento->broadcastWith())->toMatchArray([
+            'id_pedido' => $pedido->id_pedido,
+            'estado' => 'CANCELADO',
+        ])
+        ->and($evento->broadcastWith())->toHaveKey('ambiente');
+    tenancy()->end();
+});
+
+it('rejects cancelling a pedido that was already cancelled', function () {
+    $tenant = panelTenant();
+    $admin = panelAdmin($tenant);
+
+    tenancy()->initialize($tenant);
+    $pedido = panelPedido(['estado' => 'CANCELADO']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->patchJson("/api/v1/t/panel-express/pedidos/{$pedido->id_pedido}/estado", ['estado' => 'CANCELADO'])
+        ->assertUnprocessable();
 });
 
 it('does not paginate at fifteen like the historical listing does', function () {

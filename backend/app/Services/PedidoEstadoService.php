@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Events\Tenant\PedidoCanceladoParaConductor;
+use App\Events\Tenant\PedidoCanceladoSinConductor;
 use App\Events\Tenant\PedidoEntregado;
 use App\Events\Tenant\PedidoEstadoCambiado;
 use App\Events\Tenant\PedidoYaTomado;
@@ -254,6 +255,9 @@ class PedidoEstadoService
             // spec tenant/023: el Panel calcula "Disponible"/"Ocupado" por pedido asignado, así que
             // necesita enterarse del cierre igual que se entera de la toma y de la cancelación.
             $nuevoEstado === 'ENTREGADO' => $this->diferir($pedido, fn () => PedidoEntregado::dispatch($idPedido, $slug)),
+            // Sin conductor no hay nada que compensar, pero el Panel lo tiene en "Viajes en turno" y
+            // los conductores en su lista (spec tenant/022, RN-01).
+            $nuevoEstado === 'CANCELADO' => $this->diferir($pedido, fn () => PedidoCanceladoSinConductor::dispatch($idPedido, $slug)),
             default => null,
         };
     }
@@ -311,8 +315,8 @@ class PedidoEstadoService
     }
 
     /**
-     * spec tenant/022: solo se avisa por evento si el envío tiene conductor (RN-01) — cancelar uno
-     * sin conductor asignado ya quedó cubierto arriba, sin más trámite. `EN_CAMINO` y
+     * spec tenant/022: el aviso con push y confirmación es solo para el envío con conductor (RN-01);
+     * el que no lo tiene sale por `PedidoCanceladoSinConductor`. `EN_CAMINO` y
      * `ARRIBADO_A_ENTREGA` son los únicos estados donde el conductor ya trae el paquete encima
      * (RN-04, RN-10 de tenant/021): de ahí sale la compensación y la instrucción de qué hacer con
      * el paquete.
