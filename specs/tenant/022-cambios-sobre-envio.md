@@ -196,6 +196,9 @@ QUOTE_NOT_FOUND	404	quote_id inexistente o de otro envío
 - [ ] Reprogramar a 10 minutos en el futuro devuelve 422.
 - [ ] Reprogramar un envío `IN_TRANSIT` devuelve 409.
 - [ ] Cancelar un envío `IN_TRANSIT` marca `compensation_eligible: true` y crea el registro en `delivery_changes`.
+- [ ] Cancelar un envío sin repartidor (`PENDIENTE` o `PUBLICADO`) emite `PedidoCanceladoSinConductor` y no `PedidoCanceladoParaConductor`, por lo que no hay push ni compensación.
+- [ ] Ese envío sale de "Viajes en turno" sin recargar el Panel, y la App actualiza su lista sin esperar el sondeo.
+- [ ] Cancelar un envío ya cancelado devuelve 422; el Panel muestra que el viaje cambió de estado y sincroniza la lista.
 - [ ] Tras la cancelación, el repartidor recibe la siguiente oferta disponible.
 Cotizar con el repartidor a 2 km del destino viejo da un extra_distance_km distinto que cotizar con él ya en el punto.
 Aplicar una cotización de hace 6 minutos devuelve 409 con QUOTE_EXPIRED.

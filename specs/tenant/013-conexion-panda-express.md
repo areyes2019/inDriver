@@ -119,6 +119,10 @@ que se disparan ahí:
   panel de despachador (no desde la app), para que el conductor se entere al instante (esto ya lo
   cubre el `cancelledExternally` que `panda_express` trae listo en `stores/trip.js`, hoy sin
   ninguna fuente real que lo dispare).
+- `PedidoCanceladoSinConductor` — agregado después (SPEC-022, RN-01): si el pedido cancelado no tenía
+  conductor. Sale con el mismo nombre, `pedido.cancelado`, y solo por socket. Como no es el viaje
+  activo de nadie, la app marca `driver.orderListDirty` y vuelve a pedir su lista sin esperar el
+  sondeo.
 
 `panda_express` ya trae `pusher-js` (`services/realtime.js`) — Reverb es compatible con el
 protocolo de Pusher Channels, así que solo cambian las credenciales de conexión (host/puerto propio

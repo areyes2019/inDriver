@@ -196,7 +196,8 @@ conductores, y a duplicar la autorización. El costo real del filtro es una comp
 - **RN-04**: Los eventos que el conductor no puede perderse (`PedidoDisponible`,
   `PedidoCanceladoParaConductor`, `PedidoReprogramado`, `SaldoAcreditado`) se emiten por socket y por
   FCM al mismo tiempo. No hay reintentos: si llegan los dos, la app descarta el segundo por
-  `event_id`.
+  `event_id`. `PedidoCanceladoSinConductor` (SPEC-022, RN-01) queda fuera de esta regla: no tiene un
+  conductor afectado, así que va solo por socket, igual que `PedidoYaTomado`.
 - **RN-05**: Los eventos de alta frecuencia (`UbicacionActualizada`) van solo por socket. Si no hay
   conexión, se pierden — la siguiente posición los reemplaza sin problema.
 - **RN-06**: La app guarda en memoria los `event_id` procesados de la sesión y descarta repetidos sin

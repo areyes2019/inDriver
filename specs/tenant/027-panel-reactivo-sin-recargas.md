@@ -252,6 +252,15 @@ en absoluto si la transición nunca llega a guardarse. Fuera del mecanismo se qu
 (PUBLICADO): sus eventos llevan el modelo en memoria, no un id que haya que releer, y
 `Tenant\PedidoController::publicar()` depende de que las ofertas existan antes de persistir.
 
+**Enmienda 3 — cancelar un envío sin conductor.** Este apartado dice que no se crea ningún evento
+nuevo, pero `pedido.cancelado` solo salía si el envío tenía conductor: el que nadie había tomado se
+quedaba en "Viajes en turno" hasta recargar. Se agrega `PedidoCanceladoSinConductor` (SPEC-022,
+RN-01), con el mismo nombre en el canal porque para quien escucha es la misma noticia. Su carga es
+`id_pedido`, los campos de `DatosDeEventoPanel::delPedido()` y `event_id`; no lleva `saldo_viajes`,
+`cancelado_por`, `motivo`, `compensation_eligible` ni `instruction`. El reductor del Panel no cambia:
+quita la fila y, como `id_conductor` viene en `null`, `liberarConductor` no hace nada. También sale
+por `Pedido::$avisosDiferidos`, igual que el resto de los avisos que releen el pedido.
+
 ## 6. Reglas de negocio
 
 ### Origen de los datos
@@ -531,6 +540,7 @@ decisión propia que no se cuela en esta spec (§9, adición 19).
 - `app/Events/Tenant/PedidoYaTomado.php`, `PedidoEntregado.php`, `PedidoCanceladoParaConductor.php`,
   `PedidoEstadoCambiado.php`, `PedidoRequiereAsignacionManual.php`,
   `ConductorDisponibilidadCambiada.php`, `SaldoAcreditado.php` — cargas enriquecidas.
+- `app/Events/Tenant/PedidoCanceladoSinConductor.php` — evento nuevo (Enmienda 3 de §5).
 
   Los **constructores no cambian**: siguen recibiendo ids y `broadcastWith()` resuelve el resto
   contra la base. Es lo contrario de lo que planteaba el borrador (pasarles el modelo), y se decidió

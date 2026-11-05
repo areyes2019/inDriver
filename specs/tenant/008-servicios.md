@@ -173,6 +173,11 @@ permite `CANCELADO` desde los seis estados del panel), ya escribe `fecha_cancela
 conductor asignado, ya dispara `PedidoCanceladoParaConductor` para avisarle. Un endpoint nuevo
 duplicaría todo eso. Esta spec no toca el backend.
 
+**Enmienda (posterior a la implementación).** Cancelar un viaje sin conductor no emitía ningún
+evento, así que los demás paneles abiertos y las listas de los conductores no se enteraban. Ahora el
+backend emite `PedidoCanceladoSinConductor` (SPEC-022, RN-01) con el mismo nombre en el canal,
+`pedido.cancelado`, y el endpoint sigue siendo este.
+
 ### "Cancelar" saca el viaje del panel; no borra el pedido
 
 Cancelar transiciona el pedido a `CANCELADO`, que es estado final y por lo tanto queda fuera del
@@ -301,7 +306,10 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
   /t/{slug}/pedidos/{id_pedido}/estado` con `{ estado: 'CANCELADO', cancelado_por: 'ADMIN' }` usando
   `http` (`@/lib/http`) y `route.params.slug`, igual que el resto de los componentes del panel. En
   éxito emite `cancelado`; en error deja el panel abierto y muestra el mensaje con un botón
-  "Reintentar".
+  "Reintentar". El mensaje depende del error:
+  - `422` (el viaje cambió de estado y ya no admite la transición): *"Este viaje ya cambió de estado.
+    Actualizamos la lista."*, y llama a `panel.sincronizar()` para poner la lista al día.
+  - Cualquier otro error: *"No se pudo cancelar el viaje."*, sin sincronizar.
 - `UiConfirmDialog` con `:require-password="false"`, `title="Cancelar viaje"`,
   `confirm-label="Sí, cancelar"` y el mensaje: *"El viaje #{folio} saldrá del panel y quedará como
   CANCELADO. Esta acción no se puede deshacer."*
@@ -423,8 +431,8 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
 25. Cancelar **no borra** el pedido de la base de datos: lo pasa a `CANCELADO`, estado final, por lo
     que sale del panel pero permanece en el listado de Pedidos.
 26. No se pide motivo de cancelación; se envía `cancelado_por: 'ADMIN'` y `motivo` vacío.
-27. El aviso al conductor de un viaje cancelado lo dispara el backend
-    (`PedidoCanceladoParaConductor`); el frontend no hace nada extra.
+27. El aviso de un viaje cancelado lo dispara el backend (`PedidoCanceladoParaConductor` si tenía
+    conductor, `PedidoCanceladoSinConductor` si no); el frontend no hace nada extra.
 28. El botón "Cancelar viaje" se muestra en los seis estados del panel.
 29. Solo un panel deslizante abierto a la vez: el detalle y "Nueva Entrega" se excluyen mutuamente.
 30. La selección del viaje vive en `PanelView.vue`, no dentro de `ServiciosEnTurno.vue`.
