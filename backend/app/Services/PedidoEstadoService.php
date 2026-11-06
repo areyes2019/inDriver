@@ -35,7 +35,13 @@ use Illuminate\Validation\ValidationException;
  */
 class PedidoEstadoService
 {
-    public const ESTADOS_FINALES = ['ENTREGADO', 'CANCELADO', 'INCIDENCIA'];
+    public const ESTADOS_FINALES = ['ENTREGADO', 'CANCELADO', 'INCIDENCIA', 'DEVUELTO'];
+
+    /**
+     * Lo que se le cobra al vendedor por el regreso de un paquete que el comprador no pagó, como
+     * porcentaje del envío (spec tenant/031, D11).
+     */
+    public const PORCENTAJE_TARIFA_REGRESO = 30;
 
     /**
      * La fase "En recogida": hay conductor pero todavía no trae el paquete. Es lo único que el
@@ -58,6 +64,7 @@ class PedidoEstadoService
         'ARRIBADO',
         'EN_CAMINO',
         'ARRIBADO_A_ENTREGA',
+        'EN_REGRESO',
     ];
 
     /**
@@ -77,7 +84,9 @@ class PedidoEstadoService
         'TOMADO' => ['ARRIBADO', 'CANCELADO'],
         'ARRIBADO' => ['EN_CAMINO', 'CANCELADO'],
         'EN_CAMINO' => ['ARRIBADO_A_ENTREGA', 'INCIDENCIA'],
-        'ARRIBADO_A_ENTREGA' => ['ENTREGADO', 'INCIDENCIA'],
+        'ARRIBADO_A_ENTREGA' => ['ENTREGADO', 'INCIDENCIA', 'EN_REGRESO'],
+        'EN_REGRESO' => ['DEVUELTO', 'INCIDENCIA'],
+        'DEVUELTO' => [],
         'ENTREGADO' => [],
         'CANCELADO' => [],
         'INCIDENCIA' => [],
@@ -95,7 +104,8 @@ class PedidoEstadoService
         'TOMADO' => ['ARRIBADO'],
         'ARRIBADO' => ['EN_CAMINO'],
         'EN_CAMINO' => ['ARRIBADO_A_ENTREGA'],
-        'ARRIBADO_A_ENTREGA' => ['ENTREGADO'],
+        'ARRIBADO_A_ENTREGA' => ['ENTREGADO', 'EN_REGRESO'],
+        'EN_REGRESO' => ['DEVUELTO'],
     ];
 
     public function __construct(
@@ -123,22 +133,29 @@ class PedidoEstadoService
             ]);
         }
 
+        if ($nuevoEstado === 'EN_REGRESO') {
+            $this->iniciarRegreso($pedido);
+        }
+
         $pedido->estado = $nuevoEstado;
 
         match ($nuevoEstado) {
             'PUBLICADO' => $pedido->fecha_publicacion = now(),
             'TOMADO' => $pedido->fecha_asignacion = now(),
-            'ENTREGADO' => $pedido->fecha_entrega = now(),
+            'ENTREGADO', 'DEVUELTO' => $pedido->fecha_entrega = now(),
             'CANCELADO', 'INCIDENCIA' => $pedido->fecha_cancelacion = now(),
             default => null,
         };
 
-        if ($nuevoEstado === 'ENTREGADO' && $pedido->id_conductor) {
+        // Un regreso cuenta como viaje trabajado (spec tenant/031, D15).
+        $viajeTrabajado = in_array($nuevoEstado, ['ENTREGADO', 'DEVUELTO'], true);
+
+        if ($viajeTrabajado && $pedido->id_conductor) {
             $this->liquidarConductor($pedido);
             $this->tracking->calcularResumenRuta($pedido);
         }
 
-        if ($nuevoEstado === 'ENTREGADO') {
+        if ($viajeTrabajado) {
             $this->consumirViajeDelTenant($pedido);
         }
 
@@ -224,6 +241,24 @@ class PedidoEstadoService
         }
 
         return $devuelto;
+    }
+
+    /**
+     * El comprador no pagó (spec tenant/031): solo hay regreso si el repartidor adelantó un
+     * producto. La tarifa queda fija aquí, para que un cambio posterior del porcentaje no altere lo
+     * que ya se le dijo al repartidor (RN-07).
+     *
+     * @throws ValidationException si el pedido no es contra entrega.
+     */
+    private function iniciarRegreso(Pedido $pedido): void
+    {
+        if ($pedido->modalidad_pago !== 'RECEPTOR_PAGA_ENVIO_PRODUCTOS' || (float) $pedido->importe_cobro <= 0) {
+            throw ValidationException::withMessages([
+                'estado' => 'Solo un pedido contra entrega puede regresar al vendedor.',
+            ]);
+        }
+
+        $pedido->tarifa_regreso = round((float) $pedido->importe_envio * self::PORCENTAJE_TARIFA_REGRESO / 100, 2);
     }
 
     /**

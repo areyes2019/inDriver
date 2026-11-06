@@ -133,7 +133,7 @@ class PedidoController extends Controller
         // spec tenant/022, RN-07: con el paquete ya en la mano, se cancela o se entrega, no se
         // reprograma. RN-06: no tiene sentido reprogramar a un horario que ya casi llegó.
         if ($cambioAgenda) {
-            if (in_array($pedido->estado, ['EN_CAMINO', 'ARRIBADO_A_ENTREGA'], true)) {
+            if (in_array($pedido->estado, ['EN_CAMINO', 'ARRIBADO_A_ENTREGA', 'EN_REGRESO'], true)) {
                 throw ValidationException::withMessages([
                     'fecha_servicio' => ['CANNOT_RESCHEDULE_IN_TRANSIT'],
                 ]);
@@ -193,6 +193,8 @@ class PedidoController extends Controller
             ]);
         }
 
+        $this->rechazarReubicacionEnRegreso($pedido);
+
         $data = $request->validate([
             'direccion' => ['required', 'string', 'max:255'],
             'latitud' => ['required', 'numeric', 'between:-90,90'],
@@ -214,6 +216,8 @@ class PedidoController extends Controller
      */
     public function aplicarReubicacion(Request $request, Pedido $pedido): JsonResponse
     {
+        $this->rechazarReubicacionEnRegreso($pedido);
+
         $data = $request->validate([
             'quote_id' => ['required', 'integer'],
         ]);
@@ -296,6 +300,18 @@ class PedidoController extends Controller
         ]);
 
         return response()->json(new PedidoResource($pedido));
+    }
+
+    /**
+     * spec tenant/031: en regreso el paquete ya no va al comprador, así que no hay destino que mover.
+     */
+    private function rechazarReubicacionEnRegreso(Pedido $pedido): void
+    {
+        if ($pedido->estado === 'EN_REGRESO') {
+            throw ValidationException::withMessages([
+                'estado' => ['DELIVERY_RETURNING'],
+            ]);
+        }
     }
 
     /**

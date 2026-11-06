@@ -51,6 +51,7 @@ class DatosDeEventoPanel
 
         return [
             'estado' => $pedido->estado,
+            'tarifa_regreso' => $pedido->tarifa_regreso,
             'ambiente' => $pedido->ambiente,
             'id_conductor' => $pedido->id_conductor,
             'conductor_nombre' => $pedido->conductor?->usuario !== null

@@ -75,13 +75,13 @@ class MonederoConductor
     private static function dePrepago(Conductor $conductor, CarbonInterface $desde): Collection
     {
         $entregas = Pedido::where('id_conductor', $conductor->id_conductor)
-            ->where('estado', 'ENTREGADO')
+            ->whereIn('estado', ['ENTREGADO', 'DEVUELTO'])
             ->where('fecha_entrega', '>=', $desde)
             ->get()
             ->map(fn (Pedido $p) => self::movimiento(
                 $p->fecha_entrega,
-                "Envío {$p->numero_pedido} entregado",
-                entrada: (float) $p->importe_envio,
+                $p->estado === 'DEVUELTO' ? "Envío {$p->numero_pedido} devuelto" : "Envío {$p->numero_pedido} entregado",
+                entrada: (float) $p->importe_envio + (float) $p->tarifa_regreso,
             ));
 
         $compras = VentaViajeConductor::where('id_conductor', $conductor->id_conductor)

@@ -9,13 +9,15 @@ export const FASES_POR_ESTADO: Readonly<Record<string, string>> = {
   ARRIBADO: 'En recogida',
   EN_CAMINO: 'En entrega',
   ARRIBADO_A_ENTREGA: 'En entrega',
+  EN_REGRESO: 'En regreso',
   ENTREGADO: 'Completado',
+  DEVUELTO: 'Devuelto',
   CANCELADO: 'Cancelado',
   INCIDENCIA: 'Incidencia',
 }
 
 const ESTADOS_CANCELABLES = new Set(['PENDIENTE', 'PUBLICADO', 'TOMADO', 'ARRIBADO'])
-const ESTADOS_EN_ENTREGA = new Set(['EN_CAMINO', 'ARRIBADO_A_ENTREGA'])
+const ESTADOS_CON_PAQUETE = new Set(['EN_CAMINO', 'ARRIBADO_A_ENTREGA', 'EN_REGRESO'])
 
 export function faseDe(estado: string): string {
   return FASES_POR_ESTADO[estado] ?? estado
@@ -28,5 +30,5 @@ export function sePuedeCancelar(estado: string): boolean {
 
 /** Con el paquete encima no se cancela: la única salida, además de entregar, es la incidencia. */
 export function sePuedeCerrarPorIncidencia(estado: string): boolean {
-  return ESTADOS_EN_ENTREGA.has(estado)
+  return ESTADOS_CON_PAQUETE.has(estado)
 }

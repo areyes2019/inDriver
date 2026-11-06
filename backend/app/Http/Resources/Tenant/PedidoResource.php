@@ -38,6 +38,7 @@ class PedidoResource extends JsonResource
             'modalidad_pago' => $this->modalidad_pago,
             'importe_envio' => $this->importe_envio,
             'importe_cobro' => $this->importe_cobro,
+            'tarifa_regreso' => $this->tarifa_regreso,
             'id_despachador' => $this->id_despachador,
             'despachador_nombre' => $this->despachador?->usuario !== null
                 ? trim("{$this->despachador->usuario->nombre} {$this->despachador->usuario->apellido_paterno}")

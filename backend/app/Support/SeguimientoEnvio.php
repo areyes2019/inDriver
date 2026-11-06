@@ -34,6 +34,23 @@ class SeguimientoEnvio
             return null;
         }
 
+        // spec tenant/031: el regreso es la entrega al revés, de donde está el comprador al vendedor.
+        if ($pedido->estado === 'EN_REGRESO') {
+            return [
+                'hito' => self::HITO_ENTREGA,
+                'estilo' => 'SOLIDO',
+                'color' => ColorConductor::para($pedido->id_conductor),
+                'origen' => [
+                    'lat' => (float) $pedido->latitud_entrega,
+                    'lng' => (float) $pedido->longitud_entrega,
+                ],
+                'destino' => [
+                    'lat' => (float) $pedido->latitud_recogida,
+                    'lng' => (float) $pedido->longitud_recogida,
+                ],
+            ];
+        }
+
         $hito = $pedido->estado === 'TOMADO' ? self::HITO_ACERCAMIENTO : self::HITO_ENTREGA;
 
         if ($hito === self::HITO_ACERCAMIENTO) {

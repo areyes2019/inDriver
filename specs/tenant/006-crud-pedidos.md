@@ -422,9 +422,11 @@ simulación. Las pantallas muestran solo el nombre de la fase.
 | Publicado | `PUBLICADO` | Nadie; ofertado a los conductores |
 | En recogida | `TOMADO`, `ARRIBADO` | Un conductor, todavía sin el paquete |
 | En entrega | `EN_CAMINO`, `ARRIBADO_A_ENTREGA` | Un conductor, con el paquete |
+| En regreso | `EN_REGRESO` | Un conductor, que devuelve el paquete al vendedor (SPEC-031) |
 | Completado | `ENTREGADO` (final) | — |
 | Cancelado | `CANCELADO` (final) | — |
 | Incidencia | `INCIDENCIA` (final) | — |
+| Devuelto | `DEVUELTO` (final) | — |
 
 `RECHAZADO` se retira: nada lo dispara hoy. Rechazar una **oferta** (`pedido_ofertas`) sigue
 existiendo y no cambia el estado del pedido.
@@ -442,7 +444,9 @@ existiendo y no cambia el estado del pedido.
 | `ARRIBADO_A_ENTREGA` | `ENTREGADO` | Conductor | Confirma la entrega |
 | `TOMADO`, `ARRIBADO` | `PUBLICADO` | Conductor | Cancela el viaje |
 | `PENDIENTE`, `PUBLICADO`, `TOMADO`, `ARRIBADO` | `CANCELADO` | Despachador o AdminCliente | Cancela el viaje |
-| `EN_CAMINO`, `ARRIBADO_A_ENTREGA` | `INCIDENCIA` | Despachador o AdminCliente | Cierra el viaje por una emergencia |
+| `ARRIBADO_A_ENTREGA` | `EN_REGRESO` | Conductor | El comprador no pagó un contra entrega (SPEC-031). Fija `tarifa_regreso` |
+| `EN_REGRESO` | `DEVUELTO` | Conductor | Entregó el paquete al vendedor y recibió el pago. Genera comisión y consume 1 viaje |
+| `EN_CAMINO`, `ARRIBADO_A_ENTREGA`, `EN_REGRESO` | `INCIDENCIA` | Despachador o AdminCliente | Cierra el viaje por una emergencia |
 
 Cualquier otra combinación responde `422`.
 

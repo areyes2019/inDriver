@@ -33,11 +33,20 @@ const ESTADOS_FINALES: Record<string, { texto: string; clase: string }> = {
   ENTREGADO: { texto: faseDe('ENTREGADO'), clase: 'bg-success-bg text-success-text' },
   CANCELADO: { texto: faseDe('CANCELADO'), clase: 'bg-red-100 text-red-700' },
   INCIDENCIA: { texto: faseDe('INCIDENCIA'), clase: 'bg-red-100 text-red-700' },
+  DEVUELTO: { texto: faseDe('DEVUELTO'), clase: 'bg-red-100 text-red-700' },
 }
 
 const cerrado = computed(() => (props.viaje ? (ESTADOS_FINALES[props.viaje.estado] ?? null) : null))
 
 // Spec tenant/006: se cancela hasta En recogida; con el paquete encima solo queda la incidencia.
+// spec tenant/031: lo que el repartidor le cobra al vendedor si el comprador no pagó.
+const cobroAlVendedor = computed(() => {
+  const viaje = props.viaje
+  if (viaje === null || (viaje.estado !== 'EN_REGRESO' && viaje.estado !== 'DEVUELTO')) return null
+
+  return Number(viaje.importe_cobro ?? 0) + Number(viaje.importe_envio ?? 0) + Number(viaje.tarifa_regreso ?? 0)
+})
+
 const cancelable = computed(() => (props.viaje ? sePuedeCancelar(props.viaje.estado) : false))
 const porIncidencia = computed(() =>
   props.viaje ? sePuedeCerrarPorIncidencia(props.viaje.estado) : false,
@@ -216,6 +225,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           <span class="text-sm text-body">Envío</span>
           <span class="text-sm font-semibold text-heading">
             {{ importeFormateado(viaje.importe_envio) }}
+          </span>
+        </div>
+        <div v-if="cobroAlVendedor !== null" class="mt-2 flex items-center justify-between">
+          <span class="text-sm text-body">Cobro al vendedor por el regreso</span>
+          <span class="text-sm font-semibold text-heading">
+            {{ importeFormateado(cobroAlVendedor) }}
           </span>
         </div>
       </section>

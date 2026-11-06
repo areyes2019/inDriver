@@ -51,6 +51,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'conteo_reubicaciones',
     'cargo_extra',
     'pago_extra',
+    'tarifa_regreso',
 ])]
 #[ScopedBy([AmbienteScope::class])]
 #[ObservedBy([PedidoObserver::class])]
@@ -107,6 +108,7 @@ class Pedido extends Model
             'notificado_conductor_en' => 'datetime',
             'cargo_extra' => 'decimal:2',
             'pago_extra' => 'decimal:2',
+            'tarifa_regreso' => 'decimal:2',
         ];
     }
 

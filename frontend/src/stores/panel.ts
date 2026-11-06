@@ -28,11 +28,13 @@ export type EstadoPedido =
   | 'ARRIBADO'
   | 'EN_CAMINO'
   | 'ARRIBADO_A_ENTREGA'
+  | 'EN_REGRESO'
+  | 'DEVUELTO'
   | 'ENTREGADO'
   | 'CANCELADO'
   | 'INCIDENCIA'
 
-const ESTADOS_FINALES: EstadoPedido[] = ['ENTREGADO', 'CANCELADO', 'INCIDENCIA']
+const ESTADOS_FINALES: EstadoPedido[] = ['ENTREGADO', 'CANCELADO', 'INCIDENCIA', 'DEVUELTO']
 
 export interface ViajeEnTurno {
   id_pedido: number
@@ -50,6 +52,8 @@ export interface ViajeEnTurno {
   nombre_solicitante: string | null
   telefono_solicitante: string | null
   importe_envio: string | number | null
+  importe_cobro?: string | number | null
+  tarifa_regreso?: string | number | null
   id_conductor: number | null
   conductor_nombre: string | null
   ambiente?: string | null
@@ -588,6 +592,7 @@ export const usePanelStore = defineStore('panel', () => {
     conductor_nombre?: string | null
     seguimiento?: Seguimiento | null
     saldo_viajes?: number | null
+    tarifa_regreso?: string | number | null
   }
 
   const REDUCTORES: Record<string, (payload: never) => void> = {
@@ -636,7 +641,10 @@ export const usePanelStore = defineStore('panel', () => {
       }
 
       viajeConocido(payload.id_pedido)
-      actualizarViaje(payload.id_pedido, { estado: payload.estado })
+      actualizarViaje(payload.id_pedido, {
+        estado: payload.estado,
+        tarifa_regreso: payload.tarifa_regreso,
+      })
       ocuparConductor(
         payload.id_conductor,
         payload.id_pedido,

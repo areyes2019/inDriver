@@ -108,14 +108,18 @@ Solo aplica a `RECEPTOR_PAGA_ENVIO_PRODUCTOS`. Con producto de $300 y envío de 
 - **RN-09.** El resumen de cada pedido contra entrega avisa de esta regla antes de confirmar.
 - **RN-10.** El sistema registra lo que debe pagar el vendedor, pero no obliga a pagarlo. Si no paga, el cliente se marca como `Inactivo` hasta que pague (RN-15).
 
-### Cambio propuesto a los estados (etapa 3)
+### Cambio a los estados
 
 | Desde | Hacia | Quién | Cuándo |
 |---|---|---|---|
 | `ARRIBADO_A_ENTREGA` | `EN_REGRESO` | Conductor | El comprador no pagó |
 | `EN_REGRESO` | `DEVUELTO` (final) | Conductor | Entregó el paquete al vendedor y recibió el pago |
 
-`INCIDENCIA` se conserva para emergencias: cierra sin comisión ni consumo de viaje, así que no sirve para este caso. Antes de programarlo hay que revisar qué usa cada estado en el mapa, la geocerca y `ESTADOS_EN_TURNO`.
+`INCIDENCIA` se conserva para emergencias, también durante el regreso: cierra sin comisión ni consumo de viaje. Si el vendedor no paga, el despachador la usa y marca al cliente como `Inactivo` desde Clientes (D14). Ninguno de los dos pasos es automático.
+
+En el mapa, el regreso dibuja la línea del comprador al vendedor. El servicio GPS no cambia: sigue rastreando hasta el estado final. En regreso no se puede reprogramar ni cambiar el destino. En TEST, el simulador no mueve al conductor durante el regreso.
+
+La tarifa de regreso se cobra en efectivo al vendedor. En Prepago aparece en el monedero del conductor; en Comisión no entra a su cuenta con la flotilla (D12).
 
 ## 5. Flujo
 

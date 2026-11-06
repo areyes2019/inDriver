@@ -215,7 +215,7 @@ it('serves every field panda_express reads along a full conductor shift', functi
         'id_pedido', 'estado', 'nombre_solicitante', 'telefono_solicitante',
         'direccion_recogida', 'direccion_entrega',
         'latitud_recogida', 'longitud_recogida', 'latitud_entrega', 'longitud_entrega',
-        'modalidad_pago', 'importe_envio', 'importe_cobro', 'seguimiento',
+        'modalidad_pago', 'importe_envio', 'importe_cobro', 'tarifa_regreso', 'seguimiento',
     ];
 
     $this->postJson(CONTRATO_BASE."/conductor/pedidos/{$pedido->id_pedido}/aceptar")
@@ -265,6 +265,47 @@ it('lets the conductor cancel its active pedido the way the app does', function 
 
     // useTripManagement.cancelTrip(): POST sin cuerpo.
     $this->postJson(CONTRATO_BASE."/conductor/pedidos/{$pedido->id_pedido}/cancelar")->assertSuccessful();
+
+    expect($this->getJson(CONTRATO_BASE.'/conductor/pedidos/activo')->getContent())->toBe('null');
+});
+
+it('lets the conductor return an unpaid package the way the app does', function () {
+    $e = contratoEscenario();
+    $token = $this->postJson(CONTRATO_BASE.'/conductor/login', [
+        'email' => 'beto@cafeluna.com',
+        'password' => 'Password123!',
+    ])->json('token');
+    $this->withHeader('Authorization', "Bearer {$token}");
+
+    $pedido = contratoPedidoOfertado($e['tenant'], $e['conductor']);
+    tenancy()->initialize($e['tenant']);
+    $pedido->update(['modalidad_pago' => 'RECEPTOR_PAGA_ENVIO_PRODUCTOS', 'importe_envio' => 50, 'importe_cobro' => 300]);
+    tenancy()->end();
+
+    $this->postJson(CONTRATO_BASE."/conductor/pedidos/{$pedido->id_pedido}/aceptar")->assertOk();
+
+    foreach (['ARRIBADO', 'EN_CAMINO', 'ARRIBADO_A_ENTREGA'] as $estado) {
+        $this->postJson(CONTRATO_BASE."/conductor/pedidos/{$pedido->id_pedido}/estado", ['estado' => $estado])->assertOk();
+    }
+
+    // useTripManagement.reportNoPayment(): lo que ActiveTripCard.vue necesita para el desglose.
+    $this->postJson(CONTRATO_BASE."/conductor/pedidos/{$pedido->id_pedido}/estado", ['estado' => 'EN_REGRESO'])
+        ->assertOk()
+        ->assertJsonPath('estado', 'EN_REGRESO')
+        ->assertJsonPath('importe_cobro', '300.00')
+        ->assertJsonPath('importe_envio', '50.00')
+        ->assertJsonPath('tarifa_regreso', '15.00');
+
+    // Si la app se reinicia a medio regreso, lo recupera con todo y tarifa.
+    $this->getJson(CONTRATO_BASE.'/conductor/pedidos/activo')
+        ->assertOk()
+        ->assertJsonPath('estado', 'EN_REGRESO')
+        ->assertJsonPath('tarifa_regreso', '15.00');
+
+    // useTripManagement.completeReturn(): el conductor queda libre.
+    $this->postJson(CONTRATO_BASE."/conductor/pedidos/{$pedido->id_pedido}/estado", ['estado' => 'DEVUELTO'])
+        ->assertOk()
+        ->assertJsonPath('estado', 'DEVUELTO');
 
     expect($this->getJson(CONTRATO_BASE.'/conductor/pedidos/activo')->getContent())->toBe('null');
 });

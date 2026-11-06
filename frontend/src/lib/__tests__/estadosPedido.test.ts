@@ -9,7 +9,9 @@ test('agrupa los estados internos en las fases de la spec tenant/006', () => {
   assert.equal(faseDe('ARRIBADO'), 'En recogida')
   assert.equal(faseDe('EN_CAMINO'), 'En entrega')
   assert.equal(faseDe('ARRIBADO_A_ENTREGA'), 'En entrega')
+  assert.equal(faseDe('EN_REGRESO'), 'En regreso')
   assert.equal(faseDe('ENTREGADO'), 'Completado')
+  assert.equal(faseDe('DEVUELTO'), 'Devuelto')
 })
 
 test('solo se cancela en Pendiente, Publicado y En recogida', () => {
@@ -20,14 +22,14 @@ test('solo se cancela en Pendiente, Publicado y En recogida', () => {
 })
 
 test('En entrega no se cancela: se cierra por incidencia', () => {
-  for (const estado of ['EN_CAMINO', 'ARRIBADO_A_ENTREGA']) {
+  for (const estado of ['EN_CAMINO', 'ARRIBADO_A_ENTREGA', 'EN_REGRESO']) {
     assert.equal(sePuedeCancelar(estado), false, estado)
     assert.equal(sePuedeCerrarPorIncidencia(estado), true, estado)
   }
 })
 
 test('un estado final no admite ninguna de las dos', () => {
-  for (const estado of ['ENTREGADO', 'CANCELADO', 'INCIDENCIA']) {
+  for (const estado of ['ENTREGADO', 'CANCELADO', 'INCIDENCIA', 'DEVUELTO']) {
     assert.equal(sePuedeCancelar(estado), false, estado)
     assert.equal(sePuedeCerrarPorIncidencia(estado), false, estado)
   }

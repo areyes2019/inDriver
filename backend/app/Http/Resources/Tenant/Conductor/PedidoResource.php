@@ -37,6 +37,7 @@ class PedidoResource extends JsonResource
             'modalidad_pago' => $this->modalidad_pago,
             'importe_envio' => $this->importe_envio,
             'importe_cobro' => $this->importe_cobro,
+            'tarifa_regreso' => $this->tarifa_regreso,
             'id_vehiculo' => $this->id_vehiculo,
             'vehiculo_placa' => $this->vehiculo?->placa,
             'estado' => $this->estado,

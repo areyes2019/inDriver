@@ -200,7 +200,7 @@ class TrackingService
 
         ConductorPosicion::insert($filas);
 
-        if ($pedido->estado === 'ENTREGADO') {
+        if (in_array($pedido->estado, ['ENTREGADO', 'DEVUELTO'], true)) {
             $this->calcularResumenRuta($pedido);
             $pedido->saveQuietly();
         }
