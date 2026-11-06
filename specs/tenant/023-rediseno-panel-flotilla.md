@@ -153,6 +153,8 @@ badge nuevos, la lista tiene tres fuentes más de cambio, todas ya presentes en 
 | `conductor.disponibilidad-cambiada` | entra o sale un conductor de la lista (ya se escuchaba) |
 | `pedido.tomado` | un conductor pasa a `Ocupado` |
 | `pedido.cancelado` | un conductor vuelve a `Disponible` sin entregar |
+| `pedido.devuelto` (SPEC-027) | el conductor canceló y vuelve a `Disponible` |
+| `pedido.incidencia` (SPEC-027) | el Panel cerró el viaje y el conductor vuelve a `Disponible` |
 | `pedido.entregado` (nuevo) | vuelve a `Disponible` y baja su saldo de viajes |
 | `saldo.acreditado` | el dueño le vendió viajes (`VentaViajeConductorController.php:68`) |
 

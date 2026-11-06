@@ -230,7 +230,7 @@ que en LIVE: son acciones humanas, no llegadas geográficas.
   entrega → `ARRIBADO_A_ENTREGA`. `EN_CAMINO` y `ENTREGADO` los sigue disparando el conductor.
 - **RN-14**: El avance se deduce del reloj, no de un contador. Una corrida perdida del comando se
   recupera sola en la siguiente, escribiendo de golpe los puntos atrasados.
-- **RN-15**: Cancelar el envío detiene la simulación. Un envío en estado final no avanza más.
+- **RN-15**: Cancelar el envío, cerrarlo por incidencia o que el conductor lo devuelva detiene la simulación. Un envío en estado final no avanza más.
 - **RN-16**: La ruta se calcula una vez por tramo y se guarda. Si el proveedor falla, se usa línea
   recta y se anota `warning` en la bitácora.
 - **RN-17**: `panda_express` no conoce el ambiente. No recibe el campo ni cambia su comportamiento.

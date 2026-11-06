@@ -155,8 +155,9 @@ no se mueve y no dice nada es indistinguible de una app rota.
   tenga un envío activo se sabe consultando `pedidos`, no duplicando el dato aquí.
 - **RN-02**: Para encenderse, el conductor necesita saldo disponible según la modalidad del tenant. Si
   no, se rechaza con `INSUFFICIENT_BALANCE` y el estado no cambia.
-- **RN-03**: El conductor no puede apagarse con un envío en curso: debe entregarlo o pedir la
-  cancelación al Panel. Se rechaza con `HAS_ACTIVE_DELIVERY`.
+- **RN-03**: El conductor no puede apagarse con un envío en curso. En En recogida puede cancelarlo, y
+  el envío regresa a `PUBLICADO`. En En entrega debe entregarlo o, en una emergencia, pedir al Panel
+  el cierre por incidencia. Se rechaza con `HAS_ACTIVE_DELIVERY`.
 - **RN-04**: Si pasan más de 10 minutos sin señales (`ultima_actualizacion`), una tarea programada lo
   apaga y emite el evento al Panel.
 - **RN-05**: Al cerrar sesión el conductor queda fuera de línea siempre, aunque tenga un envío en
@@ -217,8 +218,8 @@ de entorno, y así debe diagnosticarse.
 
 - Con saldo cero, la respuesta es `INSUFFICIENT_BALANCE`, el estado sigue en fuera de línea y **la app
   muestra el motivo en pantalla**.
-- Con una entrega en curso, apagarse responde `HAS_ACTIVE_DELIVERY` y la app explica que debe terminar
-  o cancelar la entrega.
+- Con una entrega en curso, apagarse responde `HAS_ACTIVE_DELIVERY` y la app explica qué puede hacer:
+  cancelar si va En recogida, o terminar la entrega si va En entrega.
 - Al encender, el Panel muestra al repartidor como disponible sin recargar la página, tanto en el menú
   lateral como en la tabla de conductores.
 - Al actualizarse la tabla por un evento, el filtro de búsqueda y la página activa se conservan.

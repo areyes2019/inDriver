@@ -3,8 +3,8 @@
 > **Spec unificada**: consolida `tenant/006-crud-pedidos.md` (autoridad principal) y
 > `tenant/011-nueva-entrega.md` (panel deslizante de agendamiento rápido, absorbido aquí). Donde
 > ambas entraban en conflicto, gana 006. Spec abierta: va a seguir cambiando (por ejemplo, cuando se
-> conecte el motor de asignación, o cuando se defina dónde vive el cambio de estado de un pedido ya
-> creado). No cerrarla ni renumerarla al agregar contenido nuevo.
+> conecte el motor de asignación). La máquina de estados del pedido vive aquí, en su propia sección.
+> No cerrarla ni renumerarla al agregar contenido nuevo.
 >
 > **Corrección de alcance (posterior a la unificación original)**: no existe un "formulario completo"
 > de pedidos como página propia, ni un menú "Pedidos" en el panel del tenant. La creación de pedidos
@@ -405,6 +405,63 @@ A diferencia de `ServiciosEnTurno`, que empieza en `top-[4.25rem]` para no meter
 navbar, este panel usa `top: 0` y `height: 100vh`. Como su `z-index` es menor que el del navbar, el
 navbar lo sigue tapando visualmente en esa franja superior — el contenido visible del formulario
 arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del navbar.
+
+## Máquina de estados del pedido (fuente única)
+
+> **Acordada el 2026-11-05 y pendiente de implementar.** Esta sección es la única definición de los
+> estados de un pedido: las demás specs la citan y, si alguna discrepa, gana esta. El código todavía
+> no la cumple por completo.
+
+### Fases y estados
+
+Los estados internos se conservan porque de ellos dependen los hitos del mapa, la geocerca y la
+simulación. Las pantallas muestran solo el nombre de la fase.
+
+| Fase en pantalla | Estados internos | Quién tiene el viaje |
+|---|---|---|
+| Pendiente | `PENDIENTE` | Nadie; aún sin ofertas |
+| Publicado | `PUBLICADO` | Nadie; ofertado a los conductores |
+| En recogida | `TOMADO`, `ARRIBADO` | Un conductor, todavía sin el paquete |
+| En entrega | `EN_CAMINO`, `ARRIBADO_A_ENTREGA` | Un conductor, con el paquete |
+| Completado | `ENTREGADO` (final) | — |
+| Cancelado | `CANCELADO` (final) | — |
+| Incidencia | `INCIDENCIA` (final) | — |
+
+`RECHAZADO` se retira: nada lo dispara hoy. Rechazar una **oferta** (`pedido_ofertas`) sigue
+existiendo y no cambia el estado del pedido.
+
+### Transiciones
+
+| Desde | Hacia | Quién | Cuándo |
+|---|---|---|---|
+| `PENDIENTE` | `PUBLICADO` | Sistema | "Lo antes posible": al crearse. Agendado: 15 minutos antes de `hora_desde` (SPEC-024). Rescate de cola: SPEC-026, RN-04 |
+| `PUBLICADO` | `PENDIENTE` | Sistema | Tras 3 rondas de oferta sin aceptación, para asignarlo a mano (SPEC-020, RN-04) |
+| `PUBLICADO` | `TOMADO` | Conductor | Acepta el viaje |
+| `TOMADO` | `ARRIBADO` | Conductor | Llega al punto de recogida |
+| `ARRIBADO` | `EN_CAMINO` | Conductor | Confirma que recogió el paquete |
+| `EN_CAMINO` | `ARRIBADO_A_ENTREGA` | Conductor | Llega al punto de entrega |
+| `ARRIBADO_A_ENTREGA` | `ENTREGADO` | Conductor | Confirma la entrega |
+| `TOMADO`, `ARRIBADO` | `PUBLICADO` | Conductor | Cancela el viaje |
+| `PENDIENTE`, `PUBLICADO`, `TOMADO`, `ARRIBADO` | `CANCELADO` | Despachador o AdminCliente | Cancela el viaje |
+| `EN_CAMINO`, `ARRIBADO_A_ENTREGA` | `INCIDENCIA` | Despachador o AdminCliente | Cierra el viaje por una emergencia |
+
+Cualquier otra combinación responde `422`.
+
+### Reglas de cancelación
+
+- **Solo se cancela en Pendiente, Publicado y En recogida.** Con el paquete encima (En entrega) no
+  hay cancelación ni compensación.
+- **Si cancela el despachador,** el pedido pasa a `CANCELADO` y desaparece del panel. El registro y
+  su historial se conservan.
+- **Si cancela el conductor,** el pedido regresa a `PUBLICADO` y lo pueden tomar otros conductores:
+  - Se limpia la asignación, el conductor queda libre y `veces_ofertado` vuelve a 0.
+  - Su oferta queda `RECHAZADA`: no se le vuelve a ofrecer, salvo que sea el único disponible en la
+    reoferta final (SPEC-020, RN-05).
+  - No se escribe `fecha_cancelacion`. El hecho queda en `auditoria`, con el conductor y el estado
+    del que venía.
+- **Cierre por incidencia:** es la única salida de En entrega que no es entregar. El motivo es
+  obligatorio. Libera al conductor, avisa a su app, saca el viaje del panel, no consume viaje ni
+  genera comisión.
 
 ## Reglas de negocio
 

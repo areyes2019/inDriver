@@ -135,7 +135,8 @@ recarga su pool una sola vez.
 
 ### Cola al quedar libre
 
-- **RN-01:** Un conductor "queda libre" al llegar su pedido activo a `ENTREGADO` o `CANCELADO`, y
+- **RN-01:** Un conductor "queda libre" al llegar su pedido activo a `ENTREGADO`, `CANCELADO` o
+  `INCIDENCIA`, al devolverlo a `PUBLICADO` (cancelación del conductor), y
   también al pasar a `DISPONIBLE` sin pedido activo (conectarse). Los tres casos disparan la
   reactivación.
 - **RN-02:** La reactivación corre **después** de confirmar la transición, fuera de su transacción.
@@ -151,7 +152,7 @@ recarga su pool una sola vez.
   ventana de 45 s de SPEC-020. Él elige cuál acepta; aceptar uno cierra las demás ofertas de *ese*
   pedido como `PERDIDA`, y los otros pedidos siguen su curso normal.
 - **RN-06:** Se respeta el rechazo explícito: un pedido que ese conductor marcó `RECHAZADA` no se le
-  vuelve a ofrecer (SPEC-020, RN-05). Las ofertas `PERDIDA` y `EXPIRADA` sí se reabren, porque
+  vuelve a ofrecer (SPEC-020, RN-05). Cancelar un viaje En recogida cuenta como rechazo explícito. Las ofertas `PERDIDA` y `EXPIRADA` sí se reabren, porque
   ninguna de las dos fue una decisión suya.
 - **RN-07:** Solo se le ofrece si sigue `DISPONIBLE`, sin pedido activo y con saldo suficiente
   (SPEC-019 RN-02, SPEC-023 RN-03). Si entregó y se desconectó, no recibe nada.
@@ -166,7 +167,7 @@ recarga su pool una sola vez.
 ### Hitos y polilínea
 
 - **RN-11:** El hito se deriva del estado del pedido: `TOMADO` → **H1**; `ARRIBADO`, `EN_CAMINO` y
-  `ARRIBADO_A_ENTREGA` → **H2**; estados finales → sin línea.
+  `ARRIBADO_A_ENTREGA` → **H2**; estados finales o devuelto a `PUBLICADO` → sin línea.
 - **RN-12:** El cambio a H2 ocurre **al llegar al punto de recogida** (`ARRIBADO`), no al presionar
   "iniciar viaje" (`EN_CAMINO`). El conductor que ya está en el negocio quiere ver a dónde va
   después, no la línea del tramo que acaba de terminar.
@@ -190,8 +191,8 @@ recarga su pool una sola vez.
 - **RN-20:** La línea sigue calles reales (Directions). Si Directions falla, se traza una recta entre
   los extremos **con el mismo color y el mismo estilo**: degradar el trazo escondería que la ruta es
   aproximada.
-- **RN-21:** La línea desaparece del Panel y de la app en cuanto el pedido llega a `ENTREGADO` o
-  `CANCELADO`.
+- **RN-21:** La línea desaparece del Panel y de la app en cuanto el pedido llega a un estado final o
+  el conductor lo devuelve a `PUBLICADO`.
 - **RN-22:** `panda_express` aplica las mismas reglas de color y estilo aunque el conductor solo se
   vea a sí mismo, para que lo que él ve y lo que ve el despachador sean la misma imagen.
 
@@ -233,6 +234,7 @@ registra como `warning` (RN-02).
 - [ ] Con dos pedidos en cola y un conductor entregando el suyo, al marcar `ENTREGADO` los dos
       pedidos aparecen en su bandeja sin recargar y sin esperar los 10 s del sondeo.
 - [ ] Ese mismo caso, pero cancelando el pedido en vez de entregarlo: mismo resultado.
+- [ ] Un conductor que cancela en En recogida recibe los otros pedidos en cola, pero no el que acaba de cancelar.
 - [ ] Un conductor que entrega y se desconecta en el mismo movimiento no recibe ofertas.
 - [ ] Un conductor sin saldo que entrega no recibe ofertas.
 - [ ] Un pedido que cayó a `PENDIENTE` por agotar sus 3 rondas vuelve a `PUBLICADO` y se le ofrece al
@@ -263,7 +265,7 @@ registra como `warning` (RN-02).
 
 | # | Adición | Dónde vive |
 |---|---|---|
-| 1 | Reoferta automática al liberarse el conductor | `OfertaPedidoService::reactivarColaPara()`, invocado desde `PedidoEstadoService` tras confirmar `ENTREGADO`/`CANCELADO` y desde `DisponibilidadService` al pasar a `DISPONIBLE` |
+| 1 | Reoferta automática al liberarse el conductor | `OfertaPedidoService::reactivarColaPara()`, invocado desde `PedidoEstadoService` tras confirmar `ENTREGADO`/`CANCELADO`/`INCIDENCIA` o la devolución a `PUBLICADO`, y desde `DisponibilidadService` al pasar a `DISPONIBLE` |
 | 2 | Aviso en tiempo real para que la cola aparezca sola | Evento `ConductorColaReactivada` → `conductor.cola-reactivada`; en la app, un watcher que llama `orders.loadOrders()` una sola vez |
 | 3 | Rescate de los pedidos en asignación manual | Filtro de RN-03 dentro de `reactivarColaPara()`, con la transición `PENDIENTE → PUBLICADO` que ya existe |
 | 4 | Color estable por conductor sin guardarlo | Helper compartido en el backend (`PALETA[id % 10]`), expuesto en los Resources |
@@ -279,7 +281,7 @@ registra como `warning` (RN-02).
 **Backend**
 
 - `app/Services/OfertaPedidoService.php` — método nuevo `reactivarColaPara(Conductor)`.
-- `app/Services/PedidoEstadoService.php` — engancha la reactivación tras `ENTREGADO` y `CANCELADO`.
+- `app/Services/PedidoEstadoService.php` — engancha la reactivación tras `ENTREGADO`, `CANCELADO`, `INCIDENCIA` y la devolución a `PUBLICADO`.
 - `app/Services/DisponibilidadService.php` — la engancha también al pasar a `DISPONIBLE`.
 - `app/Events/Tenant/ConductorColaReactivada.php` — evento nuevo.
 - `app/Http/Controllers/Tenant/Conductor/PedidoController.php` — orden del pool (RN-08).

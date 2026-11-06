@@ -103,7 +103,7 @@ El evento que sale al Panel no lleva `accuracy_m` ni `speed_kmh`. El mapa no los
 
 ## 6. Reglas de negocio
 
-- **RN-01:** La App emite posición **solo** con un envío en `ASSIGNED` o `IN_TRANSIT`. Estar en línea sin envío no genera tracking.
+- **RN-01:** La App emite posición **solo** con un envío en `TOMADO`, `ARRIBADO`, `EN_CAMINO` o `ARRIBADO_A_ENTREGA`. Estar en línea sin envío no genera tracking.
 - **RN-01b:** Un conductor en línea **sin** envío sí conserva su última posición conocida (`conductor_estado`), y solo esa: ni historia de recorrido ni difusión al Panel. Sin ella, quien nunca hizo un envío no tiene posición —y en TEST no la tendría nunca, porque ahí el GPS real se descarta siempre—, con lo que el tramo de acercamiento simulado de SPEC-025 medía cero metros. Si el conductor está fuera de línea, la lectura se descarta sin crear nada.
 - **RN-02:** Frecuencia: cada 15 segundos, o antes si el repartidor se movió más de 50 metros desde el último envío. Detenido más de 2 minutos, baja a un envío por minuto.
 - **RN-03:** Se descarta en la App, sin enviar, toda lectura con `accuracy_m` mayor a 100 o con velocidad implícita superior a 150 km/h respecto al punto anterior. El servidor repite el filtro de velocidad sobre `conductor_estado`, en un único punto compartido por las dos puertas de entrada —el POST directo y el worker del buzón del microservicio GPS (SPEC-028)—, porque el filtro no puede depender de por dónde entró el punto.
@@ -113,7 +113,7 @@ El evento que sale al Panel no lleva `accuracy_m` ni `speed_kmh`. El mapa no los
 - **RN-03c:** Todo descarte por RN-03 se registra en el log con conductor, tenant, coordenada rechazada y cuántos rechazos seguidos lleva. Una coordenada que se descarta en silencio es indistinguible de un GPS apagado cuando hay que diagnosticar, que es lo que costó días de rastreo en el incidente de SPEC-028, §16.
 - **RN-04:** El servidor guarda en `delivery_tracks` y actualiza `couriers.last_lat/lng/last_seen_at` en la misma operación. Ese `last_seen_at` es el que alimenta el timeout de SPEC-019.
 - **RN-05:** Sin conexión, la App acumula hasta 200 puntos en SQLite local y los sube por `POST /api/v1/deliveries/{id}/locations` al reconectar. Pasados los 200, descarta los más antiguos.
-- **RN-06:** El tracking corre en segundo plano con foreground service de Android y notificación persistente. Se detiene al entregar, cancelar o salir de línea.
+- **RN-06:** El tracking corre en segundo plano con foreground service de Android y notificación persistente. Se detiene al entregar, cancelar, cerrar por incidencia o salir de línea.
 - **RN-07:** Los puntos subidos por lote se guardan en `delivery_tracks` pero **no** se difunden al Panel: son historia, no posición actual.
 - **RN-08:** Al entregar el envío se calcula `distance_traveled_km` y se guarda `route_snapshot`.
 
@@ -130,7 +130,7 @@ Un `LOCATION_UPDATE` inválido por socket se descarta en silencio. No hay a qui�
 ## 8. Criterios de aceptación
 
 - [ ] Un repartidor en línea sin envío no genera registros en `delivery_tracks`.
-- [ ] Con un envío `IN_TRANSIT`, el marcador del Panel se mueve sin recargar la página.
+- [ ] Con un envío `EN_CAMINO`, el marcador del Panel se mueve sin recargar la página.
 - [ ] Una lectura con `accuracy_m: 250` no sale de la App.
 - [ ] Con la posición anterior envenenada en otro país, cuatro lecturas reales seguidas bastan para que el marcador vuelva a la posición correcta: no se queda clavado el resto del envío (RN-03b).
 - [ ] Dos lecturas malas sueltas con una buena en medio no suman entre sí: la base correcta sobrevive (RN-03b).

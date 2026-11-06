@@ -522,7 +522,7 @@ Deja funcionando:
 - **Qué consume**: cada envío que pasa a `ENTREGADO` consume **exactamente 1 viaje** del tenant,
   una sola vez, en cualquier modalidad (`Prepago` o `Comision`). Vender viajes a un conductor
   **deja de descontar** del saldo del tenant.
-- **Qué no consume**: un envío cancelado o rechazado en cualquier punto (no consume ni devuelve);
+- **Qué no consume**: un envío cancelado, cerrado por incidencia o devuelto por el conductor (no consume ni devuelve);
   un envío del ambiente `TEST` (ver enmienda en `025-modo-test-live.md`); y los envíos entregados
   **antes** de desplegar esta corrección (no hay relleno retroactivo).
 - **Bitácora del consumo**: tabla nueva `consumos_viajes_tenant`, una fila por envío consumido.
@@ -595,7 +595,7 @@ Reemplazan o complementan las reglas 1 y 2 de arriba:
   `SUM(compras_paquetes.cantidad_viajes) − COUNT(consumos_viajes_tenant)`. Puede ser negativo.
 - **RN-C2** *(complementa RN-2)*: al pasar a `ENTREGADO`, además de liquidar al conductor, el envío
   consume 1 viaje del tenant, una sola vez (`UNIQUE(id_pedido)`), en ambas modalidades.
-- **RN-C3**: cancelaciones y rechazos no consumen ni devuelven. Un envío TEST no consume.
+- **RN-C3**: cancelaciones, incidencias y devoluciones del conductor no consumen ni devuelven. Un envío TEST no consume.
 - **RN-C4** *(RN-1 se mantiene)*: la venta a un conductor se rechaza si la cantidad resultante
   excede el saldo actual del tenant (RN-C1). La venta no modifica ese saldo.
 - **RN-C5**: ningún saldo del tenant `<= 0` bloquea operación alguna.
@@ -653,7 +653,7 @@ Reemplazan o complementan las reglas 1 y 2 de arriba:
 
 30. El saldo del tenant baja 1 por envío entregado, en cualquier modalidad; ya no baja al vender
     viajes a un conductor. **Reemplaza al supuesto 5.**
-31. Cancelados y rechazados no consumen ni devuelven.
+31. Cancelados, incidencias y devueltos no consumen ni devuelven.
 32. Los envíos TEST no consumen del saldo real del tenant (excepción a RN-06 de 025, registrada
     allá).
 33. El saldo puede quedar negativo; no se bloquea nada por saldo. El bloqueo sigue pendiente.

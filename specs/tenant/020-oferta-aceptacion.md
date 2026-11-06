@@ -25,7 +25,7 @@ courier_id — FK a couriers, nullable, indexado
 offered_at — timestamp, nullable
 accepted_at — timestamp, nullable
 
-Estados relevantes de deliveries.status: PENDING → OFFERED → ASSIGNED. Si nadie acepta, vuelve a PENDING.
+Estados relevantes del pedido: `PENDIENTE` → `PUBLICADO` → `TOMADO`. Si nadie acepta tras las rondas de RN-04, vuelve a `PENDIENTE`. La máquina completa está en `tenant/006-crud-pedidos.md`.
 
 Tabla nueva delivery_offers, para saber a quién ya se le ofreció y no repetírselo:
 
@@ -74,7 +74,7 @@ Respuesta de acepatcion exitosa
 {
   "data": {
     "delivery_id": "01JB2K3F9A",
-    "status": "ASSIGNED",
+    "status": "TOMADO",
     "accepted_at": "2026-09-04T10:02:12Z",
     "customer": { "name": "Marta Ochoa", "phone": "+52 461 123 4567" },
     "pickup": { "label": "Farmacia San Juan", "address": "Av. Tecnológico 210" },
@@ -88,12 +88,13 @@ El teléfono y la dirección exacta solo aparecen después de aceptar. En la ofe
 
 RN-01: La oferta se emite en paralelo a todos los repartidores en línea y sin envío activo del tenant. El primero que llegue al servidor gana.
 RN-02: La aceptación se resuelve por HTTP, dentro de una transacción con lockForUpdate sobre la fila del envío. El socket solo difunde el resultado.
-RN-03: La ventana de aceptación es de 45 segundos. Al vencer, las ofertas PENDING pasan a EXPIRED y el envío regresa a PENDING.
-RN-04: Si un envío expira sin aceptación, se reofrece hasta 3 veces. A la tercera queda en PENDING y se notifica al admin_cliente para asignación manual.
+RN-03: La ventana de aceptación es de 45 segundos. Al vencer, las ofertas PENDING pasan a EXPIRED y el envío sigue `PUBLICADO` mientras queden rondas (RN-04).
+RN-04: Si un envío expira sin aceptación, se reofrece hasta 3 veces. A la tercera queda en `PENDIENTE` y se notifica al admin_cliente para asignación manual.
 RN-05: Un repartidor no recibe dos veces la misma oferta si ya la rechazó o la perdió, salvo que sea el único disponible en la reoferta final.
 RN-06: Un repartidor con envío activo no recibe ofertas. Un solo envío a la vez.
 RN-07: Rechazar es explícito y no penaliza. Dejar expirar sin responder tres veces seguidas apaga el modo en línea con reason: TIMEOUT (SPEC-019, RN-05).
 RN-08: Aceptar un envío ya asignado devuelve 409 con el motivo, no un error genérico. La App cierra la tarjeta de oferta sin mostrar error rojo: perder una carrera es normal, no es una falla.
+RN-09: Si el repartidor cancela en En recogida, el envío regresa a `PUBLICADO` y se reoferta a los demás repartidores elegibles, con `veces_ofertado` en 0. Su oferta queda `RECHAZADA`: no se le vuelve a ofrecer, salvo que sea el único disponible en la reoferta final (RN-05).
 
 # Errores 
 DELIVERY_ALREADY_TAKEN	409	Otro repartidor aceptó primero
@@ -105,9 +106,10 @@ COURIER_NOT_AVAILABLE	409	Está fuera de línea o ya tiene envío activo
 - Dos repartidores aceptan el mismo envío con 50 ms de diferencia: uno recibe 200, el otro 409 con DELIVERY_ALREADY_TAKEN, y deliveries.courier_id queda con un solo valor.
 - El que pierde recibe DELIVERY_OFFER_CLOSED y la tarjeta desaparece de su pantalla sin mensaje de error.
 - Un repartidor fuera de línea no recibe NEW_DELIVERY_AVAILABLE.
-- Un repartidor con envío en IN_TRANSIT no recibe ofertas nuevas.
+- Un repartidor con envío en En recogida o En entrega no recibe ofertas nuevas.
 - Aceptar a los 46 segundos devuelve 409 con OFFER_EXPIRED.
-- Un envío que expira tres veces queda en PENDING y aparece en el Panel para asignación manual.
+- Un envío que expira tres veces queda en `PENDIENTE` y aparece en el Panel para asignación manual.
+- Si el repartidor cancela en En recogida, otro repartidor elegible recibe la oferta y quien canceló no.
 - El payload de NEW_DELIVERY_AVAILABLE no contiene teléfono ni dirección exacta del cliente.
 - Con la app cerrada, la oferta llega como push (SPEC-018, RN-04) y al abrir la app la tarjeta sigue vigente si no ha expirado.
 - Un repartidor del tenant A recibe 404 al aceptar un envío del tenant B.

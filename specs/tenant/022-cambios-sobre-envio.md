@@ -15,21 +15,23 @@
 
 ---
 
+> **Estados:** esta spec nació con nombres en inglés. La máquina de estados vigente, con sus nombres, está en `tenant/006-crud-pedidos.md`, y gana si hay discrepancia.
+
 ## 1. Objetivo
 Notificar al repartidor cuando el cliente o el administrador cancelan un envío ya tomado, cambian su hora de entrega o cambian el punto de entrega, y dejar constancia de si el aviso llegó a tiempo.
 
 ## 2. Alcance
 
-**Incluye:** cancelación de un envío en curso, cambio de horario programado, confirmación de recepción por parte de la App, compensación cuando el repartidor ya iba en camino.
+**Incluye:** cancelación de un envío En recogida, cierre por incidencia de uno En entrega, cambio de horario programado y confirmación de recepción por parte de la App.
 
-**No incluye:** cancelación de envíos que nadie ha tomado (eso solo cambia estado, sin aviso), reembolso al cliente final, cálculo del monto de compensación (SPEC-023).
+**No incluye:** push ni confirmación al cancelar envíos que nadie ha tomado (van solo por socket, RN-01) ni reembolso al cliente final.
 
 ## 3. Actores y permisos
 
 | Actor | Permisos |
 |---|---|
-| `admin_cliente` | Cancela y reprograma envíos de su tenant |
-| `repartidor` | Recibe el aviso y lo confirma; no puede cancelar por su cuenta |
+| `admin_cliente`, `despachador` | Cancelan, cierran por incidencia y reprograman envíos de su tenant |
+| `repartidor` | Recibe el aviso y lo confirma; puede cancelar solo en En recogida, y el envío regresa a `PUBLICADO` (RN-18) |
 | `super_admin` | Solo lectura |
 
 ## 4. Modelo de datos
@@ -46,7 +48,7 @@ Se agrega a `deliveries`:
 - relocation_count — unsigned tinyint, default 0
 - extra_charges — decimal(10,2), default 0
 
-`courier_notified_at` se llena cuando la App confirma. Es el único `ack` del sistema, y existe por una razón concreta: si el repartidor recogió el paquete después de esa hora, es problema suyo; si lo recogió antes, la compensación es procedente.
+`courier_notified_at` se llena cuando la App confirma. Es el único `ack` del sistema y deja constancia de si el aviso llegó a tiempo.
 
 Tabla `delivery_changes` (bitácora de incidencias):
 
@@ -63,7 +65,7 @@ Tabla `delivery_changes` (bitácora de incidencias):
 
 | Método | Ruta | Descripción | Éxito |
 |---|---|---|---|
-| POST | `/api/v1/deliveries/{id}/cancel` | Panel cancela el envío | 200 |
+| PATCH | `/api/v1/t/{slug}/pedidos/{pedido}/estado` | Panel cancela el envío o lo cierra por incidencia (SPEC-008) | 200 |
 | PATCH | `/api/v1/deliveries/{id}/schedule` | Panel cambia la hora de entrega | 200 |
 | POST | `/api/v1/deliveries/{id}/notified` | App confirma que vio el cambio | 204 |
 POST	/api/v1/deliveries/{id}/relocation/quote	Cotiza el cambio antes de aplicarlo	200
@@ -79,13 +81,12 @@ PATCH	/api/v1/deliveries/{id}/dropoff	Aplica el cambio de destino	200
     "delivery_id": "01JB2K3F9A",
     "cancelled_by": "CUSTOMER",
     "reason": "Ya no lo necesito",
-    "compensation_eligible": true,
-    "instruction": "RETURN_TO_PICKUP"
+    "instruction": "STOP"
   }
 }
 ```
 
-`instruction` toma tres valores: `STOP` (no había recogido nada), `RETURN_TO_PICKUP` (ya tiene el paquete) y `CONTACT_SUPPORT`.
+`instruction` toma dos valores: `STOP` (cancelación: todavía no recogía nada) y `CONTACT_SUPPORT` (cierre por incidencia).
 
 **`DELIVERY_SCHEDULE_UPDATED`**, mismo canal:
 
@@ -161,24 +162,27 @@ Evento DELIVERY_ADDRESS_UPDATED hacia private-courier.{courier_id}:
 - **RN-01:** El aviso con push y confirmación es solo para el envío con `courier_id`. Cancelar un envío sin repartidor emite `pedido.cancelado` únicamente por socket (`PedidoCanceladoSinConductor`), para que el Panel y las listas de los conductores lo quiten al instante.
 - **RN-02:** Cancelación y reprogramación se emiten por socket **y** por push simultáneamente (SPEC-018, RN-04). Es el caso que justifica esa regla.
 - **RN-03:** La App confirma con `POST /notified`. Si a los 60 segundos no hay confirmación, el Panel muestra el envío en rojo con la etiqueta "repartidor no confirmado" y habilita llamada telefónica. No hay reintentos automáticos; a partir de ahí es intervención humana.
-- **RN-04:** Si el envío estaba en `IN_TRANSIT` al cancelarse, `compensation_eligible` es verdadero y se dispara el flujo de SPEC-023.
+- **RN-04:** Un envío solo se cancela en Pendiente, Publicado y En recogida. Como el repartidor todavía no lleva el paquete, no hay compensación.
 - **RN-05:** Un envío cancelado no acepta más `LOCATION_UPDATE`. El tracking se detiene con el evento (SPEC-021, RN-06).
 - **RN-06:** Reprogramar a una hora ya pasada se rechaza. La nueva hora debe estar al menos 15 minutos en el futuro.
-- **RN-07:** Un envío `IN_TRANSIT` no se puede reprogramar: el repartidor ya lleva el paquete. Se cancela o se entrega.
-- **RN-08:** Cancelar un envío ya entregado devuelve 409. La devolución es otro flujo.
+- **RN-07:** Un envío En entrega no se puede reprogramar: el repartidor ya lleva el paquete. Se entrega o, en una emergencia, se cierra por incidencia (RN-17).
+- **RN-08:** Cancelar un envío en estado final devuelve 422. La devolución es otro flujo.
 - **RN-09:** Al cancelar, el repartidor queda disponible de inmediato y puede recibir ofertas nuevas (SPEC-020, RN-06).
 RN-10: La cotización se calcula desde la posición actual del repartidor (SPEC-021), no desde el origen. Si ya pasó el punto viejo, el desvío real es mayor.
 RN-11: La cotización vence a los 5 minutos. Después de eso el repartidor se movió y el precio ya no aplica: hay que cotizar de nuevo.
-RN-12: El cambio de destino sí se permite con el envío en IN_TRANSIT, a diferencia de la reprogramación (RN-07). Es justo el caso de uso: el paquete ya va en camino.
+RN-12: El cambio de destino sí se permite con el envío En entrega, a diferencia de la reprogramación (RN-07). Es justo el caso de uso: el paquete ya va en camino.
 RN-13: Máximo 2 reubicaciones por envío. A la tercera se rechaza y se sugiere cancelar y crear un envío nuevo.
 RN-14: El cargo extra se cobra al cliente y el extra_payout se abona al repartidor como movimiento ADJUSTMENT al entregar (SPEC-023).
 RN-15: Si el nuevo destino queda fuera de las zonas de cobertura del tenant, se rechaza la cotización.
 RN-16: El repartidor no puede rechazar la reubicación dentro del rango cotizado; el sistema ya la validó. Solo confirma que la vio, con el mismo POST /notified.
+RN-17: El Panel puede cerrar por incidencia un envío En entrega, con motivo obligatorio. Queda en `INCIDENCIA`, sale del Panel, libera al repartidor y le avisa por socket y push con `instruction: CONTACT_SUPPORT`. No consume viaje ni genera comisión o compensación.
+RN-18: Si el repartidor cancela en En recogida, el envío regresa a `PUBLICADO` y lo pueden tomar otros (SPEC-020, RN-09). No se dispara el aviso de cancelación de esta spec.
 ## 7. Errores
 
 | Código | HTTP | Cuándo |
 |---|---|---|
-| `DELIVERY_ALREADY_COMPLETED` | 409 | Cancelar o reprogramar algo ya entregado |
+| `DELIVERY_ALREADY_COMPLETED` | 422 | Cancelar o reprogramar un envío en estado final |
+| — | 422 | Cancelar un envío En entrega, o cerrar por incidencia uno que no lo está |
 | `CANNOT_RESCHEDULE_IN_TRANSIT` | 409 | Reprogramar con el paquete en camino |
 | `SCHEDULE_IN_PAST` | 422 | Nueva hora a menos de 15 minutos |
 | `DELIVERY_NOT_FOUND` | 404 | Envío de otro tenant |
@@ -188,21 +192,24 @@ DROPOFF_OUT_OF_COVERAGE	422	Nuevo destino fuera de zona
 QUOTE_NOT_FOUND	404	quote_id inexistente o de otro envío
 ## 8. Criterios de aceptación
 
-- [ ] Cancelar un envío `IN_TRANSIT` hace que la App muestre pantalla completa de cancelación, no una notificación pequeña.
+- [ ] Cancelar un envío En recogida desde el Panel hace que la App muestre pantalla completa de cancelación, no una notificación pequeña.
 - [ ] El mismo evento llega por socket y por push; la App lo procesa una sola vez.
 - [ ] Con la app cerrada, la cancelación llega como push y al abrirla la pantalla ya está en estado cancelado.
 - [ ] Sin confirmación a los 61 segundos, el Panel marca el envío en rojo con botón de llamada.
 - [ ] Un envío cancelado deja de generar registros en `delivery_tracks`.
 - [ ] Reprogramar a 10 minutos en el futuro devuelve 422.
-- [ ] Reprogramar un envío `IN_TRANSIT` devuelve 409.
-- [ ] Cancelar un envío `IN_TRANSIT` marca `compensation_eligible: true` y crea el registro en `delivery_changes`.
-- [ ] Cancelar un envío sin repartidor (`PENDIENTE` o `PUBLICADO`) emite `PedidoCanceladoSinConductor` y no `PedidoCanceladoParaConductor`, por lo que no hay push ni compensación.
+- [ ] Reprogramar un envío En entrega devuelve 409.
+- [ ] Cancelar un envío En recogida desde el Panel crea el registro en `delivery_changes`.
+- [ ] Cancelar un envío En entrega devuelve 422.
+- [ ] Cerrar por incidencia un envío En entrega sin motivo devuelve 422; con motivo, sale del Panel y libera al repartidor.
+- [ ] Si el repartidor cancela en En recogida, el envío vuelve a `PUBLICADO` y otros repartidores reciben la oferta.
+- [ ] Cancelar un envío sin repartidor (`PENDIENTE` o `PUBLICADO`) emite `PedidoCanceladoSinConductor` y no `PedidoCanceladoParaConductor`, por lo que no hay push.
 - [ ] Ese envío sale de "Viajes en turno" sin recargar el Panel, y la App actualiza su lista sin esperar el sondeo.
 - [ ] Cancelar un envío ya cancelado devuelve 422; el Panel muestra que el viaje cambió de estado y sincroniza la lista.
 - [ ] Tras la cancelación, el repartidor recibe la siguiente oferta disponible.
 Cotizar con el repartidor a 2 km del destino viejo da un extra_distance_km distinto que cotizar con él ya en el punto.
 Aplicar una cotización de hace 6 minutos devuelve 409 con QUOTE_EXPIRED.
-Con el envío en IN_TRANSIT, cambiar destino devuelve 200 y la App actualiza elmapa al punto nuevo.
+Con el envío En entrega, cambiar destino devuelve 200 y la App actualiza elmapa al punto nuevo.
 La App muestra el destino anterior tachado junto al nuevo, no solo el nuevo.
 Un tercer cambio de destino devuelve 409 con RELOCATION_LIMIT_REACHED.
 Un destino fuera de zona de cobertura devuelve 422 sin crear cotización.
@@ -229,7 +236,7 @@ Sin confirmación del repartidor a los 61 segundos, el Panel marca el envío en 
 
 ## 1. Objetivo
 
-Llevar el saldo de cada repartidor y avisarle en tiempo real cuando cambia, ya sea por una recarga, por la comisión de un envío o por una compensación. Hereda el protocolo de SPEC-018.
+Llevar el saldo de cada repartidor y avisarle en tiempo real cuando cambia, ya sea por una recarga o por la comisión de un envío. Hereda el protocolo de SPEC-018.
 
 ## 2. Alcance
 
@@ -259,7 +266,7 @@ almacenado. Aplica a la modalidad **Comisión**.
 
 - `id_movimiento` — PK
 - `id_conductor` — FK, indexado
-- `tipo` — enum: `CREDITO`, `COMISION`, `COMPENSACION`, `AJUSTE`
+- `tipo` — enum: `CREDITO`, `COMISION`, `AJUSTE`
 - `monto` — decimal(10,2), positivo en abonos, negativo en cargos
 - `saldo_resultante` — decimal(10,2)
 - `id_pedido` — FK, nullable
@@ -347,7 +354,7 @@ alcance (spec `018`).
 - **RN-02:** `saldo_resultante` se guarda en cada movimiento. Permite auditar sin recalcular toda la serie.
 - **RN-03:** El saldo puede quedar negativo por comisiones, pero con saldo en cero o menos el repartidor no puede ponerse en línea (SPEC-019, RN-02).
 - **RN-04:** Un `COMMISSION` se registra al **entregar**, no al aceptar. Un envío cancelado no cobra comisión.
-- **RN-05:** Un `COMPENSATION` se registra cuando SPEC-022 marca `compensation_eligible: true`. El monto lo define el `admin_cliente`; el sistema solo abre el pendiente.
+- **RN-05:** *Eliminada: ya no hay compensación, porque un envío no se cancela con el paquete encima (SPEC-022, RN-04).*
 - **RN-06:** Cruzar de cero a positivo, o de positivo a cero o negativo, emite además `COURIER_AVAILABILITY_CHANGED` si eso cambió su elegibilidad para estar en línea.
 - **RN-07:** Un movimiento con `amount` cero se rechaza.
 - **RN-08:** Solo `super_admin` ve movimientos de todos los tenants; un `admin_cliente` que consulte un repartidor ajeno recibe 404.

@@ -61,7 +61,7 @@ Deja funcionando:
 ### Por qué "viajes en turno" excluye estados finales
 
 Igual que la máquina de estados definida en `tenant/006-crud-pedidos.md`, un pedido en `ENTREGADO`,
-`RECHAZADO` o `CANCELADO` ya salió de operación. El panel solo lista pedidos en `PENDIENTE`,
+`INCIDENCIA` o `CANCELADO` ya salió de operación. El panel solo lista pedidos en `PENDIENTE`,
 `PUBLICADO`, `TOMADO`, `ARRIBADO`, `EN_CAMINO` o `ARRIBADO_A_ENTREGA`.
 
 ### Por qué no se filtra por despachador
@@ -168,7 +168,7 @@ en el `<button>`.
 ### Se reusa `PATCH /pedidos/{pedido}/estado`, no se crea un endpoint de cancelación
 
 El endpoint ya existe, ya valida la transición contra `PedidoEstadoService::TRANSICIONES` (que
-permite `CANCELADO` desde los seis estados del panel), ya escribe `fecha_cancelacion`,
+permite `CANCELADO` desde Pendiente, Publicado y En recogida), ya escribe `fecha_cancelacion`,
 `cancelado_por` y `motivo_cancelacion`, ya deja registro en `auditoria` y, cuando el pedido tenía
 conductor asignado, ya dispara `PedidoCanceladoParaConductor` para avisarle. Un endpoint nuevo
 duplicaría todo eso. Esta spec no toca el backend.
@@ -198,7 +198,7 @@ sin invadir el mapa central.
 ## Reglas de negocio
 
 - "Viajes en turno" = pedidos del tenant en estado `PENDIENTE`, `PUBLICADO`, `TOMADO`, `ARRIBADO`,
-  `EN_CAMINO` o `ARRIBADO_A_ENTREGA`. Se excluyen `ENTREGADO`, `RECHAZADO` y `CANCELADO`.
+  `EN_CAMINO` o `ARRIBADO_A_ENTREGA`. Se excluyen `ENTREGADO`, `INCIDENCIA` y `CANCELADO`.
 - No se filtra por despachador: se ve la operación completa del tenant.
 - Orden: ítems con `lo_antes_posible: true` primero (en el orden en que los devuelve la API),
   después el resto ordenado por `hora_desde` ascendente.
@@ -213,11 +213,14 @@ sin invadir el mapa central.
 - Nunca están abiertos a la vez el detalle del envío y el panel de "Nueva Entrega": abrir uno cierra
   el otro.
 - El detalle se cierra con el botón `×` o con la tecla `Escape`.
-- El botón "Cancelar viaje" está disponible en los seis estados del panel, porque la máquina de
-  estados permite pasar a `CANCELADO` desde todos ellos.
+- El botón "Cancelar viaje" solo se muestra en Pendiente, Publicado y En recogida (máquina de estados
+  de `tenant/006-crud-pedidos.md`).
+- En En entrega se muestra en su lugar "Cerrar por incidencia", con motivo obligatorio. Es para
+  emergencias y deja el pedido en `INCIDENCIA`.
 - Cancelar exige confirmación previa. No se pide motivo: se envía `cancelado_por: 'ADMIN'` y
   `motivo` vacío.
-- Tras una cancelación exitosa se cierra el detalle y se recarga la lista; el viaje ya no aparece.
+- Tras una cancelación exitosa se cierra el detalle y el viaje sale de la lista sin recargarla
+  (`tenant/027`).
 - Si la cancelación falla, el panel de detalle **queda abierto** y muestra un mensaje de error con
   opción de reintentar.
 
@@ -337,7 +340,7 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
 - Paginación visible (la lista completa scrollea dentro del panel).
 - Filtrado por despachador.
 - Actualización en tiempo real del panel por websockets (`tenant/018`–`022` cubren el protocolo;
-  este panel se refresca al montar, al agendar y al cancelar).
+  este panel se refrescaba al montar, al agendar y al cancelar; `tenant/027` lo reemplazó).
 - Comportamiento específico para pantallas angostas (mobile) — el panel usa el mismo `w-[20%]` fijo
   en cualquier tamaño de pantalla.
 - Actualizar `004-guia-diseno-base.md`, cuyo apartado de iconografía quedó desactualizado (dice
@@ -375,7 +378,7 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
 16. "Cancelar viaje" abre un diálogo de confirmación cuyo texto aclara que el viaje quedará como
     CANCELADO y que la acción no se puede deshacer.
 17. Al confirmar, se envía `PATCH /t/{slug}/pedidos/{id}/estado` con `estado: 'CANCELADO'` y
-    `cancelado_por: 'ADMIN'`; el detalle se cierra, la lista se recarga y el viaje ya no aparece.
+    `cancelado_por: 'ADMIN'`; el detalle se cierra y el viaje sale de la lista sin recargarla.
 18. El pedido cancelado sigue existiendo: aparece con estado `CANCELADO` en el listado de Pedidos.
 19. Si la cancelación falla, el detalle permanece abierto con un mensaje de error y un botón para
     reintentar.
@@ -384,15 +387,15 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
 
 ## Supuestos asumidos (registro completo)
 
-1. "Viajes en turno" = pedidos con estado no final (excluye `ENTREGADO`/`RECHAZADO`/`CANCELADO`),
+1. "Viajes en turno" = pedidos con estado no final (excluye `ENTREGADO`/`INCIDENCIA`/`CANCELADO`),
    sin filtrar por despachador.
 2. Orden: lo antes posible primero, luego por `hora_desde` ascendente.
 3. Campos mostrados por tarjeta: ícono de calendario, folio con `#`, fecha/hora en acento, dirección
    de recogida (punto azul) y dirección de entrega (punto rojo), ambas truncadas. **Ya no** se
    muestran el badge de estado ni el nombre del cliente.
 4. Estado vacío con mensaje si no hay viajes en turno.
-5. La tarjeta **es clickeable** y abre el detalle del envío. La única acción disponible sobre un
-   viaje es cancelarlo.
+5. La tarjeta **es clickeable** y abre el detalle del envío. Las únicas acciones disponibles sobre
+   un viaje son cancelarlo o, en En entrega, cerrarlo por incidencia.
 6. La lista completa se muestra con scroll propio dentro del panel, sin paginación visible.
 7. El tipo `ViajeEnTurno` vive dentro de `ServiciosEnTurno.vue` (ya no hay fixture; ver
    `tenant/012`) y se exporta desde ahí para que `DetalleEnvioPanel` lo reuse.
@@ -433,6 +436,7 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
 26. No se pide motivo de cancelación; se envía `cancelado_por: 'ADMIN'` y `motivo` vacío.
 27. El aviso de un viaje cancelado lo dispara el backend (`PedidoCanceladoParaConductor` si tenía
     conductor, `PedidoCanceladoSinConductor` si no); el frontend no hace nada extra.
-28. El botón "Cancelar viaje" se muestra en los seis estados del panel.
+28. El botón "Cancelar viaje" se muestra solo en Pendiente, Publicado y En recogida; en En entrega se
+    muestra "Cerrar por incidencia".
 29. Solo un panel deslizante abierto a la vez: el detalle y "Nueva Entrega" se excluyen mutuamente.
 30. La selección del viaje vive en `PanelView.vue`, no dentro de `ServiciosEnTurno.vue`.

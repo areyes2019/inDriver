@@ -173,7 +173,7 @@ Negocio
 - EN_CAMINO
 - ARRIBADO_A_ENTREGA
 - ENTREGADO
-- RECHAZADO
+- INCIDENCIA
 - CANCELADO
 
 * Caso de  uso 
@@ -478,7 +478,7 @@ created_at
 updated_at
 
 Una fila por envio LIVE que pasa a ENTREGADO, en cualquier modalidad (Prepago o Comision). Los
-envios TEST, cancelados o rechazados no generan fila. El saldo de viajes del tenant se calcula, no se
+envios TEST, cancelados o cerrados por incidencia no generan fila. El saldo de viajes del tenant se calcula, no se
 guarda: SUM(compras_paquetes.cantidad_viajes) - COUNT(consumos_viajes_tenant). Ver
 specs/tenant/015-configuracion-comisiones.md (correccion "el saldo del tenant se consume por envio
 entregado") y specs/tenant/025-modo-test-live.md (enmienda TEST).

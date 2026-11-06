@@ -131,7 +131,7 @@ Los componentes se vuelven de solo lectura sobre este store. Ninguno hace `http.
 
 `PENDIENTE`, `PUBLICADO`, `TOMADO`, `ARRIBADO`, `EN_CAMINO`, `ARRIBADO_A_ENTREGA` — los mismos seis
 que hoy filtra el cliente (`ServiciosEnTurno.vue:27-34`). El complemento son los `ESTADOS_FINALES` de
-`PedidoEstadoService` (`ENTREGADO`, `CANCELADO`, `RECHAZADO`). La lista pasa a definirse **una sola
+`PedidoEstadoService` (`ENTREGADO`, `CANCELADO`, `INCIDENCIA`). La lista pasa a definirse **una sola
 vez, en el backend**, para que el filtro no pueda discrepar entre las dos capas.
 
 ### Las dos secciones (1.1)
@@ -157,12 +157,11 @@ lo que ocurre por sí solo cuando la sección se deriva en vez de guardarse.
 estados, y `pedido.tomado` sigue mandando `estado`, `id_conductor` y `conductor_nombre` como en la
 1.0. Todo lo que agrega la 1.1 vive en la pantalla.
 
-**El cruce solo va en un sentido.** Las transiciones de `PedidoEstadoService::TRANSICIONES` no
-permiten volver de "en curso" a "pendientes": desde `TOMADO` los únicos caminos son avanzar
-(`ARRIBADO`) o cancelarse, y el regreso que sí existe —`PUBLICADO → PENDIENTE`, cuando se agotan las
-rondas de oferta de SPEC-020— ocurre **dentro** de pendientes, sin cruzar nada. Aun así la regla se
-escribe en los dos sentidos (RN-29): al ser derivada, el día que exista una función de desasignar la
-tarjeta regresará sola a pendientes sin tocar una línea de esta capa.
+**El cruce va en los dos sentidos.** Un viaje cruza de "pendientes" a "en curso" cuando un conductor
+lo toma, y regresa cuando ese conductor lo cancela en En recogida (máquina de estados de SPEC-006). El
+regreso `PUBLICADO → PENDIENTE`, cuando se agotan las rondas de oferta de SPEC-020, ocurre **dentro**
+de pendientes, sin cruzar nada. Como la sección se deriva del estado (RN-29), la tarjeta regresa sola
+sin tocar una línea de esta capa.
 
 ## 5. Endpoints y eventos
 
@@ -210,6 +209,8 @@ el destinatario ya filtra en el cliente).
 | `pedido.estado-cambiado` | `id_pedido`, `id_conductor`, `estado` | `seguimiento` | El mapa cambia de hito sin volver a pedir `/conductores/activos` |
 | `pedido.entregado` | `id_pedido` | `id_conductor`, `saldo_viajes` | Saca el viaje y libera al conductor |
 | `pedido.cancelado` | `id_pedido`, `cancelado_por`, `motivo`, … | `id_conductor`, `saldo_viajes` | Igual que entregado |
+| `pedido.devuelto` | *(evento nuevo, Enmienda 4)* | — | Regresa el viaje a pendientes y libera al conductor |
+| `pedido.incidencia` | *(evento nuevo, Enmienda 4)* | — | Igual que entregado |
 | `pedido.requiere-asignacion-manual` | `id_pedido` | `estado` | Devuelve el viaje a `PENDIENTE` en la lista |
 | `conductor.disponibilidad-cambiada` | `id_conductor`, `disponibilidad` | `conductor` — el `ConductorActivoResource` completo, o `null` al desconectarse | Insertar a alguien que se conecta exige su nombre, placa, saldo, color y posición: sin esto es obligatorio recargar |
 | `saldo.acreditado` | `id_conductor`, `viajes_acreditados` | `saldo_viajes` | El saldo resultante, no el delta: el Panel no tiene que sumar y no puede desincronizarse |
@@ -257,9 +258,17 @@ nuevo, pero `pedido.cancelado` solo salía si el envío tenía conductor: el que
 quedaba en "Viajes en turno" hasta recargar. Se agrega `PedidoCanceladoSinConductor` (SPEC-022,
 RN-01), con el mismo nombre en el canal porque para quien escucha es la misma noticia. Su carga es
 `id_pedido`, los campos de `DatosDeEventoPanel::delPedido()` y `event_id`; no lleva `saldo_viajes`,
-`cancelado_por`, `motivo`, `compensation_eligible` ni `instruction`. El reductor del Panel no cambia:
+`cancelado_por`, `motivo` ni `instruction`. El reductor del Panel no cambia:
 quita la fila y, como `id_conductor` viene en `null`, `liberarConductor` no hace nada. También sale
 por `Pedido::$avisosDiferidos`, igual que el resto de los avisos que releen el pedido.
+
+**Enmienda 4 — viaje devuelto y cierre por incidencia (2026-11-05, pendiente de implementar).** La
+máquina de estados de SPEC-006 agrega dos caminos, y cada uno necesita su evento:
+
+- `pedido.devuelto` (`PedidoDevuelto`): el conductor canceló en En recogida. Lleva `id_pedido`,
+  `estado`, `id_conductor_anterior`, `saldo_viajes`, `ambiente` y `event_id`.
+- `pedido.incidencia` (`PedidoCerradoPorIncidencia`): el Panel cerró un viaje En entrega. Lleva
+  `id_pedido`, `estado`, `id_conductor`, `saldo_viajes`, `motivo`, `ambiente` y `event_id`.
 
 ## 6. Reglas de negocio
 
@@ -292,6 +301,8 @@ por `Pedido::$avisosDiferidos`, igual que el resto de los avisos que releen el p
   | `pedido.estado-cambiado` | Cambia `estado`; si es final, quita la fila | Actualiza `seguimiento` del pedido asignado |
   | `pedido.entregado` | Quita la fila | Marca "Disponible", fija `saldo_viajes`, limpia `pedido_asignado` |
   | `pedido.cancelado` | Quita la fila | Igual que entregado |
+  | `pedido.incidencia` | Quita la fila | Igual que entregado |
+  | `pedido.devuelto` | `estado = PUBLICADO`, sin conductor | Marca "Disponible", fija `saldo_viajes`, limpia `pedido_asignado` |
   | `pedido.requiere-asignacion-manual` | `estado = PENDIENTE`, sin conductor | Libera al conductor si lo tenía |
   | `conductor.disponibilidad-cambiada` | — | `DISPONIBLE` inserta desde `payload.conductor`; `FUERA_DE_SERVICIO` quita la fila |
   | `saldo.acreditado` | — | Fija `saldo_viajes` con el valor recibido |
@@ -362,7 +373,8 @@ por `Pedido::$avisosDiferidos`, igual que el resto de los avisos que releen el p
   fila se movió bajo el dedo. Desde la 1.1 eso incluye los **cambios de sección** (RN-34): lo que se
   congela no es solo la posición, es el sitio.
 - **RN-26:** El viaje abierto en `DetalleEnvioPanel` nunca se cierra solo por un evento. Si se
-  entrega o se cancela, el detalle lo refleja y deja que la persona lo cierre.
+  entrega o se cancela, el detalle lo refleja y deja que la persona lo cierre. La fila sale de la
+  lista de todos modos: lo que sigue abierto es solo el detalle de quien lo estaba viendo.
 - **RN-27:** Con `prefers-reduced-motion` activo no hay desplazamientos ni FLIP: los cambios se
   aplican al instante y el resaltado se reduce a un cambio de fondo sin transición.
 
@@ -500,6 +512,8 @@ decisión propia que no se cuela en esta spec (§9, adición 19).
       interrumpe cuando un viaje cruza.
 - [ ] Un viaje que se entrega se despide desde "Viajes en curso" (RN-23) y no reaparece en
       pendientes.
+- [ ] Un viaje que el conductor cancela en En recogida regresa a "Viajes pendientes" sin recargar.
+- [ ] Un viaje que el despachador cancela desaparece del panel sin recargar.
 
 ## 9. Adiciones técnicas aceptadas
 
@@ -541,6 +555,7 @@ decisión propia que no se cuela en esta spec (§9, adición 19).
   `PedidoEstadoCambiado.php`, `PedidoRequiereAsignacionManual.php`,
   `ConductorDisponibilidadCambiada.php`, `SaldoAcreditado.php` — cargas enriquecidas.
 - `app/Events/Tenant/PedidoCanceladoSinConductor.php` — evento nuevo (Enmienda 3 de §5).
+- `app/Events/Tenant/PedidoDevuelto.php`, `PedidoCerradoPorIncidencia.php` — eventos nuevos (Enmienda 4 de §5).
 
   Los **constructores no cambian**: siguen recibiendo ids y `broadcastWith()` resuelve el resto
   contra la base. Es lo contrario de lo que planteaba el borrador (pasarles el modelo), y se decidió

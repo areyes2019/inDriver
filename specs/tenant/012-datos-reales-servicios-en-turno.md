@@ -60,7 +60,7 @@ Deja funcionando:
 El backend (`PedidoController::index`) solo acepta un único valor en `?estado=`, pero "viajes en
 turno" son pedidos en 6 estados distintos (`PENDIENTE, PUBLICADO, TOMADO, ARRIBADO, EN_CAMINO,
 ARRIBADO_A_ENTREGA`). Pedir 6 veces el mismo listado sería peor que pedirlo una vez sin filtro y
-excluir en el cliente los 3 estados finales (`ENTREGADO, RECHAZADO, CANCELADO`) — mismo criterio de
+excluir en el cliente los 3 estados finales (`ENTREGADO, INCIDENCIA, CANCELADO`) — mismo criterio de
 "estado no final" que ya usaba el fixture y que define `tenant/006`. Se acepta como conocido que,
 según crezca el historial de pedidos `ENTREGADO`/`CANCELADO` de un tenant, esto puede traer páginas
 de más solo para descartarlas; optimizar eso (por ejemplo agregando un filtro `?estado[]=` al
@@ -104,7 +104,7 @@ el tipo no cambia; solo crece la lista de campos.
 ## Reglas de negocio
 
 1. "Viajes en turno" = pedidos del tenant en estado `PENDIENTE, PUBLICADO, TOMADO, ARRIBADO,
-   EN_CAMINO o ARRIBADO_A_ENTREGA` (se excluyen `ENTREGADO`, `RECHAZADO`, `CANCELADO`).
+   EN_CAMINO o ARRIBADO_A_ENTREGA` (se excluyen `ENTREGADO`, `INCIDENCIA`, `CANCELADO`).
 2. Orden: primero los pedidos con `lo_antes_posible = true`, después el resto ordenado por
    `hora_desde` ascendente (mismo criterio ya vigente).
 3. No se filtra por despachador: se listan los viajes en turno de todo el tenant.
@@ -175,7 +175,7 @@ Sin cambios. Se reutiliza tal como está:
    `viajesEnTurnoFixture` (el archivo de fixtures ya no lo exporta).
 2. El panel muestra un indicador de carga mientras espera la respuesta de `GET /pedidos`.
 3. El panel lista únicamente pedidos reales en estado `PENDIENTE, PUBLICADO, TOMADO, ARRIBADO,
-   EN_CAMINO o ARRIBADO_A_ENTREGA`; los pedidos `ENTREGADO`, `RECHAZADO` o `CANCELADO` no aparecen.
+   EN_CAMINO o ARRIBADO_A_ENTREGA`; los pedidos `ENTREGADO`, `INCIDENCIA` o `CANCELADO` no aparecen.
 4. Con más de 15 pedidos en turno, el panel los muestra todos (no solo los primeros 15) sin acción
    del usuario.
 5. El orden se mantiene: `lo_antes_posible` primero, luego por `hora_desde` ascendente.
@@ -196,7 +196,7 @@ Sin cambios. Se reutiliza tal como está:
 
 1. "Barra lateral de envíos" es el panel "Viajes en turno" (`ServiciosEnTurno.vue`); el fixture de
    conductores (`conductoresActivosFixture`, usado por el mapa) no se toca.
-2. "Viajes en turno" excluye pedidos en estado final (`ENTREGADO`, `RECHAZADO`, `CANCELADO`), igual
+2. "Viajes en turno" excluye pedidos en estado final (`ENTREGADO`, `INCIDENCIA`, `CANCELADO`), igual
    que definía el fixture y que la máquina de estados de `tenant/006`.
 3. El orden se mantiene igual que hoy: `lo_antes_posible` primero, luego `hora_desde` ascendente.
 4. No hay actualización automática en tiempo real; la lista se carga al entrar al panel y se

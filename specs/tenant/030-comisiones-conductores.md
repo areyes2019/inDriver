@@ -186,7 +186,7 @@ siguiente carga.
 - **RN-06** En `Prepago` no se genera comisión, aunque exista `comision_porcentaje` configurado.
 - **RN-07** Los pedidos TEST generan comisión igual que los LIVE; comisiones y liquidaciones no
   distinguen ambiente y se suman en los mismos totales.
-- **RN-08** Cancelar o rechazar un pedido no genera ni revierte comisión.
+- **RN-08** Cancelar un pedido, cerrarlo por incidencia o que el conductor lo devuelva no genera ni revierte comisión.
 - **RN-09** Generado = `SUM(importe_comision)`; pagado = `SUM(liquidaciones.monto)`; pendiente =
   generado − pagado. Calculados siempre; sin contadores.
 - **RN-10** Una liquidación exige `monto > 0` y `monto ≤ pendiente` del conductor en ese momento,
@@ -383,7 +383,7 @@ en conectarse.
 4. Cambiar el porcentaje a 30 después de entregar no altera la fila (RN-04).
 5. En `Prepago` no se crea fila aunque haya porcentaje (RN-06); `prepago_descontado` sigue igual.
 6. Un pedido TEST en `Comision` sí crea fila (RN-07).
-7. Cancelar desde `ARRIBADO_A_ENTREGA` no crea fila (RN-08).
+7. Cancelar desde `ARRIBADO` o cerrar por incidencia desde `ARRIBADO_A_ENTREGA` no crea fila (RN-08).
 8. Porcentaje 0 → fila con 0.00 y `PAGADA` (RN-05).
 9. Entregar en `Comision` crea **además** exactamente un `consumos_viajes_tenant` (RN-14; el saldo
    del tenant baja 1 igual que en Prepago).
@@ -498,7 +498,7 @@ proyecto hoy; no se agregan.
     de usarse para comisiones y pierde su bloqueo de conexión, pero no se borra.
 17. La pantalla se actualiza al recibir `pedido.entregado` por el canal existente, volviendo a pedir
     el resumen al backend.
-18. Cancelar o rechazar nunca genera ni revierte comisión.
+18. Cancelar, cerrar por incidencia o devolver un pedido nunca genera ni revierte comisión.
 19. Las acciones "Liquidar comisión" y "Ver comisiones" son por fila en la lista de conductores,
     visibles solo para `AdminCliente` y solo en `Comision` (mismo criterio que "Vender viajes").
 20. La columna "Comisión pendiente" se muestra a cualquier rol que vea la tabla, solo en `Comision`;

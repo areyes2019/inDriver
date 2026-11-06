@@ -99,7 +99,7 @@ ARRIBADO_A_ENTREGA→ENTREGADO`, descuento de prepago o cálculo de comisión al
 a un servicio compartido `PedidoEstadoService` (transición + liquidación), usado tanto por
 `Tenant\PedidoController` (despachador/admin, sin cambios de comportamiento) como por el nuevo
 `Tenant\Conductor\PedidoController`, que además restringe qué transiciones puede disparar un
-conductor (no puede mandar un pedido a `RECHAZADO`, ni tocar uno que no sea el suyo).
+conductor (no puede cerrar un pedido por incidencia, ni tocar uno que no sea el suyo).
 
 ### Diseño del canal de tiempo real (Reverb)
 
@@ -123,6 +123,11 @@ que se disparan ahí:
   conductor. Sale con el mismo nombre, `pedido.cancelado`, y solo por socket. Como no es el viaje
   activo de nadie, la app marca `driver.orderListDirty` y vuelve a pedir su lista sin esperar el
   sondeo.
+- `PedidoDevuelto` (`pedido.devuelto`) — el conductor canceló y el pedido regresó a `PUBLICADO`. Va
+  solo por socket. Lo reciben el Panel y los conductores; la reoferta sale con los avisos normales de
+  SPEC-020.
+- `PedidoCerradoPorIncidencia` (`pedido.incidencia`) — el Panel cerró un pedido En entrega. Va por
+  socket y push al conductor asignado.
 
 `panda_express` ya trae `pusher-js` (`services/realtime.js`) — Reverb es compatible con el
 protocolo de Pusher Channels, así que solo cambian las credenciales de conexión (host/puerto propio
@@ -166,13 +171,14 @@ existen en el esquema, ninguna se modifica.
 2. Un conductor solo ve en su pool pedidos con `estado = 'PUBLICADO'` y `id_conductor = null`, de
    su propio tenant.
 3. Un conductor no puede aceptar un segundo pedido si ya tiene uno activo (`id_conductor` propio en
-   un pedido cuyo estado no sea final: `ENTREGADO`, `RECHAZADO`, `CANCELADO`).
+   un pedido cuyo estado no sea final: `ENTREGADO`, `INCIDENCIA`, `CANCELADO`).
 4. Al aceptar (`PUBLICADO→TOMADO`), el pedido toma automáticamente el vehículo propio del conductor
    (`vehiculos.id_conductor`, relación 1 a 1 — ver `tenant/004-vehiculo-del-conductor.md`); como todo
    conductor activo tiene su propio vehículo desde el alta, `id_vehiculo` nunca queda `null`.
 5. Desde la app, el conductor solo puede mover su propio pedido activo por:
-   `TOMADO→ARRIBADO→EN_CAMINO→ARRIBADO_A_ENTREGA→ENTREGADO`, o cancelarlo (`→CANCELADO`) en
-   cualquier punto antes de `ENTREGADO`.
+   `TOMADO→ARRIBADO→EN_CAMINO→ARRIBADO_A_ENTREGA→ENTREGADO`, o cancelarlo en `TOMADO` o `ARRIBADO`.
+   Al cancelar, el pedido regresa a `PUBLICADO` para que otros lo tomen (máquina de estados de
+   `tenant/006-crud-pedidos.md`). Desde `EN_CAMINO` ya no puede cancelar.
 6. Conectarse (`estado: 'ONLINE'`) es requisito para ver el pool de pedidos disponibles;
    desconectarse (`'OFFLINE'`) no afecta un pedido ya en curso.
 7. Cada cambio de `ONLINE`/`OFFLINE` actualiza también `conductores.disponibilidad`
@@ -368,8 +374,8 @@ alcance.
 5. Aceptar un pedido ya tomado por otro conductor responde 409/422 sin modificar el pedido.
 6. Un conductor con un pedido activo no puede aceptar uno segundo.
 7. Las transiciones de estado del conductor respetan exactamente
-   `TOMADO→ARRIBADO→EN_CAMINO→ARRIBADO_A_ENTREGA→ENTREGADO`; cualquier otra combinación responde
-   422.
+   `TOMADO→ARRIBADO→EN_CAMINO→ARRIBADO_A_ENTREGA→ENTREGADO`, y cancelar en `TOMADO` o `ARRIBADO`
+   regresa el pedido a `PUBLICADO`; cualquier otra combinación responde 422.
 8. Al llegar a `ENTREGADO` desde la app, se liquida igual que hoy desde el panel (descuento de
    prepago o comisión, según modalidad del tenant) — mismo resultado, sin duplicar lógica.
 9. `POST /conductor/estado` con `{ estado: 'ONLINE' }` deja `conductores.disponibilidad` en
@@ -396,8 +402,8 @@ alcance.
    tenant, y lo gana el primero que lo acepta — no se usa asignación dirigida
    (`pedido_asignaciones`).
 4. El conductor solo puede disparar las transiciones `TOMADO→ARRIBADO→EN_CAMINO→
-   ARRIBADO_A_ENTREGA→ENTREGADO` y cancelar su propio pedido activo — nunca `RECHAZADO` ni tocar
-   pedidos ajenos.
+   ARRIBADO_A_ENTREGA→ENTREGADO` y cancelar su propio pedido en `TOMADO` o `ARRIBADO`, que lo regresa
+   a `PUBLICADO` — nunca cerrarlo por incidencia ni tocar pedidos ajenos.
 5. Un conductor tiene como máximo un pedido activo (no final) a la vez.
 6. Conectar/desconectar desde la app escribe directo en `conductor_estado.estado`
    (`ONLINE`/`OFFLINE` únicamente); los demás valores de ese enum quedan fuera de alcance de la app.

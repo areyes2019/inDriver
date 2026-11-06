@@ -188,7 +188,7 @@ ser la dirección **pública** del servicio (§14).
 | Aviso | Cuándo | Efecto en el servicio |
 |---|---|---|
 | `ENVIO_INICIADO` | El pedido pasa a un estado de envío en curso | Habilita el rastreo del conductor y fija su `id_pedido` |
-| `ENVIO_TERMINADO` | Entregado, cancelado o reasignado | Vacía la tanda pendiente y saca al conductor del mapa |
+| `ENVIO_TERMINADO` | Entregado, cancelado, cerrado por incidencia, devuelto por el conductor o reasignado | Vacía la tanda pendiente y saca al conductor del mapa |
 | `PERMISO_CANCELADO` | Cierre de sesión o apagado del conductor | Anota desde cuándo dejan de valer sus permisos |
 
 ### 6.4 Buzón servicio → Laravel (`gps:hacia-laravel`)
