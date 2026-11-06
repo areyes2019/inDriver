@@ -230,6 +230,8 @@ Cada etapa se detiene hasta el visto bueno del usuario, que la prueba en el sist
 | 7 | Avisos, bandeja y plantillas | Menú de conversaciones; el cliente recibe avisos |
 | 8 | Conexión de números por flotilla | Una segunda flotilla se conecta sin cruce de datos |
 
+**Hallazgo de la etapa 1, pendiente de decisión:** `config/app.php` fija `UTC`, y `pedidos:publicar-agendados` interpreta `hora_desde` y `hora_hasta` en esa zona, aunque el Panel las captura en hora local. Un agendado de 17:00 a 18:00 en Celaya se publica a las 10:45 hora local. A las 16:50, cuando sí le tocaba, ya no se publica y queda `PENDIENTE`. Después de las 18:00 hora local, `now()` ya da la fecha del día siguiente.
+
 La etapa 6 se prueba con una flotilla de prueba en LIVE y el número de prueba, porque en TEST el bot no crea pedidos (D3).
 
 ## 9. Componentes

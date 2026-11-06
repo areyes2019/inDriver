@@ -33,6 +33,54 @@ class RutaService
     }
 
     /**
+     * Kilómetros por calle según Google, o `null` si no hay una ruta real (spec tenant/031, RN-02).
+     *
+     * Es para cobrar, por eso no usa `calcular()`: aquella cae a línea recta para no dejar muerto un
+     * viaje de prueba, y una tarifa calculada así sale más barata sin que nadie se entere. Lee la
+     * misma distancia que muestra el Panel (`leg.distance.value`).
+     *
+     * @param  array{lat: float, lng: float}  $origen
+     * @param  array{lat: float, lng: float}  $destino
+     */
+    public function distanciaPorCalleKm(array $origen, array $destino): ?float
+    {
+        $llave = config('services.google_maps.key');
+
+        if (! is_string($llave) || $llave === '') {
+            Log::warning('No se puede medir la distancia por calle: falta la llave de Google Maps');
+
+            return null;
+        }
+
+        try {
+            $respuesta = Http::timeout(10)->get('https://maps.googleapis.com/maps/api/directions/json', [
+                'origin' => "{$origen['lat']},{$origen['lng']}",
+                'destination' => "{$destino['lat']},{$destino['lng']}",
+                'mode' => 'driving',
+                'key' => $llave,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo medir la distancia por calle', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+
+        $metros = $respuesta->json('routes.0.legs.0.distance.value');
+
+        if ($respuesta->json('status') !== 'OK' || ! is_numeric($metros)) {
+            Log::warning('Directions no devolvió una distancia utilizable', [
+                'status' => $respuesta->json('status'),
+                'origen' => $origen,
+                'destino' => $destino,
+            ]);
+
+            return null;
+        }
+
+        return (float) $metros / 1000;
+    }
+
+    /**
      * @param  array{lat: float, lng: float}  $origen
      * @param  array{lat: float, lng: float}  $destino
      * @return array<int, array{lat: float, lng: float}>

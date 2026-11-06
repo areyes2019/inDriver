@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Tenant;
 
-use App\Events\Tenant\PedidoCreado;
 use App\Events\Tenant\PedidoReprogramado;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Tenant\PedidoResource;
@@ -14,14 +13,14 @@ use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\PedidoCotizacion;
 use App\Services\CambioEnvioService;
+use App\Services\CreacionPedidoService;
 use App\Services\PedidoEstadoService;
+use App\Services\TarifaService;
 use App\Support\SaldoViajesTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -30,6 +29,8 @@ class PedidoController extends Controller
     public function __construct(
         private readonly PedidoEstadoService $estados,
         private readonly CambioEnvioService $cambios,
+        private readonly CreacionPedidoService $creacion,
+        private readonly TarifaService $tarifas,
     ) {}
 
     public function index(Request $request): AnonymousResourceCollection
@@ -99,56 +100,7 @@ class PedidoController extends Controller
         $this->validarTarifasConfiguradas();
         $data = $this->validarDatos($request);
 
-        // spec tenant/025, RN-03: el envío sella aquí el ambiente del interruptor y no vuelve a
-        // cambiarlo nunca. Va fuera del `create()` de arriba a propósito: `ambiente` no está en el
-        // `#[Fillable]` del modelo, para que ningún `update()` ni `fill()` pueda moverlo después.
-        $ambiente = ConfiguracionTenant::obtener(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_LIVE);
-
-        $pedido = DB::transaction(function () use ($data, $ambiente) {
-            // `withoutGlobalScopes()`: el número de envío es correlativo del tenant entero, no del
-            // ambiente. Sin esto, el primer envío TEST reciclaría el PED-000001 de un envío LIVE.
-            $siguienteId = (int) (Pedido::withoutGlobalScopes()->max('id_pedido') ?? 0) + 1;
-            $numeroPedido = 'PED-'.str_pad((string) $siguienteId, 6, '0', STR_PAD_LEFT);
-
-            $pedido = Pedido::create([
-                ...$data,
-                'numero_pedido' => $numeroPedido,
-                'estado' => 'PENDIENTE',
-            ]);
-
-            $pedido->ambiente = $ambiente;
-            $pedido->save();
-
-            return $pedido;
-        });
-
-        $pedido->load(['cliente', 'despachador.usuario', 'conductor.usuario', 'vehiculo']);
-
-        Auditoria::create([
-            'id_usuario' => $request->user('usuario')->id_usuario,
-            'tabla_afectada' => 'pedidos',
-            'accion' => 'ALTA',
-            'descripcion' => "Alta del pedido {$pedido->numero_pedido}",
-        ]);
-
-        // spec tenant/024: un pedido "lo antes posible" se publica en el acto — sin esto nace
-        // PENDIENTE y se queda ahí para siempre, porque nada más en el sistema lo publica y sin
-        // PUBLICADO nunca se crean las ofertas que forman el pool del conductor (spec tenant/020).
-        // Los agendados los publica `pedidos:publicar-agendados` 15 minutos antes de su horario.
-        if ($pedido->lo_antes_posible) {
-            $this->publicar($pedido);
-        }
-
-        // spec tenant/027, RN-05: el alta se anuncia por el canal para que la fila entre sola a
-        // "Viajes en turno". No basta con `pedido.disponible`: ese solo sale si el envío se publica
-        // y además hay conductores elegibles en ese momento, así que un agendado —o uno creado con
-        // la flotilla desconectada— obligaba a recargar la página para verlo.
-        //
-        // Va después de `publicar()` para que la carga lleve el estado con el que quedó el envío y
-        // no el PENDIENTE intermedio del `create()`.
-        if ($slug = tenant()?->slug) {
-            PedidoCreado::dispatch($pedido->id_pedido, $slug);
-        }
+        $pedido = $this->creacion->crear($data, $request->user('usuario')->id_usuario);
 
         return response()->json(new PedidoResource($pedido), 201);
     }
@@ -346,32 +298,6 @@ class PedidoController extends Controller
     }
 
     /**
-     * Publica el pedido: es lo único que abre la oferta a los conductores en línea
-     * (`PedidoEstadoService` -> `OfertaPedidoService::ofertar`, spec tenant/020).
-     *
-     * Va fuera de la transacción del alta y protegido (spec tenant/018, RN-08): si Reverb está
-     * caído, el despachador no tiene por qué recibir un error — el pedido queda publicado igual y
-     * el aviso perdido solo se anota en la bitácora. `transicionar` deja el estado en memoria
-     * antes de avisar, así que se persiste pase lo que pase: dejar ofertas abiertas sobre un
-     * pedido que en la base sigue PENDIENTE es peor que perder el aviso.
-     */
-    private function publicar(Pedido $pedido): void
-    {
-        try {
-            $this->estados->transicionar($pedido, 'PUBLICADO');
-        } catch (\Throwable $e) {
-            Log::warning('No se pudo avisar de la publicación del pedido', [
-                'id_pedido' => $pedido->id_pedido,
-                'error' => $e->getMessage(),
-            ]);
-        } finally {
-            if ($pedido->estado === 'PUBLICADO') {
-                $pedido->save();
-            }
-        }
-    }
-
-    /**
      * Solo un rol "opera" la creación de pedidos a la vez, según la configuración del tenant
      * (spec tenant/011): AdminCliente cuando el tenant no usa despachadores, Despachador cuando sí
      * los usa. Nunca ambos al mismo tiempo.
@@ -394,11 +320,7 @@ class PedidoController extends Controller
      */
     private function validarTarifasConfiguradas(): void
     {
-        $tarifaBanderazo = ConfiguracionTenant::obtener(ConfiguracionTenant::BANDERAZO);
-        $kmIncluidosBanderazo = ConfiguracionTenant::obtener(ConfiguracionTenant::KM_INCLUIDOS);
-        $tarifaKmAdicional = ConfiguracionTenant::obtener(ConfiguracionTenant::KM_ADICIONAL);
-
-        if ($tarifaBanderazo === null || $kmIncluidosBanderazo === null || $tarifaKmAdicional === null) {
+        if ($this->tarifas->vigentes() === null) {
             throw ValidationException::withMessages([
                 'importe_envio' => 'El administrador del tenant debe configurar las tarifas antes de poder agendar pedidos.',
             ]);

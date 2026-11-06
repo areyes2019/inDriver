@@ -10,6 +10,7 @@ use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
 use App\Services\PedidoEstadoService;
 use App\Services\RutaService;
+use App\Services\TarifaService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -111,6 +112,7 @@ class SembrarPedidos extends Command
     public function __construct(
         private readonly PedidoEstadoService $estados,
         private readonly RutaService $rutas,
+        private readonly TarifaService $tarifas,
     ) {
         parent::__construct();
     }
@@ -135,7 +137,7 @@ class SembrarPedidos extends Command
         tenancy()->initialize($tenant);
 
         try {
-            $tarifas = $this->tarifas();
+            $tarifas = $this->tarifas->vigentes();
 
             if ($tarifas === null) {
                 $this->error('El tenant no tiene configuradas las tarifas (banderazo, km incluidos, km adicional).');
@@ -260,26 +262,6 @@ class SembrarPedidos extends Command
     }
 
     /**
-     * @return array{banderazo: float, km_incluidos: float, km_adicional: float}|null
-     */
-    private function tarifas(): ?array
-    {
-        $banderazo = ConfiguracionTenant::obtener(ConfiguracionTenant::BANDERAZO);
-        $incluidos = ConfiguracionTenant::obtener(ConfiguracionTenant::KM_INCLUIDOS);
-        $adicional = ConfiguracionTenant::obtener(ConfiguracionTenant::KM_ADICIONAL);
-
-        if ($banderazo === null || $incluidos === null || $adicional === null) {
-            return null;
-        }
-
-        return [
-            'banderazo' => (float) $banderazo,
-            'km_incluidos' => (float) $incluidos,
-            'km_adicional' => (float) $adicional,
-        ];
-    }
-
-    /**
      * @param  array{lat: float, lng: float}|null  $centro
      * @param  array{banderazo: float, km_incluidos: float, km_adicional: float}  $tarifas
      */
@@ -293,7 +275,7 @@ class SembrarPedidos extends Command
         // recta. Si Directions falla, RutaService devuelve la línea recta y el importe sale igual.
         $km = $google ? $this->distanciaPorCalleKm($recogida, $entrega) : $this->distanciaKm($recogida, $entrega);
         $this->ultimaDistanciaKm = $km;
-        $importe = $tarifas['banderazo'] + (max(0.0, $km - $tarifas['km_incluidos']) * $tarifas['km_adicional']);
+        $importe = $this->tarifas->importe($km, $tarifas);
 
         // Igual que el formulario del Panel: `importe_cobro` solo tiene sentido cuando el receptor
         // paga los productos; en las otras dos modalidades queda en cero
