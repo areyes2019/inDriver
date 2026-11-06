@@ -119,6 +119,8 @@ Solo aplica a `RECEPTOR_PAGA_ENVIO_PRODUCTOS`. Con producto de $300 y envío de 
 
 En el mapa, el regreso dibuja la línea del comprador al vendedor. El servicio GPS no cambia: sigue rastreando hasta el estado final. En regreso no se puede reprogramar ni cambiar el destino. En TEST, el simulador no mueve al conductor durante el regreso.
 
+Durante el regreso, la app ofrece llamar al vendedor con `telefono_vendedor`, que solo se envía en `EN_REGRESO`. Si el pedido no tiene un cliente con teléfono, no hay botones de contacto.
+
 La tarifa de regreso se cobra en efectivo al vendedor. En Prepago aparece en el monedero del conductor; en Comisión no entra a su cuenta con la flotilla (D12).
 
 ## 5. Flujo

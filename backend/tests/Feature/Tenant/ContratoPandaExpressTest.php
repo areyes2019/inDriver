@@ -10,6 +10,7 @@ use App\Events\Tenant\PedidoYaTomado;
 use App\Events\Tenant\SaldoAcreditado;
 use App\Events\Tenant\SaldoCambiado;
 use App\Models\Tenant;
+use App\Models\Tenant\Cliente;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\MovimientoSaldo;
@@ -279,13 +280,23 @@ it('lets the conductor return an unpaid package the way the app does', function 
 
     $pedido = contratoPedidoOfertado($e['tenant'], $e['conductor']);
     tenancy()->initialize($e['tenant']);
-    $pedido->update(['modalidad_pago' => 'RECEPTOR_PAGA_ENVIO_PRODUCTOS', 'importe_envio' => 50, 'importe_cobro' => 300]);
+    $vendedor = Cliente::create(['nombre' => 'Tienda Sol', 'telefono' => '4619998877', 'estado' => 'Activo']);
+    $pedido->update([
+        'id_cliente' => $vendedor->id_cliente,
+        'modalidad_pago' => 'RECEPTOR_PAGA_ENVIO_PRODUCTOS',
+        'importe_envio' => 50,
+        'importe_cobro' => 300,
+    ]);
     tenancy()->end();
 
-    $this->postJson(CONTRATO_BASE."/conductor/pedidos/{$pedido->id_pedido}/aceptar")->assertOk();
+    $this->postJson(CONTRATO_BASE."/conductor/pedidos/{$pedido->id_pedido}/aceptar")
+        ->assertOk()
+        ->assertJsonPath('telefono_vendedor', null);
 
     foreach (['ARRIBADO', 'EN_CAMINO', 'ARRIBADO_A_ENTREGA'] as $estado) {
-        $this->postJson(CONTRATO_BASE."/conductor/pedidos/{$pedido->id_pedido}/estado", ['estado' => $estado])->assertOk();
+        $this->postJson(CONTRATO_BASE."/conductor/pedidos/{$pedido->id_pedido}/estado", ['estado' => $estado])
+            ->assertOk()
+            ->assertJsonPath('telefono_vendedor', null);
     }
 
     // useTripManagement.reportNoPayment(): lo que ActiveTripCard.vue necesita para el desglose.
@@ -294,7 +305,8 @@ it('lets the conductor return an unpaid package the way the app does', function 
         ->assertJsonPath('estado', 'EN_REGRESO')
         ->assertJsonPath('importe_cobro', '300.00')
         ->assertJsonPath('importe_envio', '50.00')
-        ->assertJsonPath('tarifa_regreso', '15.00');
+        ->assertJsonPath('tarifa_regreso', '15.00')
+        ->assertJsonPath('telefono_vendedor', '4619998877');
 
     // Si la app se reinicia a medio regreso, lo recupera con todo y tarifa.
     $this->getJson(CONTRATO_BASE.'/conductor/pedidos/activo')

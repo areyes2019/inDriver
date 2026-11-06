@@ -38,6 +38,8 @@ class PedidoResource extends JsonResource
             'importe_envio' => $this->importe_envio,
             'importe_cobro' => $this->importe_cobro,
             'tarifa_regreso' => $this->tarifa_regreso,
+            // spec tenant/031: el repartidor solo necesita al vendedor para avisar que va de vuelta.
+            'telefono_vendedor' => $this->estado === 'EN_REGRESO' ? $this->cliente?->telefono : null,
             'id_vehiculo' => $this->id_vehiculo,
             'vehiculo_placa' => $this->vehiculo?->placa,
             'estado' => $this->estado,
