@@ -59,7 +59,8 @@ conductor vería la oferta en su pool y recibiría un 422 al aceptarla.
 
 `pedidos:publicar-agendados` corre cada minuto sobre todos los tenants activos, igual que
 `conductor:apagar-inactivos` (spec `tenant/019`), y publica lo que ya entró en la anticipación de 15
-minutos.
+minutos. La fecha y las horas de servicio se interpretan en hora local (`App\Support\HoraOperacion`,
+spec `tenant/031`).
 
 Se descarta programar un job con `->delay()` al crear el pedido, que sería lo natural, porque un
 job es una promesa que alguien tiene que cumplir: la publicación es la operación central de esta

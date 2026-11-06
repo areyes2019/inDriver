@@ -11,6 +11,7 @@ use App\Models\Tenant\Pedido;
 use App\Services\PedidoEstadoService;
 use App\Services\RutaService;
 use App\Services\TarifaService;
+use App\Support\HoraOperacion;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -301,7 +302,7 @@ class SembrarPedidos extends Command
                 'direccion_entrega' => $entrega['direccion'],
                 'latitud_entrega' => $entrega['lat'],
                 'longitud_entrega' => $entrega['lng'],
-                'fecha_servicio' => now()->toDateString(),
+                'fecha_servicio' => HoraOperacion::hoy(),
                 'lo_antes_posible' => true,
                 'modalidad_pago' => $modalidad,
                 'importe_envio' => round($importe, 2),

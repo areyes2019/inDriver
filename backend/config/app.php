@@ -81,6 +81,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Operating Timezone
+    |--------------------------------------------------------------------------
+    |
+    | La hora local de la flotilla. Con ella se interpretan la fecha y las horas
+    | de servicio de un pedido, que se capturan en hora local y se guardan sin
+    | zona (App\Support\HoraOperacion). `timezone` sigue en UTC porque es como
+    | están guardadas todas las demás fechas.
+    |
+    */
+
+    'timezone_operacion' => env('APP_TIMEZONE_OPERACION', 'America/Mexico_City'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |

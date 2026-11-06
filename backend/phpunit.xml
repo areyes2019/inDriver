@@ -36,6 +36,9 @@
              lo encienden ellas con config(). -->
         <env name="GPS_SERVICE_URL" value=""/>
         <env name="SESSION_DRIVER" value="array"/>
+        <!-- Las pruebas arman sus horarios con now(), que va en UTC. Las que verifican la hora local
+             la encienden con config(). -->
+        <env name="APP_TIMEZONE_OPERACION" value="UTC"/>
         <!-- spec tenant/025, RN-09: la suite verifica los 60 km/h del spec, no la velocidad que
              cada quien haya subido en su .env para no esperar el viaje en tiempo real. -->
         <env name="SIMULACION_VELOCIDAD_KMH" value="120"/>

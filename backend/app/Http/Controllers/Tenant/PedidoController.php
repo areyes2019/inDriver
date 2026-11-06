@@ -16,6 +16,7 @@ use App\Services\CambioEnvioService;
 use App\Services\CreacionPedidoService;
 use App\Services\PedidoEstadoService;
 use App\Services\TarifaService;
+use App\Support\HoraOperacion;
 use App\Support\SaldoViajesTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -138,7 +139,7 @@ class PedidoController extends Controller
                 ]);
             }
 
-            if (! $data['lo_antes_posible'] && Carbon::parse("{$data['fecha_servicio']} {$data['hora_desde']}")->lt(now()->addMinutes(15))) {
+            if (! $data['lo_antes_posible'] && HoraOperacion::momento($data['fecha_servicio'], $data['hora_desde'])->lt(now()->addMinutes(15))) {
                 throw ValidationException::withMessages([
                     'hora_desde' => ['SCHEDULE_IN_PAST'],
                 ]);
@@ -381,7 +382,7 @@ class PedidoController extends Controller
         }
 
         $data['lo_antes_posible'] = $loAntesPosible;
-        $data['fecha_servicio'] = $data['fecha_servicio'] ?? now()->toDateString();
+        $data['fecha_servicio'] = $data['fecha_servicio'] ?? HoraOperacion::hoy();
         $data['importe_cobro'] = $data['modalidad_pago'] === 'RECEPTOR_PAGA_ENVIO_PRODUCTOS'
             ? ($data['importe_cobro'] ?? 0)
             : 0;

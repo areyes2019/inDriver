@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Models\Tenant as TenantCentral;
 use App\Models\Tenant\Pedido;
 use App\Services\PedidoEstadoService;
+use App\Support\HoraOperacion;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -46,7 +47,7 @@ class PublicarPedidosAgendados extends Command
                 ->whereNotNull('hora_hasta')
                 // Filtro grueso en la base (portable entre MySQL y el SQLite de los tests): la
                 // comparación fina con la hora se hace abajo, en PHP, sobre un puñado de filas.
-                ->whereDate('fecha_servicio', '<=', $limite->toDateString())
+                ->whereDate('fecha_servicio', '<=', $limite->copy()->setTimezone(HoraOperacion::zona())->toDateString())
                 ->get()
                 ->each(function (Pedido $pedido) use ($estados, $ahora, $limite) {
                     if ($this->leTocaPublicarse($pedido, $ahora, $limite)) {
@@ -92,7 +93,7 @@ class PublicarPedidosAgendados extends Command
         }
 
         try {
-            return Carbon::parse($pedido->fecha_servicio->toDateString().' '.$hora);
+            return HoraOperacion::momento($pedido->fecha_servicio->toDateString(), $hora);
         } catch (\Throwable) {
             return null;
         }
