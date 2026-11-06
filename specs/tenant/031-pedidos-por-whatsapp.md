@@ -90,7 +90,7 @@ Que el cliente de una flotilla pida un envío escribiendo al número de WhatsApp
 | Recogida | Sin dinero | Sin dinero | "Entrega $300 al vendedor" |
 | Entrega | "Cobrar $50" | "Nada que cobrar" | "Cobrar $350" |
 
-Hoy `ActiveTripCard.vue` muestra "Cobrar" con `importe_envio` en todos los casos, y la app no usa `importe_cobro`. `PedidoOfertaResource` tampoco lo envía en la oferta.
+La regla vive en `src/utils/dineroViaje.js` de `panda_expess`. `PedidoOfertaResource` envía `importe_cobro` para avisar antes de aceptar. "Pago estimado" sigue mostrando `importe_envio`, porque es lo que gana el viaje, no lo que se cobra.
 
 ### Comprador que no paga
 

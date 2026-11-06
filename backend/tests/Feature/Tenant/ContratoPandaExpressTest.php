@@ -206,7 +206,7 @@ it('serves every field panda_express reads along a full conductor shift', functi
         ->assertJsonStructure(['data' => [[
             'id_pedido', 'estado', 'nombre_solicitante', 'direccion_recogida', 'direccion_entrega',
             'latitud_recogida', 'longitud_recogida', 'latitud_entrega', 'longitud_entrega',
-            'modalidad_pago', 'importe_envio',
+            'modalidad_pago', 'importe_envio', 'importe_cobro',
         ]]])
         ->assertJsonPath('data.0.id_pedido', $pedido->id_pedido);
 
@@ -215,7 +215,7 @@ it('serves every field panda_express reads along a full conductor shift', functi
         'id_pedido', 'estado', 'nombre_solicitante', 'telefono_solicitante',
         'direccion_recogida', 'direccion_entrega',
         'latitud_recogida', 'longitud_recogida', 'latitud_entrega', 'longitud_entrega',
-        'modalidad_pago', 'importe_envio', 'seguimiento',
+        'modalidad_pago', 'importe_envio', 'importe_cobro', 'seguimiento',
     ];
 
     $this->postJson(CONTRATO_BASE."/conductor/pedidos/{$pedido->id_pedido}/aceptar")

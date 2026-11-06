@@ -34,6 +34,8 @@ class PedidoOfertaResource extends JsonResource
             'longitud_entrega' => $this->pedido->longitud_entrega,
             'modalidad_pago' => $this->pedido->modalidad_pago,
             'importe_envio' => $this->pedido->importe_envio,
+            // spec tenant/031: el conductor debe saber antes de aceptar si tendrá que adelantarlo.
+            'importe_cobro' => $this->pedido->importe_cobro,
             'estado' => $this->pedido->estado,
             'expira_en' => $this->expira_en,
         ];
