@@ -34,7 +34,7 @@ class PurgarPosicionesAntiguas extends Command
                         $query->where('estado', 'ENTREGADO')->where('fecha_entrega', '<', $limite);
                     })
                     ->orWhere(function ($query) use ($limite) {
-                        $query->where('estado', 'CANCELADO')->where('fecha_cancelacion', '<', $limite);
+                        $query->whereIn('estado', ['CANCELADO', 'INCIDENCIA'])->where('fecha_cancelacion', '<', $limite);
                     });
             })->delete();
 

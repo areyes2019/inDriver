@@ -6,6 +6,7 @@ namespace App\Jobs;
 
 use App\Models\Tenant as TenantModel;
 use App\Models\Tenant\Pedido;
+use App\Models\Tenant\PedidoOferta;
 use App\Services\OfertaPedidoService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -44,7 +45,7 @@ class ExpirarOfertaPedido implements ShouldQueue
         try {
             $pedido = Pedido::find($this->idPedido);
 
-            if ($pedido && $pedido->estado === 'PUBLICADO') {
+            if ($pedido && $pedido->estado === 'PUBLICADO' && ! $this->hayOfertaVigente()) {
                 $ofertas->expirar($pedido);
             }
         } catch (\Throwable $e) {
@@ -57,5 +58,18 @@ class ExpirarOfertaPedido implements ShouldQueue
                 tenancy()->end();
             }
         }
+    }
+
+    /**
+     * Este job pudo programarse en una ronda anterior: si el conductor aceptó y canceló antes de los
+     * 45s, el pedido volvió a `PUBLICADO` con ofertas nuevas, y cerrarlas ahora les recortaría la
+     * ventana y gastaría una ronda. La ronda vigente trae su propio job.
+     */
+    private function hayOfertaVigente(): bool
+    {
+        return PedidoOferta::where('id_pedido', $this->idPedido)
+            ->where('estado', 'PENDIENTE')
+            ->where('expira_en', '>', now())
+            ->exists();
     }
 }

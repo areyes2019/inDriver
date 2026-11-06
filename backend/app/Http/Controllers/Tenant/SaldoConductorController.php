@@ -32,7 +32,7 @@ class SaldoConductorController extends Controller
         $data = $request->validate([
             // COMISION queda fuera: esa la registra el sistema al entregar (spec tenant/022,
             // SPEC-023 RN-04), nunca a mano.
-            'tipo' => ['required', Rule::in(['CREDITO', 'AJUSTE', 'COMPENSACION'])],
+            'tipo' => ['required', Rule::in(['CREDITO', 'AJUSTE'])],
             'monto' => ['required', 'numeric'],
             'referencia' => ['nullable', 'string', 'max:120'],
         ]);

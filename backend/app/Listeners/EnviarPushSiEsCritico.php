@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Listeners;
 
 use App\Events\Tenant\PedidoCanceladoParaConductor;
+use App\Events\Tenant\PedidoCerradoPorIncidencia;
 use App\Events\Tenant\PedidoDisponible;
 use App\Events\Tenant\PedidoReprogramado;
 use App\Events\Tenant\SaldoAcreditado;
@@ -23,7 +24,7 @@ class EnviarPushSiEsCritico
 {
     public function __construct(private readonly FcmSender $fcm) {}
 
-    public function handle(PedidoDisponible|PedidoCanceladoParaConductor|PedidoReprogramado|SaldoAcreditado|SaldoCambiado $event): void
+    public function handle(PedidoDisponible|PedidoCanceladoParaConductor|PedidoCerradoPorIncidencia|PedidoReprogramado|SaldoAcreditado|SaldoCambiado $event): void
     {
         [$idsConductor, $titulo, $cuerpo, $datos] = match (true) {
             $event instanceof PedidoDisponible => [
@@ -37,6 +38,12 @@ class EnviarPushSiEsCritico
                 'Pedido cancelado',
                 'Uno de tus pedidos fue cancelado.',
                 ['event_id' => $event->eventId, 'tipo' => 'pedido.cancelado'],
+            ],
+            $event instanceof PedidoCerradoPorIncidencia => [
+                [$event->idConductor],
+                'Viaje cerrado por incidencia',
+                'El despachador cerró tu viaje. Comunícate con él.',
+                ['event_id' => $event->eventId, 'tipo' => 'pedido.incidencia'],
             ],
             $event instanceof PedidoReprogramado => [
                 [$event->idConductor],

@@ -312,9 +312,9 @@ class PedidoController extends Controller
     {
         $data = $request->validate([
             'estado' => ['required', Rule::in(array_keys(PedidoEstadoService::TRANSICIONES))],
-            // spec tenant/022: solo aplican al cancelar un envío que ya tiene conductor; se
-            // ignoran en cualquier otra transición.
-            'motivo' => ['nullable', 'string', 'max:120'],
+            // spec tenant/022: solo aplican al cancelar o cerrar por incidencia; se ignoran en
+            // cualquier otra transición. La incidencia exige motivo (RN-17).
+            'motivo' => ['nullable', 'string', 'max:120', 'required_if:estado,INCIDENCIA'],
             'cancelado_por' => ['nullable', Rule::in(['CLIENTE', 'ADMIN'])],
         ]);
 
@@ -323,6 +323,11 @@ class PedidoController extends Controller
         if ($nuevoEstado === 'CANCELADO') {
             $pedido->motivo_cancelacion = $data['motivo'] ?? null;
             $pedido->cancelado_por = $data['cancelado_por'] ?? 'ADMIN';
+        }
+
+        if ($nuevoEstado === 'INCIDENCIA') {
+            $pedido->motivo_cancelacion = $data['motivo'];
+            $pedido->cancelado_por = 'ADMIN';
         }
 
         $this->estados->transicionar($pedido, $nuevoEstado);

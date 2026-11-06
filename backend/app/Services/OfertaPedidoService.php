@@ -59,6 +59,30 @@ class OfertaPedidoService
     }
 
     /**
+     * Deja las ofertas listas para reofertar un pedido que el conductor devolvió (RN-09).
+     *
+     * Su cancelación cuenta como rechazo explícito: no se le vuelve a ofrecer, salvo que sea el único
+     * disponible en la reoferta final (RN-05). Los que perdieron la carrera original pasan a
+     * `EXPIRADA` porque `conductoresElegibles()` descarta a `PERDIDA`: si no, justo quienes querían
+     * el viaje serían los únicos que no podrían tomarlo ahora que quedó libre.
+     */
+    public function prepararReoferta(Pedido $pedido, Conductor $conductor): void
+    {
+        $ahora = now();
+
+        $oferta = PedidoOferta::firstOrNew(
+            ['id_pedido' => $pedido->id_pedido, 'id_conductor' => $conductor->id_conductor],
+            ['ofrecida_en' => $ahora, 'expira_en' => $ahora],
+        );
+
+        $oferta->fill(['estado' => 'RECHAZADA', 'respondida_en' => $ahora])->save();
+
+        PedidoOferta::where('id_pedido', $pedido->id_pedido)
+            ->where('estado', 'PERDIDA')
+            ->update(['estado' => 'EXPIRADA']);
+    }
+
+    /**
      * Cierra la ventana vencida (RN-03): lo que seguía PENDIENTE pasa a EXPIRADA. Si ya se aceptó o
      * canceló mientras tanto, no hace nada. Si no se agotaron los 3 intentos (RN-04), reoferta; si
      * sí, el pedido vuelve a PENDIENTE para asignación manual.
@@ -90,7 +114,7 @@ class OfertaPedidoService
     }
 
     /**
-     * Un conductor acaba de quedar libre —entregó, le cancelaron, o se conectó— y hay pedidos
+     * Un conductor acaba de quedar libre —entregó, le cancelaron, canceló él, o se conectó— y hay pedidos
      * esperando: se le ofrecen todos de golpe (spec tenant/026, RN-01 a RN-09).
      *
      * Sin esto su bandeja queda vacía después de entregar: mientras estuvo ocupado no era elegible

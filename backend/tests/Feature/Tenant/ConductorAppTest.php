@@ -1,6 +1,7 @@
 <?php
 
 use App\Events\Tenant\PedidoCanceladoParaConductor;
+use App\Events\Tenant\PedidoDevuelto;
 use App\Events\Tenant\PedidoDisponible;
 use App\Events\Tenant\PedidoEntregado;
 use App\Events\Tenant\PedidoYaTomado;
@@ -357,7 +358,7 @@ it('broadcasts pedido.entregado when a pedido reaches ENTREGADO', function () {
     );
 });
 
-it('rejects a conductor moving a pedido to RECHAZADO', function () {
+it('rejects a conductor moving a pedido to the retired RECHAZADO state', function () {
     $tenant = conductorAppTenant();
     conductorAppConfigurar($tenant);
     $datos = conductorAppCrear($tenant);
@@ -387,8 +388,8 @@ it("rejects a conductor changing another conductor's pedido", function () {
         ->assertForbidden();
 });
 
-it('cancels the active pedido and broadcasts pedido.cancelado', function () {
-    Event::fake([PedidoCanceladoParaConductor::class]);
+it('returns the active pedido to PUBLICADO and broadcasts pedido.devuelto when the conductor cancels', function () {
+    Event::fake([PedidoDevuelto::class, PedidoCanceladoParaConductor::class]);
 
     $tenant = conductorAppTenant();
     conductorAppConfigurar($tenant);
@@ -403,9 +404,10 @@ it('cancels the active pedido and broadcasts pedido.cancelado', function () {
     $this->withHeader('Authorization', "Bearer {$token}")
         ->postJson("/api/v1/t/cafe-luna/conductor/pedidos/{$pedido->id_pedido}/cancelar")
         ->assertOk()
-        ->assertJsonPath('estado', 'CANCELADO');
+        ->assertJsonPath('estado', 'PUBLICADO');
 
-    Event::assertDispatched(PedidoCanceladoParaConductor::class, fn ($event) => $event->idPedido === $pedido->id_pedido);
+    Event::assertDispatched(PedidoDevuelto::class, fn ($event) => $event->idPedido === $pedido->id_pedido);
+    Event::assertNotDispatched(PedidoCanceladoParaConductor::class);
 });
 
 it('broadcasts pedido.disponible when a pedido is published', function () {

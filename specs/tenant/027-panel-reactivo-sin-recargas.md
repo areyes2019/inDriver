@@ -262,7 +262,7 @@ RN-01), con el mismo nombre en el canal porque para quien escucha es la misma no
 quita la fila y, como `id_conductor` viene en `null`, `liberarConductor` no hace nada. También sale
 por `Pedido::$avisosDiferidos`, igual que el resto de los avisos que releen el pedido.
 
-**Enmienda 4 — viaje devuelto y cierre por incidencia (2026-11-05, pendiente de implementar).** La
+**Enmienda 4 — viaje devuelto y cierre por incidencia (2026-11-05).** La
 máquina de estados de SPEC-006 agrega dos caminos, y cada uno necesita su evento:
 
 - `pedido.devuelto` (`PedidoDevuelto`): el conductor canceló en En recogida. Lleva `id_pedido`,

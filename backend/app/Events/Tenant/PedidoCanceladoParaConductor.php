@@ -32,7 +32,6 @@ class PedidoCanceladoParaConductor implements ShouldBroadcastNow
         public readonly int $idConductor,
         public readonly ?string $canceladoPor = null,
         public readonly ?string $motivo = null,
-        public readonly bool $compensationEligible = false,
         public readonly ?string $instruction = null,
     ) {
         $this->eventId = (string) Str::uuid();
@@ -66,7 +65,6 @@ class PedidoCanceladoParaConductor implements ShouldBroadcastNow
             'saldo_viajes' => DatosDeEventoPanel::saldoDeConductor($datos['id_conductor'] ?? null),
             'cancelado_por' => $this->canceladoPor,
             'motivo' => $this->motivo,
-            'compensation_eligible' => $this->compensationEligible,
             'instruction' => $this->instruction,
             'event_id' => $this->eventId,
         ];

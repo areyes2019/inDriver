@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Icon } from '@iconify/vue'
+import { faseDe } from '@/lib/estadosPedido'
 import { usePanelStore, type ViajeEnTurno } from '@/stores/panel'
 import { useOrdenEstable } from '@/composables/useOrdenEstable'
 import UiEstadoConexion from '@/components/ui/UiEstadoConexion.vue'
@@ -122,16 +123,6 @@ const filas = computed<Fila[]>(() =>
     ]
   }),
 )
-
-/** El estado que el despachador ve en la tarjeta mientras el envío camina. */
-const ETIQUETAS_ESTADO: Record<string, string> = {
-  PENDIENTE: 'Por asignar',
-  PUBLICADO: 'Buscando conductor',
-  TOMADO: 'Asignado',
-  ARRIBADO: 'En recogida',
-  EN_CAMINO: 'En camino',
-  ARRIBADO_A_ENTREGA: 'En entrega',
-}
 </script>
 
 <template>
@@ -242,13 +233,10 @@ const ETIQUETAS_ESTADO: Record<string, string> = {
               class="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-600"
             >
               <Icon icon="mdi:check-circle" width="14" height="14" aria-hidden="true" />
-              Entregado
+              {{ faseDe('ENTREGADO') }}
             </p>
-            <p
-              v-else-if="ETIQUETAS_ESTADO[fila.viaje.estado]"
-              class="mt-2 truncate text-xs text-body/70"
-            >
-              {{ ETIQUETAS_ESTADO[fila.viaje.estado] }}
+            <p v-else class="mt-2 truncate text-xs text-body/70">
+              {{ faseDe(fila.viaje.estado) }}
               <span v-if="fila.viaje.conductor_nombre"> · {{ fila.viaje.conductor_nombre }}</span>
             </p>
           </button>

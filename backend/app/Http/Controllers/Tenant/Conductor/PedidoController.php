@@ -124,8 +124,8 @@ class PedidoController extends Controller
     }
 
     /**
-     * Avanza el pedido del conductor por su propia máquina de transiciones (spec tenant/013): nunca
-     * `RECHAZADO`, y solo sobre su propio pedido activo.
+     * Avanza el pedido del conductor por su propia máquina de transiciones (spec tenant/013): solo
+     * hacia adelante, y solo sobre su propio pedido activo.
      */
     public function cambiarEstado(Request $request, Pedido $pedido): JsonResponse
     {
@@ -151,16 +151,27 @@ class PedidoController extends Controller
         return response()->json(new PedidoResource($pedido));
     }
 
+    /**
+     * El conductor cancela en En recogida: el pedido regresa a `PUBLICADO` para que lo tomen otros
+     * (spec tenant/006). No escribe `fecha_cancelacion`, así que la auditoría es lo que deja
+     * constancia de quién canceló y en qué estado iba.
+     */
     public function cancelar(Request $request, Pedido $pedido): JsonResponse
     {
-        $this->verificarPropiedad($pedido, $this->conductorActual($request));
+        $conductor = $this->conductorActual($request);
 
-        $this->estados->transicionar($pedido, 'CANCELADO');
-        $pedido->save();
+        $this->verificarPropiedad($pedido, $conductor);
 
-        $this->registrarAuditoria($request, $pedido, "El conductor canceló el pedido {$pedido->numero_pedido}");
+        $estadoAnterior = $pedido->estado;
+        $devuelto = $this->estados->devolverPorConductor($pedido, $conductor);
 
-        return response()->json(new PedidoResource($pedido));
+        $this->registrarAuditoria(
+            $request,
+            $devuelto,
+            "El conductor {$conductor->id_conductor} canceló el pedido {$devuelto->numero_pedido} en {$estadoAnterior}; regresó a PUBLICADO",
+        );
+
+        return response()->json(new PedidoResource($devuelto));
     }
 
     /**

@@ -2,6 +2,8 @@
 
 use App\Events\Tenant\ConductorColaReactivada;
 use App\Events\Tenant\PedidoCanceladoParaConductor;
+use App\Events\Tenant\PedidoCerradoPorIncidencia;
+use App\Events\Tenant\PedidoDevuelto;
 use App\Events\Tenant\PedidoDisponible;
 use App\Events\Tenant\PedidoEstadoCambiado;
 use App\Events\Tenant\PedidoYaTomado;
@@ -335,6 +337,14 @@ it('broadcasts each event panda_express listens to under the name and channel it
         'conductor.cola-reactivada' => [new ConductorColaReactivada($idConductor, 2, 'cafe-luna'), ['id_conductor', 'event_id']],
         'pedido.cancelado' => [
             new PedidoCanceladoParaConductor($pedido->id_pedido, 'cafe-luna', $idConductor),
+            ['id_pedido', 'event_id'],
+        ],
+        'pedido.devuelto' => [
+            new PedidoDevuelto($pedido->id_pedido, 'cafe-luna', $idConductor),
+            ['id_pedido', 'event_id'],
+        ],
+        'pedido.incidencia' => [
+            new PedidoCerradoPorIncidencia($pedido->id_pedido, 'cafe-luna', $idConductor, 'Choque'),
             ['id_pedido', 'event_id'],
         ],
         'saldo.acreditado' => [new SaldoAcreditado($idConductor, 5, 'cafe-luna'), ['id_conductor', 'viajes_acreditados', 'event_id']],

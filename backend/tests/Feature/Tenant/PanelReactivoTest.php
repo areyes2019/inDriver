@@ -161,7 +161,7 @@ it('returns only the six en-turno states, without paginating', function () {
     }
     // Los tres finales no son "en turno": son historial, y traérselos era justo lo que obligaba al
     // Panel a paginarlo todo para después descartarlo en el navegador.
-    foreach (['ENTREGADO', 'CANCELADO', 'RECHAZADO'] as $estado) {
+    foreach (['ENTREGADO', 'CANCELADO', 'INCIDENCIA'] as $estado) {
         panelPedido(['estado' => $estado]);
     }
     tenancy()->end();
@@ -262,7 +262,7 @@ it('does not consume a tenant viaje when a pedido is cancelled', function () {
     $pedido = panelPedido(['estado' => 'EN_CAMINO', 'id_conductor' => $conductor->id_conductor]);
     $pedido->cancelado_por = 'ADMIN';
     $pedido->motivo_cancelacion = 'Cliente ausente';
-    app(PedidoEstadoService::class)->transicionar($pedido, 'CANCELADO');
+    app(PedidoEstadoService::class)->transicionar($pedido, 'INCIDENCIA');
     $pedido->save();
 
     expect(ConsumoViajeTenant::count())->toBe(0);

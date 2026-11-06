@@ -1,18 +1,32 @@
 <?php
 
+use App\Events\Tenant\ConductorColaReactivada;
 use App\Events\Tenant\PedidoCanceladoParaConductor;
+use App\Events\Tenant\PedidoCanceladoSinConductor;
+use App\Events\Tenant\PedidoCerradoPorIncidencia;
+use App\Events\Tenant\PedidoDevuelto;
 use App\Events\Tenant\PedidoDireccionActualizada;
+use App\Events\Tenant\PedidoDisponible;
+use App\Events\Tenant\PedidoRequiereAsignacionManual;
 use App\Events\Tenant\PedidoSinConfirmar;
 use App\Jobs\AvisarSinConfirmar;
+use App\Jobs\ExpirarOfertaPedido;
 use App\Models\Tenant;
+use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConductorEstado;
+use App\Models\Tenant\ConductorPosicion;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\PedidoCambio;
 use App\Models\Tenant\PedidoCotizacion;
+use App\Models\Tenant\PedidoOferta;
+use App\Models\Tenant\SimulacionEnvio;
 use App\Models\Tenant\Usuario;
+use App\Models\Tenant\VentaViajeConductor;
 use App\Models\Tenant\ZonaServicio;
+use App\Services\Gps\BuzonGps;
+use App\Services\OfertaPedidoService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
@@ -108,14 +122,35 @@ function cambioPedido(array $overrides = []): Pedido
     ], $overrides));
 }
 
-it('flags compensation and RETURN_TO_PICKUP when cancelling a pedido already EN_CAMINO', function () {
+it('rejects cancelling a pedido once the conductor has the package', function (string $estado) {
     Event::fake([PedidoCanceladoParaConductor::class]);
 
     $tenant = cambioTenant();
     $admin = cambioAdmin($tenant);
     $datos = cambioConductor($tenant);
     tenancy()->initialize($tenant);
-    $pedido = cambioPedido(['estado' => 'EN_CAMINO', 'id_conductor' => $datos['conductor']->id_conductor]);
+    $pedido = cambioPedido(['estado' => $estado, 'id_conductor' => $datos['conductor']->id_conductor]);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->patchJson("/api/v1/t/cafe-luna/pedidos/{$pedido->id_pedido}/estado", ['estado' => 'CANCELADO'])
+        ->assertUnprocessable();
+
+    Event::assertNotDispatched(PedidoCanceladoParaConductor::class);
+
+    tenancy()->initialize($tenant);
+    expect(Pedido::find($pedido->id_pedido)->estado)->toBe($estado);
+    tenancy()->end();
+})->with(['EN_CAMINO', 'ARRIBADO_A_ENTREGA']);
+
+it('cancels a pedido before pickup and tells the conductor to stop', function (string $estado) {
+    Event::fake([PedidoCanceladoParaConductor::class]);
+
+    $tenant = cambioTenant();
+    $admin = cambioAdmin($tenant);
+    $datos = cambioConductor($tenant);
+    tenancy()->initialize($tenant);
+    $pedido = cambioPedido(['estado' => $estado, 'id_conductor' => $datos['conductor']->id_conductor]);
     tenancy()->end();
 
     $this->actingAs($admin, 'usuario')
@@ -127,8 +162,7 @@ it('flags compensation and RETURN_TO_PICKUP when cancelling a pedido already EN_
         ->assertOk();
 
     Event::assertDispatched(PedidoCanceladoParaConductor::class, fn ($event) => $event->idPedido === $pedido->id_pedido
-        && $event->compensationEligible === true
-        && $event->instruction === 'RETURN_TO_PICKUP'
+        && $event->instruction === 'STOP'
         && $event->motivo === 'Ya no lo necesito'
         && $event->canceladoPor === 'CLIENTE');
 
@@ -136,24 +170,292 @@ it('flags compensation and RETURN_TO_PICKUP when cancelling a pedido already EN_
     expect(PedidoCambio::where('id_pedido', $pedido->id_pedido)->where('tipo', 'CANCELADO')->exists())->toBeTrue();
     expect(Pedido::find($pedido->id_pedido)->notificado_conductor_en)->toBeNull();
     tenancy()->end();
-});
+})->with(['TOMADO', 'ARRIBADO']);
 
-it('flags STOP instead of RETURN_TO_PICKUP when cancelling before pickup', function () {
-    Event::fake([PedidoCanceladoParaConductor::class]);
+it('closes a pedido En entrega by incident, with a mandatory reason', function (string $estado) {
+    Event::fake([PedidoCerradoPorIncidencia::class]);
 
     $tenant = cambioTenant();
     $admin = cambioAdmin($tenant);
     $datos = cambioConductor($tenant);
     tenancy()->initialize($tenant);
-    $pedido = cambioPedido(['estado' => 'TOMADO', 'id_conductor' => $datos['conductor']->id_conductor]);
+    $pedido = cambioPedido(['estado' => $estado, 'id_conductor' => $datos['conductor']->id_conductor]);
     tenancy()->end();
 
     $this->actingAs($admin, 'usuario')
-        ->patchJson("/api/v1/t/cafe-luna/pedidos/{$pedido->id_pedido}/estado", ['estado' => 'CANCELADO'])
+        ->patchJson("/api/v1/t/cafe-luna/pedidos/{$pedido->id_pedido}/estado", ['estado' => 'INCIDENCIA'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('motivo');
+
+    $this->actingAs($admin, 'usuario')
+        ->patchJson("/api/v1/t/cafe-luna/pedidos/{$pedido->id_pedido}/estado", [
+            'estado' => 'INCIDENCIA',
+            'motivo' => 'Choque del conductor',
+        ])
+        ->assertOk()
+        ->assertJsonPath('estado', 'INCIDENCIA');
+
+    Event::assertDispatched(PedidoCerradoPorIncidencia::class, fn ($event) => $event->idPedido === $pedido->id_pedido
+        && $event->idConductor === $datos['conductor']->id_conductor
+        && $event->motivo === 'Choque del conductor');
+
+    tenancy()->initialize($tenant);
+    $cerrado = Pedido::find($pedido->id_pedido);
+    expect($cerrado->motivo_cancelacion)->toBe('Choque del conductor')
+        ->and($cerrado->fecha_cancelacion)->not->toBeNull()
+        ->and(Conductor::find($datos['conductor']->id_conductor)->tienePedidoActivo())->toBeFalse()
+        ->and(PedidoCambio::where('id_pedido', $pedido->id_pedido)->exists())->toBeTrue();
+    tenancy()->end();
+})->with(['EN_CAMINO', 'ARRIBADO_A_ENTREGA']);
+
+it('rejects an incident on a pedido that is not En entrega', function (string $estado) {
+    $tenant = cambioTenant();
+    $admin = cambioAdmin($tenant);
+    tenancy()->initialize($tenant);
+    $pedido = cambioPedido(['estado' => $estado]);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->patchJson("/api/v1/t/cafe-luna/pedidos/{$pedido->id_pedido}/estado", [
+            'estado' => 'INCIDENCIA',
+            'motivo' => 'Prueba',
+        ])
+        ->assertUnprocessable();
+})->with(['PENDIENTE', 'PUBLICADO', 'TOMADO', 'ARRIBADO', 'ENTREGADO']);
+
+it('rejects the retired RECHAZADO state', function () {
+    $tenant = cambioTenant();
+    $admin = cambioAdmin($tenant);
+    tenancy()->initialize($tenant);
+    $pedido = cambioPedido(['estado' => 'PUBLICADO']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->patchJson("/api/v1/t/cafe-luna/pedidos/{$pedido->id_pedido}/estado", ['estado' => 'RECHAZADO'])
+        ->assertUnprocessable();
+});
+
+it('sends the panel what it needs when a pedido is closed by incident', function () {
+    $tenant = cambioTenant();
+    $datos = cambioConductor($tenant);
+    tenancy()->initialize($tenant);
+    $pedido = cambioPedido(['estado' => 'INCIDENCIA', 'id_conductor' => $datos['conductor']->id_conductor]);
+
+    $evento = new PedidoCerradoPorIncidencia($pedido->id_pedido, 'cafe-luna', $datos['conductor']->id_conductor, 'Choque');
+
+    expect($evento->broadcastAs())->toBe('pedido.incidencia')
+        ->and($evento->broadcastWith())->toMatchArray([
+            'id_pedido' => $pedido->id_pedido,
+            'estado' => 'INCIDENCIA',
+            'id_conductor' => $datos['conductor']->id_conductor,
+            'motivo' => 'Choque',
+            'instruction' => 'CONTACT_SUPPORT',
+        ]);
+    tenancy()->end();
+});
+
+it('lets the conductor return a pedido En recogida so that others can take it', function (string $estado) {
+    Event::fake([PedidoDevuelto::class, PedidoCanceladoParaConductor::class, PedidoCanceladoSinConductor::class, PedidoDisponible::class]);
+    Bus::fake([ExpirarOfertaPedido::class]);
+
+    $tenant = cambioTenant();
+    $datos = cambioConductor($tenant);
+    $idConductor = $datos['conductor']->id_conductor;
+
+    tenancy()->initialize($tenant);
+    $usuarioOtro = Usuario::create([
+        'nombre' => 'Ana', 'apellido_paterno' => 'Ruiz', 'email' => 'ana@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    $otro = Conductor::create([
+        'id_usuario' => $usuarioOtro->id_usuario, 'numero_licencia' => 'LIC-OTRO',
+        'estado' => 'ACTIVO', 'disponibilidad' => 'DISPONIBLE',
+    ]);
+    $pedido = cambioPedido([
+        'estado' => $estado, 'id_conductor' => $idConductor, 'fecha_asignacion' => now(), 'veces_ofertado' => 2,
+    ]);
+    PedidoOferta::create([
+        'id_pedido' => $pedido->id_pedido, 'id_conductor' => $idConductor, 'estado' => 'ACEPTADA',
+        'ofrecida_en' => now(), 'expira_en' => now(), 'respondida_en' => now(),
+    ]);
+    // Perdió la carrera original: ahora que el viaje quedó libre, también tiene que poder tomarlo.
+    PedidoOferta::create([
+        'id_pedido' => $pedido->id_pedido, 'id_conductor' => $otro->id_conductor, 'estado' => 'PERDIDA',
+        'ofrecida_en' => now(), 'expira_en' => now(), 'respondida_en' => now(),
+    ]);
+    $posicion = ConductorPosicion::create([
+        'id_conductor' => $idConductor, 'id_pedido' => $pedido->id_pedido,
+        'latitud' => 19.43, 'longitud' => -99.13, 'fecha_posicion' => now(),
+    ]);
+    tenancy()->end();
+
+    $this->withToken(cambioToken())
+        ->postJson("/api/v1/t/cafe-luna/conductor/pedidos/{$pedido->id_pedido}/cancelar")
+        ->assertOk()
+        ->assertJsonPath('estado', 'PUBLICADO');
+
+    Event::assertDispatched(PedidoDevuelto::class, fn ($event) => $event->idPedido === $pedido->id_pedido
+        && $event->idConductorAnterior === $idConductor);
+    Event::assertNotDispatched(PedidoCanceladoParaConductor::class);
+    Event::assertNotDispatched(PedidoCanceladoSinConductor::class);
+
+    tenancy()->initialize($tenant);
+    $devuelto = Pedido::find($pedido->id_pedido);
+    expect($devuelto->estado)->toBe('PUBLICADO')
+        ->and($devuelto->id_conductor)->toBeNull()
+        ->and($devuelto->id_vehiculo)->toBeNull()
+        ->and($devuelto->fecha_asignacion)->toBeNull()
+        ->and($devuelto->fecha_cancelacion)->toBeNull()
+        ->and($devuelto->veces_ofertado)->toBe(1)
+        ->and(Conductor::find($idConductor)->tienePedidoActivo())->toBeFalse()
+        ->and(PedidoOferta::where('id_conductor', $idConductor)->value('estado'))->toBe('RECHAZADA')
+        ->and(PedidoOferta::where('id_conductor', $otro->id_conductor)->value('estado'))->toBe('PENDIENTE')
+        ->and($posicion->fresh()->id_pedido)->toBeNull()
+        ->and(Auditoria::where('descripcion', 'like', '%regresó a PUBLICADO%')->exists())->toBeTrue();
+    tenancy()->end();
+})->with(['TOMADO', 'ARRIBADO']);
+
+it('rejects the conductor cancelling a pedido En entrega', function (string $estado) {
+    Event::fake([PedidoDevuelto::class]);
+
+    $tenant = cambioTenant();
+    $datos = cambioConductor($tenant);
+    tenancy()->initialize($tenant);
+    $pedido = cambioPedido(['estado' => $estado, 'id_conductor' => $datos['conductor']->id_conductor]);
+    tenancy()->end();
+
+    $token = cambioToken();
+
+    $this->withToken($token)
+        ->postJson("/api/v1/t/cafe-luna/conductor/pedidos/{$pedido->id_pedido}/cancelar")
+        ->assertUnprocessable();
+
+    Event::assertNotDispatched(PedidoDevuelto::class);
+
+    // Tampoco por el endpoint de avanzar estado, ni hacia la incidencia, que es solo del Panel.
+    foreach (['CANCELADO', 'INCIDENCIA'] as $nuevo) {
+        $this->withToken($token)
+            ->postJson("/api/v1/t/cafe-luna/conductor/pedidos/{$pedido->id_pedido}/estado", ['estado' => $nuevo])
+            ->assertUnprocessable();
+    }
+})->with(['EN_CAMINO', 'ARRIBADO_A_ENTREGA']);
+
+it('does not offer a returned pedido again to the conductor who cancelled it', function () {
+    Event::fake([PedidoDevuelto::class, PedidoDisponible::class]);
+    Bus::fake([ExpirarOfertaPedido::class]);
+
+    $tenant = cambioTenant();
+    $datos = cambioConductor($tenant);
+    $idConductor = $datos['conductor']->id_conductor;
+    tenancy()->initialize($tenant);
+    $pedido = cambioPedido(['estado' => 'TOMADO', 'id_conductor' => $idConductor]);
+    tenancy()->end();
+
+    $this->withToken(cambioToken())
+        ->postJson("/api/v1/t/cafe-luna/conductor/pedidos/{$pedido->id_pedido}/cancelar")
         ->assertOk();
 
-    Event::assertDispatched(PedidoCanceladoParaConductor::class, fn ($event) => $event->compensationEligible === false
-        && $event->instruction === 'STOP');
+    tenancy()->initialize($tenant);
+    expect(PedidoOferta::where('id_pedido', $pedido->id_pedido)->where('estado', 'PENDIENTE')->exists())->toBeFalse()
+        ->and(PedidoOferta::where('id_conductor', $idConductor)->value('estado'))->toBe('RECHAZADA');
+
+    // Tercera y última ronda, y nadie más disponible: ahí sí se le vuelve a ofrecer (RN-05).
+    Pedido::whereKey($pedido->id_pedido)->update(['veces_ofertado' => 2]);
+    app(OfertaPedidoService::class)->ofertar(Pedido::find($pedido->id_pedido));
+
+    expect(PedidoOferta::where('id_conductor', $idConductor)->value('estado'))->toBe('PENDIENTE');
+    tenancy()->end();
+});
+
+it('clears the simulated leg of a returned pedido so that the next conductor gets a new one', function () {
+    Event::fake([PedidoDevuelto::class, PedidoDisponible::class]);
+    Bus::fake([ExpirarOfertaPedido::class]);
+
+    $tenant = cambioTenant();
+    $datos = cambioConductor($tenant);
+    tenancy()->initialize($tenant);
+    $pedido = cambioPedido(['estado' => 'TOMADO', 'id_conductor' => $datos['conductor']->id_conductor, 'ambiente' => 'TEST']);
+    SimulacionEnvio::create([
+        'id_pedido' => $pedido->id_pedido, 'tramo' => SimulacionEnvio::TRAMO_ACERCAMIENTO, 'ruta' => [],
+        'distancia_m' => 100, 'iniciada_en' => now(), 'avanzada_hasta_m' => 0,
+    ]);
+    tenancy()->end();
+
+    $this->withToken(cambioToken())
+        ->postJson("/api/v1/t/cafe-luna/conductor/pedidos/{$pedido->id_pedido}/cancelar")
+        ->assertOk();
+
+    tenancy()->initialize($tenant);
+    expect(SimulacionEnvio::where('id_pedido', $pedido->id_pedido)->exists())->toBeFalse();
+    tenancy()->end();
+});
+
+it('tells the GPS service that the returned envio ended', function () {
+    Event::fake([PedidoDevuelto::class, PedidoDisponible::class]);
+    Bus::fake([ExpirarOfertaPedido::class]);
+
+    $tenant = cambioTenant();
+    $datos = cambioConductor($tenant);
+    $idConductor = $datos['conductor']->id_conductor;
+    tenancy()->initialize($tenant);
+    $pedido = cambioPedido(['estado' => 'TOMADO', 'id_conductor' => $idConductor]);
+    tenancy()->end();
+
+    $token = cambioToken();
+
+    $buzon = $this->mock(BuzonGps::class)->shouldIgnoreMissing();
+    $buzon->shouldReceive('envioTerminado')->once()->with('cafe-luna', $idConductor, $pedido->id_pedido);
+
+    $this->withToken($token)
+        ->postJson("/api/v1/t/cafe-luna/conductor/pedidos/{$pedido->id_pedido}/cancelar")
+        ->assertOk();
+});
+
+it('offers the other queued pedidos, but not the returned one, to the conductor who cancelled', function () {
+    Event::fake([PedidoDevuelto::class, PedidoDisponible::class, ConductorColaReactivada::class]);
+    Bus::fake([ExpirarOfertaPedido::class]);
+
+    $tenant = cambioTenant();
+    $admin = cambioAdmin($tenant);
+    $datos = cambioConductor($tenant);
+    $idConductor = $datos['conductor']->id_conductor;
+    tenancy()->initialize($tenant);
+    // La cola solo se le ofrece a quien tiene saldo (spec tenant/026, RN-07).
+    VentaViajeConductor::create([
+        'id_conductor' => $idConductor, 'cantidad_viajes' => 5, 'monto_pagado' => 100,
+        'id_usuario' => $admin->id_usuario, 'fecha_venta' => now(),
+    ]);
+    $devuelto = cambioPedido(['estado' => 'TOMADO', 'id_conductor' => $idConductor]);
+    $enCola = cambioPedido(['estado' => 'PUBLICADO']);
+    tenancy()->end();
+
+    $this->withToken(cambioToken())
+        ->postJson("/api/v1/t/cafe-luna/conductor/pedidos/{$devuelto->id_pedido}/cancelar")
+        ->assertOk();
+
+    tenancy()->initialize($tenant);
+    expect(PedidoOferta::where('id_pedido', $enCola->id_pedido)->where('id_conductor', $idConductor)->value('estado'))->toBe('PENDIENTE')
+        ->and(PedidoOferta::where('id_pedido', $devuelto->id_pedido)->where('id_conductor', $idConductor)->value('estado'))->toBe('RECHAZADA');
+    tenancy()->end();
+});
+
+it('does not let a job from a previous round cut the current offers short', function () {
+    Event::fake([PedidoRequiereAsignacionManual::class]);
+
+    $tenant = cambioTenant();
+    $datos = cambioConductor($tenant);
+    tenancy()->initialize($tenant);
+    $pedido = cambioPedido(['estado' => 'PUBLICADO', 'veces_ofertado' => 1]);
+    $oferta = PedidoOferta::create([
+        'id_pedido' => $pedido->id_pedido, 'id_conductor' => $datos['conductor']->id_conductor, 'estado' => 'PENDIENTE',
+        'ofrecida_en' => now(), 'expira_en' => now()->addSeconds(30),
+    ]);
+
+    (new ExpirarOfertaPedido($tenant, $pedido->id_pedido))->handle(app(OfertaPedidoService::class));
+
+    expect($oferta->fresh()->estado)->toBe('PENDIENTE')
+        ->and(Pedido::find($pedido->id_pedido)->veces_ofertado)->toBe(1);
+    tenancy()->end();
 });
 
 it('lets the conductor acknowledge a change, clearing the pending flag', function () {

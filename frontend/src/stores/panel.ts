@@ -30,9 +30,9 @@ export type EstadoPedido =
   | 'ARRIBADO_A_ENTREGA'
   | 'ENTREGADO'
   | 'CANCELADO'
-  | 'RECHAZADO'
+  | 'INCIDENCIA'
 
-const ESTADOS_FINALES: EstadoPedido[] = ['ENTREGADO', 'CANCELADO', 'RECHAZADO']
+const ESTADOS_FINALES: EstadoPedido[] = ['ENTREGADO', 'CANCELADO', 'INCIDENCIA']
 
 export interface ViajeEnTurno {
   id_pedido: number
@@ -584,6 +584,7 @@ export const usePanelStore = defineStore('panel', () => {
     id_pedido: number
     estado?: EstadoPedido
     id_conductor?: number | null
+    id_conductor_anterior?: number | null
     conductor_nombre?: string | null
     seguimiento?: Seguimiento | null
     saldo_viajes?: number | null
@@ -657,6 +658,31 @@ export const usePanelStore = defineStore('panel', () => {
 
       quitarViaje(payload.id_pedido, 'CANCELADO')
       liberarConductor(payload.id_conductor, payload.saldo_viajes)
+    },
+
+    /** El Panel cerró por una emergencia un viaje En entrega (spec tenant/022, RN-17). */
+    'pedido.incidencia': (payload: EventoPedido) => {
+      if (ignorar(payload)) return
+
+      quitarViaje(payload.id_pedido, 'INCIDENCIA')
+      liberarConductor(payload.id_conductor, payload.saldo_viajes)
+    },
+
+    /**
+     * El conductor canceló En recogida (spec tenant/006): el viaje regresa a "Viajes pendientes", y
+     * como la sección se deriva del estado (RN-29), basta con escribirlo. Aquí `id_conductor` ya
+     * viene nulo: a quien hay que liberar es al anterior.
+     */
+    'pedido.devuelto': (payload: EventoPedido) => {
+      if (ignorar(payload)) return
+
+      viajeConocido(payload.id_pedido)
+      actualizarViaje(payload.id_pedido, {
+        estado: payload.estado ?? 'PUBLICADO',
+        id_conductor: null,
+        conductor_nombre: null,
+      })
+      liberarConductor(payload.id_conductor_anterior, payload.saldo_viajes)
     },
 
     /** Se agotaron las rondas de oferta (spec tenant/020, RN-04): vuelve a PENDIENTE y sin dueño. */

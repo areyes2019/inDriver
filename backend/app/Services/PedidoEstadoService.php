@@ -6,16 +6,22 @@ namespace App\Services;
 
 use App\Events\Tenant\PedidoCanceladoParaConductor;
 use App\Events\Tenant\PedidoCanceladoSinConductor;
+use App\Events\Tenant\PedidoCerradoPorIncidencia;
+use App\Events\Tenant\PedidoDevuelto;
 use App\Events\Tenant\PedidoEntregado;
 use App\Events\Tenant\PedidoEstadoCambiado;
 use App\Events\Tenant\PedidoYaTomado;
 use App\Events\Tenant\SaldoTenantCambiado;
 use App\Models\Tenant\ComisionConductor;
+use App\Models\Tenant\Conductor;
+use App\Models\Tenant\ConductorPosicion;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\ConsumoViajeTenant;
 use App\Models\Tenant\Pedido;
+use App\Models\Tenant\SimulacionEnvio;
 use App\Models\Tenant\VentaViajeConductor;
 use App\Services\Gps\BuzonGps;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -24,11 +30,18 @@ use Illuminate\Validation\ValidationException;
  *
  * Extraído de `Tenant\PedidoController` (spec tenant/013) para que tanto el panel de
  * despachador/admin como la app de conductor (panda_express) compartan exactamente la misma
- * máquina de estados y la misma regla de liquidación, sin duplicarla.
+ * máquina de estados y la misma regla de liquidación, sin duplicarla. Las reglas de esa máquina
+ * están en la spec tenant/006, sección "Máquina de estados del pedido".
  */
 class PedidoEstadoService
 {
-    public const ESTADOS_FINALES = ['ENTREGADO', 'CANCELADO', 'RECHAZADO'];
+    public const ESTADOS_FINALES = ['ENTREGADO', 'CANCELADO', 'INCIDENCIA'];
+
+    /**
+     * La fase "En recogida": hay conductor pero todavía no trae el paquete. Es lo único que el
+     * conductor puede cancelar.
+     */
+    public const ESTADOS_EN_RECOGIDA = ['TOMADO', 'ARRIBADO'];
 
     /**
      * Los envíos vivos: lo que el Panel llama "Viajes en turno". Es el complemento exacto de
@@ -50,35 +63,39 @@ class PedidoEstadoService
     /**
      * Mapa de transiciones válidas: desde cada estado, a qué estados se puede pasar.
      *
+     * El regreso `TOMADO`/`ARRIBADO` -> `PUBLICADO` no está aquí a propósito: solo lo provoca el
+     * conductor al cancelar, y ocurre por `devolverPorConductor()`. Con el paquete encima no se
+     * cancela: `EN_CAMINO` y `ARRIBADO_A_ENTREGA` solo salen entregando o con `INCIDENCIA`.
+     *
      * @var array<string, array<int, string>>
      */
     public const TRANSICIONES = [
         'PENDIENTE' => ['PUBLICADO', 'CANCELADO'],
         // PUBLICADO -> PENDIENTE: spec tenant/020, RN-04. Se reofertó 3 veces sin que nadie
         // aceptara; vuelve al punto de partida para que el AdminCliente lo asigne a mano.
-        'PUBLICADO' => ['TOMADO', 'PENDIENTE', 'RECHAZADO', 'CANCELADO'],
+        'PUBLICADO' => ['TOMADO', 'PENDIENTE', 'CANCELADO'],
         'TOMADO' => ['ARRIBADO', 'CANCELADO'],
         'ARRIBADO' => ['EN_CAMINO', 'CANCELADO'],
-        'EN_CAMINO' => ['ARRIBADO_A_ENTREGA', 'CANCELADO'],
-        'ARRIBADO_A_ENTREGA' => ['ENTREGADO', 'CANCELADO'],
+        'EN_CAMINO' => ['ARRIBADO_A_ENTREGA', 'INCIDENCIA'],
+        'ARRIBADO_A_ENTREGA' => ['ENTREGADO', 'INCIDENCIA'],
         'ENTREGADO' => [],
-        'RECHAZADO' => [],
         'CANCELADO' => [],
+        'INCIDENCIA' => [],
     ];
 
     /**
      * Subconjunto de `TRANSICIONES` que puede disparar el conductor desde la app (spec
-     * tenant/013): nunca `RECHAZADO`, y solo sobre su propio pedido activo (el llamador valida la
-     * pertenencia antes de invocar este servicio).
+     * tenant/013): solo avanzar, y solo sobre su propio pedido activo (el llamador valida la
+     * pertenencia antes de invocar este servicio). Cancelar va por `devolverPorConductor()`.
      *
      * @var array<string, array<int, string>>
      */
     public const TRANSICIONES_CONDUCTOR = [
         'PUBLICADO' => ['TOMADO'],
-        'TOMADO' => ['ARRIBADO', 'CANCELADO'],
-        'ARRIBADO' => ['EN_CAMINO', 'CANCELADO'],
-        'EN_CAMINO' => ['ARRIBADO_A_ENTREGA', 'CANCELADO'],
-        'ARRIBADO_A_ENTREGA' => ['ENTREGADO', 'CANCELADO'],
+        'TOMADO' => ['ARRIBADO'],
+        'ARRIBADO' => ['EN_CAMINO'],
+        'EN_CAMINO' => ['ARRIBADO_A_ENTREGA'],
+        'ARRIBADO_A_ENTREGA' => ['ENTREGADO'],
     ];
 
     public function __construct(
@@ -112,7 +129,7 @@ class PedidoEstadoService
             'PUBLICADO' => $pedido->fecha_publicacion = now(),
             'TOMADO' => $pedido->fecha_asignacion = now(),
             'ENTREGADO' => $pedido->fecha_entrega = now(),
-            'CANCELADO' => $pedido->fecha_cancelacion = now(),
+            'CANCELADO', 'INCIDENCIA' => $pedido->fecha_cancelacion = now(),
             default => null,
         };
 
@@ -130,6 +147,83 @@ class PedidoEstadoService
         $this->avisarServicioGps($pedido, $nuevoEstado);
 
         $this->notificarConductores($pedido, $nuevoEstado, $estadoAnterior);
+    }
+
+    /**
+     * El conductor canceló en En recogida: el pedido regresa a `PUBLICADO` y lo pueden tomar otros
+     * (spec tenant/006; tenant/020, RN-09).
+     *
+     * No pasa por `transicionar()` porque el orden importa: `ofertar()` elige a quién ofrecerle
+     * mirando la base, así que la asignación tiene que estar ya limpia y confirmada; si no, quien
+     * canceló seguiría contando como ocupado. Por eso esta operación sí guarda, a diferencia de
+     * `transicionar()`.
+     *
+     * Reofertar va fuera de la transacción y protegido, igual que publicar (spec tenant/018, RN-08):
+     * si Reverb está caído, el conductor ya quedó libre y el pedido ya está publicado.
+     *
+     * @throws ValidationException si el pedido ya no está En recogida o ya no es de este conductor.
+     */
+    public function devolverPorConductor(Pedido $pedido, Conductor $conductor): Pedido
+    {
+        $idConductor = $conductor->id_conductor;
+
+        $devuelto = DB::transaction(function () use ($pedido, $conductor, $idConductor) {
+            /** @var Pedido $bloqueado */
+            $bloqueado = Pedido::query()->lockForUpdate()->findOrFail($pedido->id_pedido);
+
+            if ($bloqueado->id_conductor !== $idConductor || ! in_array($bloqueado->estado, self::ESTADOS_EN_RECOGIDA, true)) {
+                throw ValidationException::withMessages([
+                    'estado' => "No se puede cancelar el pedido en estado {$bloqueado->estado}.",
+                ]);
+            }
+
+            $idPedido = $bloqueado->id_pedido;
+            $slug = tenant()?->slug;
+
+            $this->ofertas->prepararReoferta($bloqueado, $conductor);
+
+            // El tramo simulado iba a nombre de este conductor, y `abrirTramo()` no abre uno nuevo
+            // si ya existe: sin borrarlo, quien lo tome después en TEST nunca avanzaría.
+            SimulacionEnvio::where('id_pedido', $idPedido)->delete();
+
+            // Su recorrido no es parte del envío que entregará otro: contarlo inflaría la distancia
+            // y la línea del resumen. Las posiciones se conservan a nombre del conductor.
+            ConductorPosicion::where('id_pedido', $idPedido)
+                ->where('id_conductor', $idConductor)
+                ->update(['id_pedido' => null]);
+
+            if (! $bloqueado->esTest() && $slug !== null) {
+                $this->diferir($bloqueado, fn () => $this->gps->envioTerminado($slug, $idConductor, $idPedido));
+            }
+
+            if ($slug !== null) {
+                $this->diferir($bloqueado, fn () => PedidoDevuelto::dispatch($idPedido, $slug, $idConductor));
+            }
+
+            $bloqueado->estado = 'PUBLICADO';
+            $bloqueado->id_conductor = null;
+            $bloqueado->id_vehiculo = null;
+            $bloqueado->fecha_asignacion = null;
+            $bloqueado->fecha_publicacion = now();
+            $bloqueado->notificado_conductor_en = null;
+            $bloqueado->veces_ofertado = 0;
+            $bloqueado->save();
+
+            return $bloqueado;
+        });
+
+        try {
+            $this->ofertas->ofertar($devuelto);
+            $this->ofertas->reactivarColaPara($conductor);
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo reofertar el pedido devuelto por el conductor.', [
+                'id_pedido' => $devuelto->id_pedido,
+                'id_conductor' => $idConductor,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $devuelto;
     }
 
     /**
@@ -164,8 +258,9 @@ class PedidoEstadoService
 
         $idPedido = $pedido->id_pedido;
 
-        // TOMADO es el primer estado en el que el conductor se pone en movimiento; los tres
-        // estados finales son el complemento exacto (`ESTADOS_FINALES`).
+        // TOMADO es el primer estado en el que el conductor se pone en movimiento; los estados
+        // finales son el complemento exacto (`ESTADOS_FINALES`). La devolución del conductor avisa
+        // desde `devolverPorConductor()`.
         if ($nuevoEstado === 'TOMADO') {
             $this->diferir($pedido, fn () => $this->gps->envioIniciado($slug, $idConductor, $idPedido));
 
@@ -235,6 +330,12 @@ class PedidoEstadoService
             return;
         }
 
+        if ($nuevoEstado === 'INCIDENCIA' && $pedido->id_conductor !== null) {
+            $this->notificarIncidencia($pedido, $estadoAnterior);
+
+            return;
+        }
+
         $slug = tenant()?->slug;
 
         if ($slug === null) {
@@ -255,8 +356,8 @@ class PedidoEstadoService
             // spec tenant/023: el Panel calcula "Disponible"/"Ocupado" por pedido asignado, así que
             // necesita enterarse del cierre igual que se entera de la toma y de la cancelación.
             $nuevoEstado === 'ENTREGADO' => $this->diferir($pedido, fn () => PedidoEntregado::dispatch($idPedido, $slug)),
-            // Sin conductor no hay nada que compensar, pero el Panel lo tiene en "Viajes en turno" y
-            // los conductores en su lista (spec tenant/022, RN-01).
+            // Sin conductor no hay a quién avisar por push, pero el Panel lo tiene en "Viajes en
+            // turno" y los conductores en su lista (spec tenant/022, RN-01).
             $nuevoEstado === 'CANCELADO' => $this->diferir($pedido, fn () => PedidoCanceladoSinConductor::dispatch($idPedido, $slug)),
             default => null,
         };
@@ -316,10 +417,8 @@ class PedidoEstadoService
 
     /**
      * spec tenant/022: el aviso con push y confirmación es solo para el envío con conductor (RN-01);
-     * el que no lo tiene sale por `PedidoCanceladoSinConductor`. `EN_CAMINO` y
-     * `ARRIBADO_A_ENTREGA` son los únicos estados donde el conductor ya trae el paquete encima
-     * (RN-04, RN-10 de tenant/021): de ahí sale la compensación y la instrucción de qué hacer con
-     * el paquete.
+     * el que no lo tiene sale por `PedidoCanceladoSinConductor`. Solo se cancela En recogida
+     * (RN-04), cuando el conductor todavía no trae el paquete: la instrucción siempre es `STOP`.
      */
     private function notificarCancelacion(Pedido $pedido, string $estadoAnterior): void
     {
@@ -328,8 +427,6 @@ class PedidoEstadoService
         if ($slug === null) {
             return;
         }
-
-        $llevaPaquete = in_array($estadoAnterior, ['EN_CAMINO', 'ARRIBADO_A_ENTREGA'], true);
 
         $this->cambios->registrarCambio(
             $pedido,
@@ -348,11 +445,39 @@ class PedidoEstadoService
             $pedido->id_conductor,
             $pedido->cancelado_por,
             $pedido->motivo_cancelacion,
-            $llevaPaquete,
-            $llevaPaquete ? 'RETURN_TO_PICKUP' : 'STOP',
+            'STOP',
         ];
 
         $this->diferir($pedido, fn () => PedidoCanceladoParaConductor::dispatch(...$argumentos));
+
+        $this->cambios->requiereConfirmacion($pedido);
+    }
+
+    /**
+     * spec tenant/022, RN-17: el conductor lleva el paquete encima y el viaje se cerró por una
+     * emergencia. Mismo circuito que la cancelación —bitácora, push y confirmación— porque tampoco
+     * puede perderse el aviso.
+     */
+    private function notificarIncidencia(Pedido $pedido, string $estadoAnterior): void
+    {
+        $slug = tenant()?->slug;
+
+        if ($slug === null) {
+            return;
+        }
+
+        $this->cambios->registrarCambio(
+            $pedido,
+            'CANCELADO',
+            ['estado' => $estadoAnterior],
+            ['estado' => 'INCIDENCIA', 'motivo' => $pedido->motivo_cancelacion],
+            'ADMIN',
+            null,
+        );
+
+        $argumentos = [$pedido->id_pedido, $slug, $pedido->id_conductor, $pedido->motivo_cancelacion];
+
+        $this->diferir($pedido, fn () => PedidoCerradoPorIncidencia::dispatch(...$argumentos));
 
         $this->cambios->requiereConfirmacion($pedido);
     }

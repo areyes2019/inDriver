@@ -233,19 +233,22 @@ it('generates the comision for TEST pedidos as well', function () {
         ->and(ConsumoViajeTenant::count())->toBe(0);
 });
 
-it('does not generate a comision when the pedido is cancelled', function () {
+it('does not generate a comision when the pedido is cancelled or closed by incident', function (string $estado, string $cierre) {
     $tenant = comisionTenant();
     comisionAdmin($tenant);
     $conductor = comisionConductor();
 
-    $pedido = comisionPedido(['id_conductor' => $conductor->id_conductor, 'estado' => 'EN_CAMINO']);
+    $pedido = comisionPedido(['id_conductor' => $conductor->id_conductor, 'estado' => $estado]);
     $pedido->cancelado_por = 'ADMIN';
     $pedido->motivo_cancelacion = 'Cliente ausente';
-    app(PedidoEstadoService::class)->transicionar($pedido, 'CANCELADO');
+    app(PedidoEstadoService::class)->transicionar($pedido, $cierre);
     $pedido->save();
 
     expect(ComisionConductor::count())->toBe(0);
-});
+})->with([
+    ['ARRIBADO', 'CANCELADO'],
+    ['ARRIBADO_A_ENTREGA', 'INCIDENCIA'],
+]);
 
 it('creates a zero comision already PAGADA when the percentage is zero', function () {
     $tenant = comisionTenant();

@@ -28,7 +28,6 @@ class SaldoService
     private const SIGNO_ESPERADO = [
         'CREDITO' => true,
         'COMISION' => false,
-        'COMPENSACION' => true,
         'AJUSTE' => null,
     ];
 

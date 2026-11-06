@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import axios from 'axios'
 import http from '@/lib/http'
+import { faseDe, sePuedeCancelar, sePuedeCerrarPorIncidencia } from '@/lib/estadosPedido'
 import { usePanelStore } from '@/stores/panel'
 import UiConfirmDialog from '@/components/ui/UiConfirmDialog.vue'
 import type { ViajeEnTurno } from '@/stores/panel'
@@ -18,6 +19,7 @@ const slug = route.params.slug as string
 const confirmando = ref(false)
 const cancelando = ref(false)
 const errorCancelar = ref<string | null>(null)
+const motivoIncidencia = ref('')
 const panel = usePanelStore()
 
 const formatoImporte = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' })
@@ -28,21 +30,18 @@ const formatoImporte = new Intl.NumberFormat('es-MX', { style: 'currency', curre
  * qué acabó y deja de ofrecer cancelar, porque ya no hay nada que cancelar.
  */
 const ESTADOS_FINALES: Record<string, { texto: string; clase: string }> = {
-  ENTREGADO: { texto: 'Entregado', clase: 'bg-success-bg text-success-text' },
-  CANCELADO: { texto: 'Cancelado', clase: 'bg-red-100 text-red-700' },
-  RECHAZADO: { texto: 'Rechazado', clase: 'bg-red-100 text-red-700' },
-}
-
-const ETIQUETAS_ESTADO: Record<string, string> = {
-  PENDIENTE: 'Por asignar',
-  PUBLICADO: 'Buscando conductor',
-  TOMADO: 'Asignado',
-  ARRIBADO: 'En recogida',
-  EN_CAMINO: 'En camino',
-  ARRIBADO_A_ENTREGA: 'En entrega',
+  ENTREGADO: { texto: faseDe('ENTREGADO'), clase: 'bg-success-bg text-success-text' },
+  CANCELADO: { texto: faseDe('CANCELADO'), clase: 'bg-red-100 text-red-700' },
+  INCIDENCIA: { texto: faseDe('INCIDENCIA'), clase: 'bg-red-100 text-red-700' },
 }
 
 const cerrado = computed(() => (props.viaje ? (ESTADOS_FINALES[props.viaje.estado] ?? null) : null))
+
+// Spec tenant/006: se cancela hasta En recogida; con el paquete encima solo queda la incidencia.
+const cancelable = computed(() => (props.viaje ? sePuedeCancelar(props.viaje.estado) : false))
+const porIncidencia = computed(() =>
+  props.viaje ? sePuedeCerrarPorIncidencia(props.viaje.estado) : false,
+)
 
 function importeFormateado(importe: string | number | null): string {
   if (importe === null || importe === '') return '—'
@@ -56,6 +55,7 @@ watch(
   () => {
     confirmando.value = false
     errorCancelar.value = null
+    motivoIncidencia.value = ''
   },
 )
 
@@ -68,10 +68,12 @@ async function cancelarViaje() {
   errorCancelar.value = null
 
   try {
-    await http.patch(`/t/${slug}/pedidos/${viaje.id_pedido}/estado`, {
-      estado: 'CANCELADO',
-      cancelado_por: 'ADMIN',
-    })
+    await http.patch(
+      `/t/${slug}/pedidos/${viaje.id_pedido}/estado`,
+      porIncidencia.value
+        ? { estado: 'INCIDENCIA', motivo: motivoIncidencia.value.trim() }
+        : { estado: 'CANCELADO', cancelado_por: 'ADMIN' },
+    )
     emit('cancelado')
   } catch (err) {
     // 422: el viaje ya no se puede cancelar porque cambió de estado y esta pantalla no se enteró.
@@ -198,7 +200,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
             {{ cerrado.texto }}
           </span>
           <span v-else class="text-sm font-semibold text-heading">
-            {{ ETIQUETAS_ESTADO[viaje.estado] ?? viaje.estado }}
+            {{ faseDe(viaje.estado) }}
           </span>
         </div>
         <div v-if="viaje.conductor_nombre" class="mt-2 flex items-center justify-between gap-2">
@@ -220,6 +222,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
       <section v-if="!cerrado" class="px-5 pb-6">
         <button
+          v-if="cancelable"
           type="button"
           :disabled="cancelando"
           class="w-full rounded-lg bg-red-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
@@ -227,6 +230,30 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         >
           {{ cancelando ? 'Cancelando...' : 'Cancelar viaje' }}
         </button>
+
+        <template v-else-if="porIncidencia">
+          <label for="motivo-incidencia" class="mb-1 block text-sm font-semibold text-heading">
+            Motivo de la incidencia
+          </label>
+          <p class="mb-2 text-xs text-body">
+            El conductor ya lleva el paquete. Usa esto solo en una emergencia.
+          </p>
+          <textarea
+            id="motivo-incidencia"
+            v-model="motivoIncidencia"
+            rows="3"
+            maxlength="120"
+            class="mb-3 w-full rounded-lg border border-default px-3 py-2 text-sm text-heading focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+          <button
+            type="button"
+            :disabled="cancelando || motivoIncidencia.trim() === ''"
+            class="w-full rounded-lg bg-red-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            @click="confirmando = true"
+          >
+            {{ cancelando ? 'Cerrando...' : 'Cerrar por incidencia' }}
+          </button>
+        </template>
 
         <div v-if="errorCancelar" class="mt-3 flex flex-col items-start gap-1">
           <p class="text-sm text-red-600">{{ errorCancelar }}</p>
@@ -243,13 +270,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
     <UiConfirmDialog
       :open="confirmando && viaje !== null"
-      title="Cancelar viaje"
+      :title="porIncidencia ? 'Cerrar por incidencia' : 'Cancelar viaje'"
       :message="
-        viaje
-          ? `El viaje #${viaje.numero_pedido} saldrá del panel y quedará como CANCELADO. Esta acción no se puede deshacer.`
-          : ''
+        !viaje
+          ? ''
+          : porIncidencia
+            ? `El viaje #${viaje.numero_pedido} saldrá del panel y quedará como INCIDENCIA. Esta acción no se puede deshacer.`
+            : `El viaje #${viaje.numero_pedido} saldrá del panel y quedará como CANCELADO. Esta acción no se puede deshacer.`
       "
-      confirm-label="Sí, cancelar"
+      :confirm-label="porIncidencia ? 'Sí, cerrar' : 'Sí, cancelar'"
       cancel-label="No, volver"
       @confirm="cancelarViaje"
       @cancel="confirmando = false"

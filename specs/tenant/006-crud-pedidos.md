@@ -408,9 +408,8 @@ arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del
 
 ## Máquina de estados del pedido (fuente única)
 
-> **Acordada el 2026-11-05 y pendiente de implementar.** Esta sección es la única definición de los
-> estados de un pedido: las demás specs la citan y, si alguna discrepa, gana esta. El código todavía
-> no la cumple por completo.
+> **Acordada el 2026-11-05.** Esta sección es la única definición de los estados de un pedido: las
+> demás specs la citan y, si alguna discrepa, gana esta.
 
 ### Fases y estados
 
@@ -461,7 +460,8 @@ Cualquier otra combinación responde `422`.
     del que venía.
 - **Cierre por incidencia:** es la única salida de En entrega que no es entregar. El motivo es
   obligatorio. Libera al conductor, avisa a su app, saca el viaje del panel, no consume viaje ni
-  genera comisión.
+  genera comisión. No agrega columnas: usa `motivo_cancelacion`, `fecha_cancelacion` y `cancelado_por`,
+  y el estado `INCIDENCIA` es lo que lo distingue de una cancelación.
 
 ## Reglas de negocio
 
