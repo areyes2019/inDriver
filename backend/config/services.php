@@ -45,6 +45,13 @@ return [
         'key' => env('GOOGLE_MAPS_API_KEY'),
     ],
 
+    // spec tenant/031. El token de cada número se guarda cifrado en `whatsapp_numeros`.
+    'whatsapp' => [
+        'app_secret' => env('WHATSAPP_APP_SECRET'),
+        'verify_token' => env('WHATSAPP_VERIFY_TOKEN'),
+        'graph_version' => env('WHATSAPP_GRAPH_VERSION', 'v23.0'),
+    ],
+
     'fcm' => [
         'project_id' => env('FIREBASE_PROJECT_ID'),
         'credentials_path' => env('FIREBASE_CREDENTIALS_PATH'),

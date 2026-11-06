@@ -262,6 +262,14 @@ La etapa 6 se prueba con una flotilla de prueba en LIVE y el número de prueba, 
 
 `PedidoController.php`, `RutaService.php`, `PedidoEstadoService.php` y `006-crud-pedidos.md` (etapa 3), `PedidoOfertaResource.php`, `routes/api.php`, `routes/console.php`, `config/services.php`, `.env.example`, `composer.json`, `router/index.ts`, `TenantLayout.vue`, y en `panda_expess`: `AvailableOrderCard.vue`, `ActiveTripCard.vue` y la pantalla de viaje de `Dashboard.vue`.
 
+### Operación del canal (etapa 4)
+
+- La URL del webhook es `/api/v1/webhooks/whatsapp`, para todas las flotillas.
+- Un número se conecta con `php artisan whatsapp:conectar-numero {slug} {phone_number_id}`. El token se pregunta en pantalla, para que no quede en el historial.
+- Un número no se puede reasignar a otra flotilla con ese comando.
+- Sin `WHATSAPP_APP_SECRET`, el webhook rechaza todo.
+- La cola `whatsapp` tiene su propio worker en `routes/console.php`.
+
 ## 10. Criterios de aceptación
 
 1. Crear un pedido desde el Panel da el mismo resultado antes y después de la etapa 1.

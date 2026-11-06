@@ -37,3 +37,13 @@ Schedule::command('queue:work --max-time=55 --sleep=1 --tries=3')
     ->everyMinute()
     ->withoutOverlapping(2)
     ->runInBackground();
+
+// spec tenant/031: WhatsApp tiene su propio worker, para que una respuesta lenta de Meta o de la IA
+// no retrase `ExpirarOfertaPedido`.
+Schedule::command('queue:work --queue=whatsapp --max-time=55 --sleep=1 --tries=3 --timeout=30')
+    ->everyMinute()
+    ->withoutOverlapping(2)
+    ->runInBackground();
+
+// spec tenant/031, RN-30.
+Schedule::command('whatsapp:purgar-mensajes')->daily();

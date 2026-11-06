@@ -25,8 +25,14 @@ use App\Http\Controllers\Tenant\SaldoConductorController;
 use App\Http\Controllers\Tenant\UsuarioController;
 use App\Http\Controllers\Tenant\VentaViajeConductorController;
 use App\Http\Controllers\Tenant\ZonaCoberturaController;
+use App\Http\Controllers\WhatsappWebhookController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
+
+// spec tenant/031: una sola URL para todas las flotillas; el tenant sale del número. Sin `tenant.slug`
+// ni sesión: lo que la protege es la firma de Meta.
+Route::get('/webhooks/whatsapp', [WhatsappWebhookController::class, 'verificar']);
+Route::post('/webhooks/whatsapp', [WhatsappWebhookController::class, 'recibir']);
 
 Route::prefix('admin')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:admin-login');
