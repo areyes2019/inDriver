@@ -1,0 +1,277 @@
+<!doctype html>
+<!--
+  spec 013 (aviso de privacidad): página fija, sin JavaScript, para que el revisor de Meta la lea
+  tal cual. Vite la copia de public/ a dist/ y nginx la sirve antes que el SPA (`try_files $uri/`).
+  Los colores y las fuentes son los del Panel (src/assets/main.css).
+-->
+<html lang="es-MX">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aviso de privacidad</title>
+    <meta
+      name="description"
+      content="Aviso de privacidad integral de la plataforma de envíos de prosello.com.mx."
+    />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --heading: #0f172a;
+        --texto: #475569;
+        --tenue: #64748b;
+        --borde: #e2e8f0;
+        --acento: #4f46e5;
+        --acento-suave: #eef0ff;
+        --fondo: #f8fafc;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--fondo);
+        color: var(--texto);
+        font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+        font-size: 16px;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 48px 16px 64px;
+      }
+
+      article {
+        background: #fff;
+        border: 1px solid var(--borde);
+        border-radius: 16px;
+        padding: 40px 32px;
+      }
+
+      h1,
+      h2 {
+        color: var(--heading);
+        font-family: 'Outfit', sans-serif;
+        line-height: 1.25;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 2rem;
+      }
+
+      h2 {
+        margin: 40px 0 12px;
+        font-size: 1.25rem;
+      }
+
+      p,
+      ul {
+        margin: 0 0 14px;
+      }
+
+      ul {
+        padding-left: 22px;
+      }
+
+      li {
+        margin-bottom: 6px;
+      }
+
+      strong {
+        color: var(--heading);
+        font-weight: 600;
+      }
+
+      a {
+        color: var(--acento);
+        overflow-wrap: anywhere;
+      }
+
+      .fecha {
+        margin-bottom: 28px;
+        color: var(--tenue);
+        font-size: 0.875rem;
+      }
+
+      .responsable {
+        margin: 0 0 14px;
+        padding: 16px 20px;
+        border-radius: 10px;
+        background: var(--acento-suave);
+        color: var(--heading);
+      }
+
+      footer {
+        margin-top: 24px;
+        color: var(--tenue);
+        font-size: 0.875rem;
+        text-align: center;
+      }
+
+      @media (max-width: 600px) {
+        main {
+          padding-top: 24px;
+        }
+
+        article {
+          padding: 28px 20px;
+        }
+
+        h1 {
+          font-size: 1.625rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <article>
+        <h1>Aviso de privacidad</h1>
+        <p class="fecha">Última actualización: 8 de noviembre de 2026</p>
+
+        <p>
+          Este aviso explica qué datos personales recabamos en la plataforma de envíos de
+          <strong>prosello.com.mx</strong> (incluidos el Panel de las flotillas, la app de
+          repartidores y los números de WhatsApp de las flotillas), para qué los usamos y cómo
+          puedes ejercer tus derechos, conforme a la Ley Federal de Protección de Datos Personales
+          en Posesión de los Particulares.
+        </p>
+
+        <h2>1. Responsable</h2>
+        <p class="responsable">
+          <strong>Abdias Reyes Reyna</strong><br />
+          Real del Seminario 122, Col. Valle del Real, C.P. 38024, Celaya, Guanajuato, México<br />
+          Correo: <a href="mailto:abdiasreyesreyna@gmail.com">abdiasreyesreyna@gmail.com</a>
+        </p>
+        <p>
+          Las flotillas de reparto que usan la plataforma acceden a los datos de sus clientes,
+          destinatarios y repartidores solo para prestar su servicio de envíos.
+        </p>
+
+        <h2>2. Datos que recabamos</h2>
+        <ul>
+          <li>
+            <strong>Clientes y destinatarios:</strong> nombre, teléfono, correo electrónico
+            (opcional), direcciones de recogida y entrega, y su ubicación en el mapa.
+          </li>
+          <li>
+            <strong>Si nos escribes por WhatsApp:</strong> tu número, tu identificador de usuario
+            de WhatsApp, tu nombre de perfil, el texto de tus mensajes y las ubicaciones que
+            compartas.
+          </li>
+          <li>
+            <strong>Repartidores:</strong> nombre, teléfono, datos del vehículo, ubicación
+            mientras están en turno y un identificador del teléfono para enviarles avisos. La
+            ubicación es un dato que permite localizar a la persona; solo se recaba durante el
+            turno.
+          </li>
+          <li>
+            <strong>Personal de las flotillas:</strong> nombre, correo electrónico y contraseña,
+            que se guarda cifrada.
+          </li>
+          <li>
+            <strong>Pedidos:</strong> importes del envío, del producto cobrado contra entrega y,
+            en su caso, del regreso del paquete.
+          </li>
+        </ul>
+        <p>
+          No recabamos datos personales sensibles. La plataforma no está dirigida a menores de
+          edad.
+        </p>
+
+        <h2>3. Para qué usamos tus datos</h2>
+        <p>Usamos tus datos únicamente para:</p>
+        <ul>
+          <li>Recibir, interpretar y confirmar pedidos de envío.</li>
+          <li>Calcular tarifas.</li>
+          <li>Asignar repartidores y dar seguimiento a la entrega.</li>
+          <li>Avisarte el estado de tu pedido.</li>
+          <li>Calcular y cobrar las comisiones de los repartidores.</li>
+          <li>Dar soporte y atender tus solicitudes.</li>
+          <li>Cumplir obligaciones legales.</li>
+        </ul>
+        <p>
+          No usamos tus datos para publicidad ni los vendemos. No hay finalidades secundarias.
+        </p>
+
+        <h2>4. Proveedores que tienen acceso a datos</h2>
+        <p>
+          Para operar la plataforma nos apoyamos en estos proveedores, que tratan los datos por
+          nuestra cuenta y solo para el fin indicado. Algunos los guardan fuera de México.
+        </p>
+        <ul>
+          <li><strong>Meta (WhatsApp):</strong> envío y recepción de mensajes.</li>
+          <li>
+            <strong>Anthropic:</strong> interpretación automática de los mensajes que recibe el
+            asistente de WhatsApp.
+          </li>
+          <li>
+            <strong>Google:</strong> mapas, cálculo de rutas y avisos en el teléfono de los
+            repartidores.
+          </li>
+          <li><strong>DigitalOcean:</strong> servidores donde se guarda la información.</li>
+          <li><strong>Resend:</strong> envío de correos electrónicos.</li>
+        </ul>
+
+        <h2>5. Cuánto tiempo conservamos tus datos</h2>
+        <p>
+          El texto de los mensajes de WhatsApp se borra a los 90 días. Los demás datos se
+          conservan mientras tu cuenta o la relación de servicio esté activa, y después solo por
+          el tiempo que exijan las leyes.
+        </p>
+
+        <h2>6. Tus derechos: acceso, rectificación, cancelación y oposición</h2>
+        <p>
+          Puedes pedir ver, corregir o borrar tus datos, oponerte a su uso o revocar tu
+          consentimiento. Escribe a
+          <a href="mailto:abdiasreyesreyna@gmail.com">abdiasreyesreyna@gmail.com</a> e incluye:
+        </p>
+        <ul>
+          <li>Tu nombre.</li>
+          <li>El teléfono o correo con el que estás registrado.</li>
+          <li>Qué derecho quieres ejercer.</li>
+          <li>Los datos a los que se refiere tu solicitud.</li>
+        </ul>
+        <p>Te responderemos en un plazo máximo de 20 días hábiles.</p>
+
+        <h2>7. Cómo dejar de recibir mensajes</h2>
+        <p>
+          Escribe <strong>BAJA</strong> al número de WhatsApp de la flotilla, o envía un correo a
+          <a href="mailto:abdiasreyesreyna@gmail.com">abdiasreyesreyna@gmail.com</a>.
+        </p>
+
+        <h2>8. Cookies y almacenamiento del navegador</h2>
+        <p>
+          El Panel solo guarda en tu navegador lo necesario para mantener tu sesión abierta. No
+          usamos cookies de publicidad ni de rastreo.
+        </p>
+
+        <h2>9. Cambios a este aviso</h2>
+        <p>
+          Publicaremos cualquier cambio en esta misma página,
+          <a href="https://prosello.com.mx/privacidad">prosello.com.mx/privacidad</a>, con la
+          fecha de la última actualización.
+        </p>
+
+        <h2>10. Autoridad</h2>
+        <p>
+          Si consideras que tus derechos no fueron atendidos, puedes acudir a la Secretaría
+          Anticorrupción y Buen Gobierno, autoridad en materia de protección de datos personales.
+        </p>
+      </article>
+
+      <footer>prosello.com.mx</footer>
+    </main>
+  </body>
+</html>

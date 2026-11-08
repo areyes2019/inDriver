@@ -102,6 +102,12 @@ async function onSubmit() {
             </RouterLink>
           </form>
         </template>
+
+        <!-- spec 013: `<a>` y no `RouterLink`, porque `/privacidad` es una página fija que sirve
+             nginx; dentro del router caería en `/:slug`. -->
+        <a href="/privacidad" class="mt-10 block text-center text-xs text-gray-500 hover:underline">
+          Aviso de privacidad
+        </a>
       </div>
     </div>
   </main>

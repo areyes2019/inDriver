@@ -185,6 +185,9 @@ it('never assigns a reserved word as slug', function () {
     expect($crear('Admin', 'dos@example.com'))->toBe('admin-3');
     expect($crear('GPS', 'tres@example.com'))->toBe('gps-2');
     expect($crear('Assets', 'cuatro@example.com'))->toBe('assets-2');
+    // spec 013, RN-3: `/privacidad` es el aviso de privacidad y `/app(s)` es Reverb.
+    expect($crear('Privacidad', 'cinco@example.com'))->toBe('privacidad-2');
+    expect($crear('Apps', 'seis@example.com'))->toBe('apps-2');
 });
 
 it('throttles tenant creation after 20 attempts per minute', function () {
