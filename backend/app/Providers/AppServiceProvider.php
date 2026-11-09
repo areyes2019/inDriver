@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use Anthropic\Client as AnthropicClient;
 use App\Models\Tenant\Usuario;
 use App\Support\ContextoAmbiente;
 use Illuminate\Auth\Notifications\ResetPassword;
@@ -22,6 +23,13 @@ class AppServiceProvider extends ServiceProvider
         // middleware del Panel y el global scope de `Pedido` hablen de la misma instancia; nace
         // vacío, y vacío significa "no filtres nada".
         $this->app->singleton(ContextoAmbiente::class);
+
+        // spec tenant/031, etapa 5. Un timeout corto y un solo reintento caben en el job de
+        // WhatsApp; si la IA no contesta, el cliente recibe una pregunta en lugar de silencio (RN-24).
+        $this->app->singleton(AnthropicClient::class, fn () => new AnthropicClient(
+            apiKey: (string) config('services.anthropic.api_key'),
+            requestOptions: ['timeout' => 15.0, 'maxRetries' => 1],
+        ));
     }
 
     /**

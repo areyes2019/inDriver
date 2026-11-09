@@ -40,9 +40,11 @@ Schedule::command('queue:work --max-time=55 --sleep=1 --tries=3')
 
 // spec tenant/031: WhatsApp tiene su propio worker, para que una respuesta lenta de Meta o de la IA
 // no retrase `ExpirarOfertaPedido`.
-Schedule::command('queue:work --queue=whatsapp --max-time=55 --sleep=1 --tries=3 --timeout=30')
+// Desde la etapa 5 un mensaje puede esperar a la IA, a dos geocodificaciones y a la ruta: 90 s de
+// techo, y el candado dura más que eso para que no arranquen dos workers a la vez.
+Schedule::command('queue:work --queue=whatsapp --max-time=55 --sleep=1 --tries=3 --timeout=90')
     ->everyMinute()
-    ->withoutOverlapping(2)
+    ->withoutOverlapping(3)
     ->runInBackground();
 
 // spec tenant/031, RN-30.

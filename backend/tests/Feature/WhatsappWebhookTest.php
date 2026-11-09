@@ -5,6 +5,7 @@ use App\Models\Tenant;
 use App\Models\Tenant\WhatsappConversacion;
 use App\Models\Tenant\WhatsappMensaje;
 use App\Models\WhatsappNumero;
+use App\Services\Whatsapp\AsistentePedidoWhatsapp;
 use App\Services\Whatsapp\WhatsappClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as PeticionHttp;
@@ -18,6 +19,8 @@ uses(RefreshDatabase::class);
 
 const WEBHOOK_URL = '/api/v1/webhooks/whatsapp';
 
+const RESPUESTA_ASISTENTE = 'Esto es lo que entendí';
+
 beforeEach(function () {
     gc_collect_cycles();
     foreach (glob(database_path('delivery_tenant_*')) as $file) {
@@ -29,6 +32,9 @@ beforeEach(function () {
         'services.whatsapp.verify_token' => 'token-de-verificacion',
         'services.whatsapp.graph_version' => 'v23.0',
     ]);
+
+    // La IA y la cotización tienen sus propias pruebas (WhatsappAsistenteTest): aquí solo importa el canal.
+    $this->mock(AsistentePedidoWhatsapp::class)->shouldReceive('responder')->andReturn(RESPUESTA_ASISTENTE);
 });
 
 afterEach(function () {
@@ -144,7 +150,7 @@ it('guarda el mensaje, responde y registra la respuesta', function () {
     Http::assertSent(fn (PeticionHttp $p) => str_contains($p->url(), '/v23.0/NUM-A/messages')
         && $p->hasHeader('Authorization', 'Bearer token-moto-a')
         && $p['to'] === '5214611234567'
-        && $p['text']['body'] === ProcesarMensajeWhatsapp::RESPUESTA);
+        && $p['text']['body'] === RESPUESTA_ASISTENTE);
 
     tenancy()->initialize($tenant);
 
@@ -256,15 +262,18 @@ it('atiende a quien no comparte su teléfono', function () {
     expect(WhatsappConversacion::sole()->telefono)->toBeNull();
 });
 
-it('un mensaje sin texto también se guarda y se responde', function () {
+it('un mensaje sin texto también se guarda y se responde, sin pasar por la IA', function () {
     $tenant = flotillaConNumero('moto-a', 'NUM-A');
     fingirMeta();
+    $this->mock(AsistentePedidoWhatsapp::class)->shouldNotReceive('responder');
 
     $payload = mensajeDeMeta('NUM-A', ['type' => 'location', 'location' => ['latitude' => 20.5, 'longitude' => -100.8]]);
     unset($payload['entry'][0]['changes'][0]['value']['messages'][0]['text']);
     postFirmado($this, $payload)->assertOk();
 
+    // RN-32: una ubicación no llama a la IA.
     Http::assertSentCount(1);
+    Http::assertSent(fn (PeticionHttp $p) => $p['text']['body'] === ProcesarMensajeWhatsapp::RESPUESTA_SIN_TEXTO);
 
     tenancy()->initialize($tenant);
     $mensaje = WhatsappMensaje::where('wamid', 'wamid.UNO')->sole();
@@ -308,14 +317,38 @@ it('si Meta falla no marca el mensaje como respondido y el reintento lo envía u
         ->push(['error' => ['message' => 'caído']], 500)
         ->push(['messages' => [['id' => 'wamid.OK']]]);
 
-    expect(fn () => $job->handle(app(WhatsappClient::class)))->toThrow(RequestException::class);
+    $asistente = app(AsistentePedidoWhatsapp::class);
+
+    expect(fn () => $job->handle(app(WhatsappClient::class), $asistente))->toThrow(RequestException::class);
     expect($mensaje->fresh()->respondido_en)->toBeNull();
 
-    $job->handle(app(WhatsappClient::class));
-    $job->handle(app(WhatsappClient::class));
+    $job->handle(app(WhatsappClient::class), $asistente);
+    $job->handle(app(WhatsappClient::class), $asistente);
 
     expect($mensaje->fresh()->respondido_en)->not->toBeNull();
     Http::assertSentCount(2);
+});
+
+it('varios mensajes seguidos reciben una sola respuesta (RN-34)', function () {
+    $tenant = flotillaConNumero('moto-a', 'NUM-A');
+    Queue::fake();
+    postFirmado($this, mensajeDeMeta('NUM-A', ['id' => 'wamid.UNO', 'text' => ['body' => 'Quiero un envío']]))->assertOk();
+    postFirmado($this, mensajeDeMeta('NUM-A', ['id' => 'wamid.DOS', 'text' => ['body' => 'a la calle Morelos 20']]))->assertOk();
+
+    tenancy()->initialize($tenant);
+    $numero = WhatsappNumero::sole();
+    $uno = WhatsappMensaje::where('wamid', 'wamid.UNO')->sole();
+    $dos = WhatsappMensaje::where('wamid', 'wamid.DOS')->sole();
+    fingirMeta();
+
+    // La cola los atiende en orden: el primero ve que hay uno más nuevo y le deja la respuesta.
+    (new ProcesarMensajeWhatsapp($tenant, $numero->id_numero, $uno->id_mensaje))->handle(app(WhatsappClient::class), app(AsistentePedidoWhatsapp::class));
+    Http::assertNothingSent();
+    expect($uno->fresh()->respondido_en)->not->toBeNull();
+
+    (new ProcesarMensajeWhatsapp($tenant, $numero->id_numero, $dos->id_mensaje))->handle(app(WhatsappClient::class), app(AsistentePedidoWhatsapp::class));
+    Http::assertSentCount(1);
+    expect(WhatsappMensaje::where('direccion', WhatsappMensaje::SALIENTE)->count())->toBe(1);
 });
 
 it('no responde un mensaje fuera de la ventana de 24 horas', function () {

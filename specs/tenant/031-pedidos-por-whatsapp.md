@@ -240,6 +240,14 @@ Cada etapa se detiene hasta el visto bueno del usuario, que la prueba en el sist
 
 La etapa 6 se prueba con una flotilla de prueba en LIVE y el número de prueba, porque en TEST el bot no crea pedidos (D3).
 
+**Cómo quedó la etapa 5** (2026-11-09):
+
+- La IA lee los mensajes de las últimas 2 horas (máximo 12), incluidas las respuestas del bot, para entender respuestas cortas como "a Juan".
+- Solo se atienden mensajes de texto. Una ubicación, una foto o un audio reciben una respuesta fija sin pasar por la IA (RN-32); usar la ubicación compartida como recogida o entrega queda para la etapa 6.
+- Las direcciones se ubican con la Geocoding API de Google, con la misma llave de Maps, y solo se aceptan resultados de domicilio (`ROOFTOP` o `RANGE_INTERPOLATED`). La API debe estar habilitada en esa llave.
+- Si el cliente manda varios mensajes antes de que el bot conteste, recibe una sola respuesta con todo (RN-34).
+- Cada respuesta termina avisando que es una prueba y que no se crea el pedido.
+
 ## 9. Componentes
 
 ### Nuevos

@@ -7,6 +7,7 @@ namespace App\Jobs;
 use App\Models\Tenant as TenantModel;
 use App\Models\Tenant\WhatsappMensaje;
 use App\Models\WhatsappNumero;
+use App\Services\Whatsapp\AsistentePedidoWhatsapp;
 use App\Services\Whatsapp\WhatsappClient;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -16,8 +17,8 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Atiende un mensaje recibido (spec tenant/031). Por ahora solo confirma que llegó: la IA entra en
- * la etapa 5.
+ * Atiende un mensaje recibido (spec tenant/031). Desde la etapa 5 contesta lo que entendió del
+ * pedido y su precio, sin crearlo.
  *
  * Va en su propia cola para que una respuesta lenta no retrase `ExpirarOfertaPedido`.
  */
@@ -27,14 +28,16 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
 
     public const COLA = 'whatsapp';
 
-    public const RESPUESTA = 'Recibido ✅';
+    /** RN-32: una ubicación, una foto o un audio no pasan por la IA. */
+    public const RESPUESTA_SIN_TEXTO = 'Por ahora solo leo mensajes de texto. Escríbeme dónde recogemos, dónde entregamos y quién recibe.';
 
     /** Fuera de esta ventana, Meta solo admite plantillas (RN-27). */
     private const VENTANA_HORAS = 24;
 
     public int $tries = 3;
 
-    public int $timeout = 30;
+    /** La IA (hasta ~30 s con su reintento), dos geocodificaciones y la ruta caben aquí. */
+    public int $timeout = 90;
 
     /** @var array<int, int> */
     public array $backoff = [10, 30];
@@ -47,7 +50,7 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
         $this->onQueue(self::COLA);
     }
 
-    public function handle(WhatsappClient $cliente): void
+    public function handle(WhatsappClient $cliente, AsistentePedidoWhatsapp $asistente): void
     {
         // Mismo cuidado que `ExpirarOfertaPedido`: con `sync` corre dentro de la petición que ya abrió
         // el tenant, y cerrarlo aquí le cortaría el piso.
@@ -58,7 +61,7 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
         }
 
         try {
-            $this->atender($cliente);
+            $this->atender($cliente, $asistente);
         } finally {
             if (! $yaInicializado) {
                 tenancy()->end();
@@ -75,7 +78,7 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
         ]);
     }
 
-    private function atender(WhatsappClient $cliente): void
+    private function atender(WhatsappClient $cliente, AsistentePedidoWhatsapp $asistente): void
     {
         $mensaje = WhatsappMensaje::with('conversacion')->find($this->idMensaje);
         $numero = WhatsappNumero::find($this->idNumero);
@@ -92,7 +95,19 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
             return;
         }
 
-        $wamid = $cliente->enviarTexto($numero, $mensaje->conversacion, self::RESPUESTA);
+        // RN-34: si el cliente ya escribió algo más que sigue sin respuesta, ese job contesta todo
+        // junto con la conversación completa. Este se da por atendido sin enviar nada.
+        if ($this->hayMensajeMasNuevoSinResponder($mensaje)) {
+            $mensaje->update(['respondido_en' => now()]);
+
+            return;
+        }
+
+        $respuesta = $mensaje->tipo === 'text'
+            ? $asistente->responder($mensaje->conversacion, $this->tenant->telefono)
+            : self::RESPUESTA_SIN_TEXTO;
+
+        $wamid = $cliente->enviarTexto($numero, $mensaje->conversacion, $respuesta);
 
         $mensaje->update(['respondido_en' => now()]);
 
@@ -101,8 +116,17 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
             'wamid' => $wamid,
             'direccion' => WhatsappMensaje::SALIENTE,
             'tipo' => 'text',
-            'texto' => self::RESPUESTA,
+            'texto' => $respuesta,
             'enviado_en' => now(),
         ]);
+    }
+
+    private function hayMensajeMasNuevoSinResponder(WhatsappMensaje $mensaje): bool
+    {
+        return WhatsappMensaje::where('id_conversacion', $mensaje->id_conversacion)
+            ->where('direccion', WhatsappMensaje::ENTRANTE)
+            ->where('id_mensaje', '>', $mensaje->id_mensaje)
+            ->whereNull('respondido_en')
+            ->exists();
     }
 }

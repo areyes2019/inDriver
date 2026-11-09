@@ -52,6 +52,13 @@ return [
         'graph_version' => env('WHATSAPP_GRAPH_VERSION', 'v23.0'),
     ],
 
+    // spec tenant/031, D5 y RN-33: la IA que lee los pedidos de WhatsApp. El modelo empieza en Haiku
+    // y solo sube si no alcanza la precisión acordada.
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'modelo_whatsapp' => env('WHATSAPP_IA_MODELO', 'claude-haiku-5-5'),
+    ],
+
     'fcm' => [
         'project_id' => env('FIREBASE_PROJECT_ID'),
         'credentials_path' => env('FIREBASE_CREDENTIALS_PATH'),
