@@ -27,9 +27,10 @@ class PurgarMensajesWhatsapp extends Command
         TenantCentral::all()->each(function (TenantCentral $tenant) use ($limite) {
             tenancy()->initialize($tenant);
 
+            // Una ubicación compartida es tan personal como el texto.
             WhatsappMensaje::where('created_at', '<', $limite)
-                ->whereNotNull('texto')
-                ->update(['texto' => null]);
+                ->where(fn ($q) => $q->whereNotNull('texto')->orWhereNotNull('latitud'))
+                ->update(['texto' => null, 'latitud' => null, 'longitud' => null]);
 
             tenancy()->end();
         });

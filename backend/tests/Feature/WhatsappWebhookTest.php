@@ -5,7 +5,8 @@ use App\Models\Tenant;
 use App\Models\Tenant\WhatsappConversacion;
 use App\Models\Tenant\WhatsappMensaje;
 use App\Models\WhatsappNumero;
-use App\Services\Whatsapp\AsistentePedidoWhatsapp;
+use App\Services\Whatsapp\ConversacionWhatsappService;
+use App\Services\Whatsapp\RespuestaBot;
 use App\Services\Whatsapp\WhatsappClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as PeticionHttp;
@@ -34,7 +35,7 @@ beforeEach(function () {
     ]);
 
     // La IA y la cotización tienen sus propias pruebas (WhatsappAsistenteTest): aquí solo importa el canal.
-    $this->mock(AsistentePedidoWhatsapp::class)->shouldReceive('responder')->andReturn(RESPUESTA_ASISTENTE);
+    $this->mock(ConversacionWhatsappService::class)->shouldReceive('atender')->andReturn(new RespuestaBot(RESPUESTA_ASISTENTE));
 });
 
 afterEach(function () {
@@ -262,22 +263,43 @@ it('atiende a quien no comparte su teléfono', function () {
     expect(WhatsappConversacion::sole()->telefono)->toBeNull();
 });
 
-it('un mensaje sin texto también se guarda y se responde, sin pasar por la IA', function () {
+it('guarda la ubicación compartida y el botón pulsado', function () {
     $tenant = flotillaConNumero('moto-a', 'NUM-A');
-    fingirMeta();
-    $this->mock(AsistentePedidoWhatsapp::class)->shouldNotReceive('responder');
+    Queue::fake();
 
-    $payload = mensajeDeMeta('NUM-A', ['type' => 'location', 'location' => ['latitude' => 20.5, 'longitude' => -100.8]]);
-    unset($payload['entry'][0]['changes'][0]['value']['messages'][0]['text']);
-    postFirmado($this, $payload)->assertOk();
+    $ubicacion = mensajeDeMeta('NUM-A', ['id' => 'wamid.UBI', 'type' => 'location', 'location' => ['latitude' => 20.5, 'longitude' => -100.8]]);
+    unset($ubicacion['entry'][0]['changes'][0]['value']['messages'][0]['text']);
+    postFirmado($this, $ubicacion)->assertOk();
 
-    // RN-32: una ubicación no llama a la IA.
-    Http::assertSentCount(1);
-    Http::assertSent(fn (PeticionHttp $p) => $p['text']['body'] === ProcesarMensajeWhatsapp::RESPUESTA_SIN_TEXTO);
+    $boton = mensajeDeMeta('NUM-A', ['id' => 'wamid.BOTON', 'type' => 'interactive', 'interactive' => [
+        'type' => 'button_reply', 'button_reply' => ['id' => 'confirmar', 'title' => 'Confirmar'],
+    ]]);
+    unset($boton['entry'][0]['changes'][0]['value']['messages'][0]['text']);
+    postFirmado($this, $boton)->assertOk();
 
     tenancy()->initialize($tenant);
-    $mensaje = WhatsappMensaje::where('wamid', 'wamid.UNO')->sole();
-    expect($mensaje->tipo)->toBe('location')->and($mensaje->texto)->toBeNull();
+    $guardada = WhatsappMensaje::where('wamid', 'wamid.UBI')->sole();
+    $pulsado = WhatsappMensaje::where('wamid', 'wamid.BOTON')->sole();
+
+    expect($guardada->latitud)->toBe(20.5)->and($guardada->longitud)->toBe(-100.8)->and($guardada->texto)->toBeNull()
+        ->and($pulsado->boton)->toBe('confirmar')->and($pulsado->texto)->toBe('Confirmar');
+});
+
+it('manda los botones en el formato de Meta y guarda la respuesta', function () {
+    $tenant = flotillaConNumero('moto-a', 'NUM-A');
+    fingirMeta();
+    $this->mock(ConversacionWhatsappService::class)->shouldReceive('atender')
+        ->andReturn(new RespuestaBot('Así quedaría tu envío', ['confirmar' => 'Confirmar', 'corregir' => 'Corregir', 'cancelar' => 'Cancelar']));
+
+    postFirmado($this, mensajeDeMeta('NUM-A'))->assertOk();
+
+    Http::assertSent(fn (PeticionHttp $p) => $p['type'] === 'interactive'
+        && $p['interactive']['body']['text'] === 'Así quedaría tu envío'
+        && $p['interactive']['action']['buttons'][0] === ['type' => 'reply', 'reply' => ['id' => 'confirmar', 'title' => 'Confirmar']]
+        && count($p['interactive']['action']['buttons']) === 3);
+
+    tenancy()->initialize($tenant);
+    expect(WhatsappMensaje::where('direccion', WhatsappMensaje::SALIENTE)->sole()->tipo)->toBe('interactive');
 });
 
 it('los avisos de estado actualizan el mensaje sin crear filas ni retroceder', function () {
@@ -317,7 +339,7 @@ it('si Meta falla no marca el mensaje como respondido y el reintento lo envía u
         ->push(['error' => ['message' => 'caído']], 500)
         ->push(['messages' => [['id' => 'wamid.OK']]]);
 
-    $asistente = app(AsistentePedidoWhatsapp::class);
+    $asistente = app(ConversacionWhatsappService::class);
 
     expect(fn () => $job->handle(app(WhatsappClient::class), $asistente))->toThrow(RequestException::class);
     expect($mensaje->fresh()->respondido_en)->toBeNull();
@@ -340,13 +362,16 @@ it('varios mensajes seguidos reciben una sola respuesta (RN-34)', function () {
     $uno = WhatsappMensaje::where('wamid', 'wamid.UNO')->sole();
     $dos = WhatsappMensaje::where('wamid', 'wamid.DOS')->sole();
     fingirMeta();
+    $this->mock(ConversacionWhatsappService::class)->shouldReceive('atender')->once()
+        ->withArgs(fn ($conversacion, $pendientes) => $pendientes->pluck('wamid')->all() === ['wamid.UNO', 'wamid.DOS'])
+        ->andReturn(new RespuestaBot(RESPUESTA_ASISTENTE));
 
     // La cola los atiende en orden: el primero ve que hay uno más nuevo y le deja la respuesta.
-    (new ProcesarMensajeWhatsapp($tenant, $numero->id_numero, $uno->id_mensaje))->handle(app(WhatsappClient::class), app(AsistentePedidoWhatsapp::class));
+    (new ProcesarMensajeWhatsapp($tenant, $numero->id_numero, $uno->id_mensaje))->handle(app(WhatsappClient::class), app(ConversacionWhatsappService::class));
     Http::assertNothingSent();
     expect($uno->fresh()->respondido_en)->not->toBeNull();
 
-    (new ProcesarMensajeWhatsapp($tenant, $numero->id_numero, $dos->id_mensaje))->handle(app(WhatsappClient::class), app(AsistentePedidoWhatsapp::class));
+    (new ProcesarMensajeWhatsapp($tenant, $numero->id_numero, $dos->id_mensaje))->handle(app(WhatsappClient::class), app(ConversacionWhatsappService::class));
     Http::assertSentCount(1);
     expect(WhatsappMensaje::where('direccion', WhatsappMensaje::SALIENTE)->count())->toBe(1);
 });

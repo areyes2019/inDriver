@@ -2,14 +2,18 @@
 
 use Anthropic\Client;
 use App\Models\Tenant;
+use App\Models\Tenant\Cliente;
 use App\Models\Tenant\ConfiguracionTenant;
+use App\Models\Tenant\Pedido;
 use App\Models\Tenant\WhatsappConversacion;
 use App\Models\Tenant\WhatsappMensaje;
+use App\Models\Tenant\WhatsappSolicitud;
 use App\Models\Tenant\ZonaServicio;
-use App\Services\Whatsapp\AsistentePedidoWhatsapp;
+use App\Services\Whatsapp\ConversacionWhatsappService;
 use App\Services\Whatsapp\ExtraccionFallida;
 use App\Services\Whatsapp\ExtraccionPedido;
 use App\Services\Whatsapp\ExtractorPedidoIA;
+use App\Services\Whatsapp\RespuestaBot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as PeticionHttp;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +22,8 @@ use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
 
-// spec tenant/031, etapa 5: la IA extrae, Laravel valida y cotiza, nada se crea.
+// spec tenant/031, etapa 6: la conversación que arma, confirma y crea el envío. La IA se simula:
+// aquí se prueba lo que Laravel hace con lo que ella diga.
 
 beforeEach(function () {
     gc_collect_cycles();
@@ -26,7 +31,11 @@ beforeEach(function () {
         File::delete($file);
     }
 
-    config(['services.google_maps.key' => 'llave-de-maps']);
+    config([
+        'services.google_maps.key' => 'llave-de-maps',
+        // D17: en las pruebas siempre sale la primera versión de cada frase.
+        'services.whatsapp.frases_al_azar' => false,
+    ]);
 
     $tenant = Tenant::create([
         'nombre_comercial' => 'Moto Uno',
@@ -41,15 +50,9 @@ beforeEach(function () {
     ConfiguracionTenant::establecer(ConfiguracionTenant::KM_INCLUIDOS, '5');
     ConfiguracionTenant::establecer(ConfiguracionTenant::KM_ADICIONAL, '5');
 
-    $this->conversacion = WhatsappConversacion::create(['usuario_whatsapp' => 'MX.BSUID1']);
-    WhatsappMensaje::create([
-        'id_conversacion' => $this->conversacion->id_conversacion,
-        'wamid' => 'wamid.UNO',
-        'direccion' => WhatsappMensaje::ENTRANTE,
-        'tipo' => 'text',
-        'texto' => 'Quiero un envío',
-        'enviado_en' => now(),
-    ]);
+    $this->conversacion = WhatsappConversacion::create(['usuario_whatsapp' => 'MX.BSUID1', 'telefono' => '5214613581090']);
+    googleResponde(lugaresDeCelaya());
+    fingirGoogle();
 });
 
 afterEach(function () {
@@ -62,30 +65,78 @@ afterEach(function () {
     }
 });
 
-function iaEntiende(array $datos): void
+/**
+ * La IA devuelve, en orden, lo que trae cada mensaje. Lo que no se indica, el mensaje no lo menciona.
+ */
+function iaDevuelve(array ...$mensajes): void
 {
-    $extraccion = ExtraccionPedido::desdeArreglo(array_merge([
+    $extracciones = array_map(fn (array $datos) => ExtraccionPedido::desdeArreglo(array_merge([
         'intencion' => 'pedido_envio',
-        'recogida_direccion' => 'Hidalgo 10, Centro, Celaya',
-        'entrega_direccion' => 'Morelos 20, Alameda, Celaya',
-        'destinatario_nombre' => 'Juan',
-        'destinatario_telefono' => '461 123 4567',
-        'quien_paga_envio' => 'destinatario',
-        'hay_cobro_producto' => 'si',
-        'importe_producto' => 300,
-    ], $datos));
+        'quien_paga_envio' => 'no_dicho',
+        'hay_cobro_producto' => 'no_dicho',
+        'acepta_direccion_ofrecida' => 'no_dicho',
+        'importe_producto' => 0,
+    ], $datos)), $mensajes);
 
-    test()->mock(ExtractorPedidoIA::class)->shouldReceive('extraer')->andReturn($extraccion);
+    test()->mock(ExtractorPedidoIA::class)->shouldReceive('extraer')->andReturn(...$extracciones);
+}
+
+/** Como lo hace el job: guarda lo que llega, lo atiende y anota la respuesta del bot. */
+function clienteEscribe(WhatsappConversacion $conversacion, array $mensaje = []): RespuestaBot
+{
+    static $numero = 0;
+    $numero++;
+
+    $entrante = WhatsappMensaje::create(array_merge([
+        'id_conversacion' => $conversacion->id_conversacion,
+        'wamid' => "wamid.{$numero}",
+        'direccion' => WhatsappMensaje::ENTRANTE,
+        'tipo' => 'text',
+        'texto' => 'mensaje del cliente',
+        'enviado_en' => now(),
+    ], $mensaje));
+
+    $respuesta = app(ConversacionWhatsappService::class)->atender($conversacion->fresh(), collect([$entrante]), '4613581090');
+
+    WhatsappMensaje::create([
+        'id_conversacion' => $conversacion->id_conversacion,
+        'wamid' => "wamid.bot.{$numero}",
+        'direccion' => WhatsappMensaje::SALIENTE,
+        'tipo' => $respuesta->botones === [] ? 'text' : 'interactive',
+        'texto' => $respuesta->texto,
+        'enviado_en' => now(),
+    ]);
+
+    return $respuesta;
+}
+
+function pulsa(WhatsappConversacion $conversacion, string $boton): RespuestaBot
+{
+    return clienteEscribe($conversacion, ['tipo' => 'interactive', 'texto' => ucfirst($boton), 'boton' => $boton]);
 }
 
 /**
- * Google responde según la dirección pedida. Una dirección sin entrada en `$lugares` no existe.
+ * Qué responde Google en esta prueba. Un solo `Http::fake` lee estos valores, porque un segundo
+ * `Http::fake` no reemplaza al primero.
  *
  * @param  array<string, array{0: float, 1: float, 2?: string}>  $lugares  dirección => [lat, lng, location_type]
  */
 function googleResponde(array $lugares, ?int $metros = 6000): void
 {
-    Http::fake(function (PeticionHttp $peticion) use ($lugares, $metros) {
+    $GLOBALS['google_lugares'] = $lugares;
+    $GLOBALS['google_metros'] = $metros;
+}
+
+function fingirGoogle(): void
+{
+    Http::fake(function (PeticionHttp $peticion) {
+        $lugares = $GLOBALS['google_lugares'];
+        $metros = $GLOBALS['google_metros'];
+
+        if (str_contains($peticion->url(), '/geocode/json') && isset($peticion['latlng'])) {
+            return Http::response(['status' => 'OK', 'results' => [['formatted_address' => 'Av. Tecnológico 50, Celaya, Gto.']]]);
+        }
+
         if (str_contains($peticion->url(), '/geocode/json')) {
             $lugar = $lugares[$peticion['address']] ?? null;
 
@@ -94,174 +145,250 @@ function googleResponde(array $lugares, ?int $metros = 6000): void
             }
 
             return Http::response(['status' => 'OK', 'results' => [[
-                'formatted_address' => "{$peticion['address']}, Gto., México",
-                'geometry' => [
-                    'location' => ['lat' => $lugar[0], 'lng' => $lugar[1]],
-                    'location_type' => $lugar[2] ?? 'ROOFTOP',
-                ],
+                'formatted_address' => "{$peticion['address']}, Gto.",
+                'geometry' => ['location' => ['lat' => $lugar[0], 'lng' => $lugar[1]], 'location_type' => $lugar[2] ?? 'ROOFTOP'],
             ]]]);
         }
 
-        if (str_contains($peticion->url(), '/directions/json')) {
-            return $metros === null
-                ? Http::response(['status' => 'ZERO_RESULTS', 'routes' => []])
-                : Http::response(['status' => 'OK', 'routes' => [['legs' => [['distance' => ['value' => $metros]]]]]]);
-        }
-
-        return Http::response([], 404);
+        return $metros === null
+            ? Http::response(['status' => 'ZERO_RESULTS', 'routes' => []])
+            : Http::response(['status' => 'OK', 'routes' => [['legs' => [['distance' => ['value' => $metros]]]]]]);
     });
 }
 
 function lugaresDeCelaya(): array
 {
     return [
-        'Hidalgo 10, Centro, Celaya' => [20.52, -100.81],
-        'Morelos 20, Alameda, Celaya' => [20.53, -100.82],
+        'Hidalgo 10, Centro' => [20.52, -100.81],
+        'Morelos 20, Alameda' => [20.53, -100.82],
     ];
 }
 
-it('dice lo que entendió y el precio de un contra entrega, sin crear nada', function () {
-    iaEntiende([]);
-    googleResponde(lugaresDeCelaya());
+/** Todo lo del envío en un mensaje, contra entrega de $300 que paga quien recibe. */
+function pedidoCompleto(array $cambios = []): array
+{
+    return array_merge([
+        'destinatario_nombre' => 'Alan',
+        'entrega_direccion' => 'Morelos 20, Alameda',
+        'destinatario_telefono' => '461 123 4567',
+        'recogida_direccion' => 'Hidalgo 10, Centro',
+        'quien_paga_envio' => 'destinatario',
+        'hay_cobro_producto' => 'si',
+        'importe_producto' => 300,
+    ], $cambios);
+}
 
-    $respuesta = app(AsistentePedidoWhatsapp::class)->responder($this->conversacion, '4613581090');
+function solicitud(): WhatsappSolicitud
+{
+    return WhatsappSolicitud::latest('id_solicitud')->firstOrFail();
+}
 
-    expect($respuesta)
-        ->toContain('Recoger en: Hidalgo 10, Centro, Celaya, Gto., México')
-        ->toContain('Entregar en: Morelos 20, Alameda, Celaya, Gto., México')
-        ->toContain('Recibe: Juan, 4611234567')
-        ->toContain('Paga el envío: quien recibe')
-        ->toContain('Envío: $15.00 (6 km)')
-        ->toContain('Producto a cobrar: $300.00')
-        ->toContain('Quien recibe paga en total: $315.00')
-        ->toContain('el repartidor te paga $300.00')
+it('saluda y pide los datos en una lista corta si el primer mensaje no trae ninguno', function () {
+    iaDevuelve(['intencion' => 'otra']);
+
+    $respuesta = clienteEscribe($this->conversacion, ['texto' => 'Hola, buenas']);
+
+    expect($respuesta->texto)->toStartWith('¡Hola!')
+        ->toContain('Pásame estos datos')
+        ->toContain('¿Quién recibe?')
+        ->and($respuesta->botones)->toBe([]);
+});
+
+it('pregunta lo que falta de uno en uno y en orden, con el nombre de quien recibe', function () {
+    iaDevuelve(['destinatario_nombre' => 'Alan'], ['entrega_direccion' => 'Morelos 20, Alameda']);
+
+    $primera = clienteEscribe($this->conversacion, ['texto' => 'Le mando algo a Alan']);
+    $segunda = clienteEscribe($this->conversacion, ['texto' => 'Morelos 20, Alameda']);
+
+    expect($primera->texto)->toContain('Muy bien.')->toContain('¿En qué calle y número vive Alan, y en qué colonia?')
+        ->and($segunda->texto)->not->toContain('¡Hola!')
+        ->toContain('¿A qué número le marcamos a Alan si hace falta?')
+        ->and(solicitud()->entrega_direccion)->toBe('Morelos 20, Alameda, Gto.');
+});
+
+it('arma el resumen con botones, registra al cliente nuevo y crea el pedido al confirmar', function () {
+    iaDevuelve(pedidoCompleto(), ['nombre_cliente' => 'Abdias']);
+
+    $pideNombre = clienteEscribe($this->conversacion, ['texto' => 'Todo el pedido']);
+    $resumen = clienteEscribe($this->conversacion, ['texto' => 'Abdias']);
+
+    expect($pideNombre->texto)->toContain('¿Cómo te llamas')
+        ->and($resumen->botones)->toBe(['confirmar' => 'Confirmar', 'corregir' => 'Corregir', 'cancelar' => 'Cancelar'])
+        ->and($resumen->texto)
+        ->toContain('Recoger en: Hidalgo 10, Centro, Gto.')
+        ->toContain('Recibe: Alan, 4611234567')
+        ->toContain('Envío: $15.00 (6 km), lo paga Alan')
+        ->toContain('Alan paga en total: $315.00')
         // 300 de adelanto + 15 de envío + 30% de 15 por el regreso (RN-09).
-        ->toContain('tú le pagas $319.50')
-        ->toContain('todavía no se crea el pedido')
-        ->not->toContain('me falta');
+        ->toContain('tú le devuelves $319.50');
 
-    expect(DB::connection('tenant')->table('pedidos')->count())->toBe(0);
+    $cliente = Cliente::sole();
+    expect($cliente->nombre)->toBe('Abdias')->and($cliente->telefono)->toBe('4613581090');
+
+    $confirmado = pulsa($this->conversacion, 'confirmar');
+    $pedido = Pedido::withoutGlobalScopes()->sole();
+
+    expect($confirmado->texto)->toContain("Tu envío quedó como {$pedido->numero_pedido}")
+        ->and($pedido->id_cliente)->toBe($cliente->id_cliente)
+        ->and($pedido->nombre_solicitante)->toBe('Alan')
+        ->and($pedido->telefono_solicitante)->toBe('4611234567')
+        ->and($pedido->modalidad_pago)->toBe('RECEPTOR_PAGA_ENVIO_PRODUCTOS')
+        ->and((float) $pedido->importe_envio)->toBe(15.0)
+        ->and((float) $pedido->importe_cobro)->toBe(300.0)
+        ->and((bool) $pedido->lo_antes_posible)->toBeTrue()
+        ->and(solicitud()->estado)->toBe(WhatsappSolicitud::CONFIRMADA)
+        // RN-40: la recogida queda guardada para la próxima vez.
+        ->and($cliente->direcciones()->sole()->calle)->toBe('Hidalgo 10, Centro, Gto.');
 });
 
-it('pregunta todo lo que falta en un solo mensaje y no consulta a Google sin direcciones', function () {
-    iaEntiende([
-        'recogida_direccion' => '',
-        'entrega_direccion' => '',
-        'destinatario_nombre' => '',
-        'destinatario_telefono' => '',
-        'quien_paga_envio' => 'no_dicho',
-        'hay_cobro_producto' => 'no_dicho',
-        'importe_producto' => 0,
-    ]);
-    Http::fake();
+it('dos confirmaciones crean un solo pedido', function () {
+    iaDevuelve(pedidoCompleto(), ['nombre_cliente' => 'Abdias']);
+    clienteEscribe($this->conversacion, ['texto' => 'Todo el pedido']);
+    clienteEscribe($this->conversacion, ['texto' => 'Abdias']);
 
-    $respuesta = app(AsistentePedidoWhatsapp::class)->responder($this->conversacion, null);
+    pulsa($this->conversacion, 'confirmar');
+    $otra = pulsa($this->conversacion, 'confirmar');
 
-    expect($respuesta)
-        ->toContain('Para cotizar me falta:')
-        ->toContain('Dónde recogemos')
-        ->toContain('Dónde entregamos')
-        ->toContain('El nombre de quien recibe')
-        ->toContain('El teléfono de quien recibe')
-        ->toContain('¿Quién paga el envío')
-        ->toContain('¿Hay que cobrarle algo');
-
-    Http::assertNothingSent();
+    expect(Pedido::withoutGlobalScopes()->count())->toBe(1)
+        ->and($otra->texto)->toContain('ya quedó confirmado como PED-000001');
 });
 
-it('no cotiza con una dirección imprecisa y la pregunta de nuevo', function () {
-    iaEntiende(['recogida_direccion' => 'Centro de Celaya']);
-    googleResponde([
-        'Centro de Celaya' => [20.52, -100.81, 'APPROXIMATE'],
-        'Morelos 20, Alameda, Celaya' => [20.53, -100.82],
-    ]);
-
-    $respuesta = app(AsistentePedidoWhatsapp::class)->responder($this->conversacion, null);
-
-    expect($respuesta)
-        ->toContain('No encontré con precisión «Centro de Celaya»')
-        ->not->toContain('Envío:');
-
-    Http::assertNotSent(fn (PeticionHttp $p) => str_contains($p->url(), '/directions/json'));
-});
-
-it('avisa cuando una dirección cae fuera de la cobertura', function () {
-    ZonaServicio::create([
-        'nombre' => 'Centro',
-        'estado' => 'Activo',
-        'poligono' => [
-            ['lat' => 20.50, 'lng' => -100.83],
-            ['lat' => 20.50, 'lng' => -100.80],
-            ['lat' => 20.54, 'lng' => -100.80],
-            ['lat' => 20.54, 'lng' => -100.83],
-        ],
-    ]);
-    iaEntiende(['entrega_direccion' => 'Rancho Lejano 1, Celaya']);
-    googleResponde(lugaresDeCelaya() + ['Rancho Lejano 1, Celaya' => [20.70, -100.60]]);
-
-    $respuesta = app(AsistentePedidoWhatsapp::class)->responder($this->conversacion, null);
-
-    expect($respuesta)
-        ->toContain('está fuera de la zona donde damos servicio')
-        ->not->toContain('Envío:');
-});
-
-it('sin una ruta real por calles no da precio', function () {
-    iaEntiende([]);
+it('sin ruta real por calles no da precio ni resumen', function () {
     googleResponde(lugaresDeCelaya(), metros: null);
+    Cliente::create(['nombre' => 'Abdias', 'telefono' => '461 358 1090', 'estado' => 'Activo']);
+    iaDevuelve(pedidoCompleto());
 
-    $respuesta = app(AsistentePedidoWhatsapp::class)->responder($this->conversacion, '4613581090');
+    $respuesta = clienteEscribe($this->conversacion, ['texto' => 'Todo el pedido']);
 
-    expect($respuesta)
-        ->toContain('no puedo calcular el precio')
-        ->toContain('4613581090')
-        ->not->toContain('$');
+    expect($respuesta->texto)->toContain('no puedo calcular el precio')->toContain('4613581090')
+        ->and($respuesta->botones)->toBe([]);
 });
 
-it('pasa a la flotilla el envío que paga quien envía con cobro de producto', function () {
-    iaEntiende(['quien_paga_envio' => 'remitente']);
-    Http::fake();
+it('reconoce al cliente por su teléfono y le ofrece su última dirección de recogida', function () {
+    $cliente = Cliente::create(['nombre' => 'Abdias', 'telefono' => '461-358-1090', 'estado' => 'Activo']);
+    $cliente->direcciones()->create(['calle' => 'Real del Seminario 122', 'latitud' => 20.54, 'longitud' => -100.83]);
+    iaDevuelve(pedidoCompleto(['recogida_direccion' => '', 'quien_paga_envio' => 'no_dicho']), ['acepta_direccion_ofrecida' => 'si']);
 
-    $respuesta = app(AsistentePedidoWhatsapp::class)->responder($this->conversacion, '4613581090');
+    $oferta = clienteEscribe($this->conversacion, ['texto' => 'Para Alan']);
+    $siguiente = clienteEscribe($this->conversacion, ['texto' => 'Sí']);
 
-    expect($respuesta)->toContain('lo atiende la flotilla directamente')->toContain('4613581090');
-    Http::assertNothingSent();
+    expect($oferta->texto)->toContain('¿Lo recogemos en Real del Seminario 122, como la vez pasada?')
+        ->and($siguiente->texto)->toContain('¿Quién paga el envío, tú o Alan?')
+        ->and(solicitud()->recogida_lat)->toBe(20.54)
+        ->and($this->conversacion->fresh()->id_cliente)->toBe($cliente->id_cliente);
 });
 
-it('ofrece hablar con una persona', function () {
-    iaEntiende(['intencion' => 'hablar_con_persona']);
+it('no adivina una dirección imprecisa y la vuelve a pedir', function () {
+    googleResponde(['Centro de Celaya' => [20.52, -100.81, 'APPROXIMATE']]);
+    iaDevuelve(['destinatario_nombre' => 'Alan', 'entrega_direccion' => 'Centro de Celaya']);
 
-    expect(app(AsistentePedidoWhatsapp::class)->responder($this->conversacion, '4613581090'))
-        ->toContain('Puedes hablar con una persona de la flotilla al 4613581090');
+    $respuesta = clienteEscribe($this->conversacion, ['texto' => 'A Alan, en el centro']);
+
+    expect($respuesta->texto)->toContain('No encontré bien «Centro de Celaya»')
+        ->not->toContain('¿En qué calle y número vive')
+        ->and(solicitud()->paso)->toBe('entrega')
+        ->and(solicitud()->tieneEntrega())->toBeFalse();
+});
+
+it('avisa cuando la dirección cae fuera de la cobertura', function () {
+    ZonaServicio::create(['nombre' => 'Centro', 'estado' => 'Activo', 'poligono' => [
+        ['lat' => 20.50, 'lng' => -100.83], ['lat' => 20.50, 'lng' => -100.80],
+        ['lat' => 20.54, 'lng' => -100.80], ['lat' => 20.54, 'lng' => -100.83],
+    ]]);
+    googleResponde(['Rancho Lejano 1' => [20.70, -100.60]]);
+    iaDevuelve(['destinatario_nombre' => 'Alan', 'entrega_direccion' => 'Rancho Lejano 1']);
+
+    expect(clienteEscribe($this->conversacion, ['texto' => 'A Alan, al rancho'])->texto)
+        ->toContain('queda fuera de la zona donde damos servicio');
+});
+
+it('una ubicación compartida responde la dirección que se estaba preguntando, sin la IA', function () {
+    iaDevuelve(['destinatario_nombre' => 'Alan']);
+    clienteEscribe($this->conversacion, ['texto' => 'Para Alan']);
+
+    $respuesta = clienteEscribe($this->conversacion, ['tipo' => 'location', 'texto' => null, 'latitud' => 20.531, 'longitud' => -100.821]);
+
+    expect(solicitud()->entrega_lat)->toBe(20.531)
+        ->and(solicitud()->entrega_direccion)->toBe('Av. Tecnológico 50, Celaya, Gto.')
+        ->and($respuesta->texto)->toContain('¿A qué número le marcamos a Alan');
+});
+
+it('no admite que pague quien envía y además se cobre un producto', function () {
+    Cliente::create(['nombre' => 'Abdias', 'telefono' => '4613581090', 'estado' => 'Activo']);
+    iaDevuelve(pedidoCompleto(['quien_paga_envio' => 'remitente']));
+
+    $respuesta = clienteEscribe($this->conversacion, ['texto' => 'Yo pago y le cobran 300']);
+
+    expect($respuesta->texto)->toContain('¿Mejor que Alan pague el envío junto con el producto?')
+        ->and(solicitud()->quien_paga)->toBeNull();
+});
+
+it('corregir vuelve a preguntar y el resumen sale con el cambio', function () {
+    Cliente::create(['nombre' => 'Abdias', 'telefono' => '4613581090', 'estado' => 'Activo']);
+    iaDevuelve(pedidoCompleto(), ['destinatario_nombre' => 'Beto']);
+    clienteEscribe($this->conversacion, ['texto' => 'Todo el pedido']);
+
+    $pregunta = pulsa($this->conversacion, 'corregir');
+    $resumen = clienteEscribe($this->conversacion, ['texto' => 'Mejor lo recibe Beto']);
+
+    expect($pregunta->texto)->toBe('Claro, ¿qué cambiamos?')
+        ->and($resumen->texto)->toContain('Recibe: Beto')
+        ->and($resumen->botones)->toHaveKey('confirmar');
+});
+
+it('cancelar descarta la hoja y el siguiente mensaje empieza de cero', function () {
+    Cliente::create(['nombre' => 'Abdias', 'telefono' => '4613581090', 'estado' => 'Activo']);
+    iaDevuelve(pedidoCompleto(), ['intencion' => 'otra']);
+    clienteEscribe($this->conversacion, ['texto' => 'Todo el pedido']);
+
+    expect(pulsa($this->conversacion, 'cancelar')->texto)->toContain('lo cancelé')
+        ->and(solicitud()->estado)->toBe(WhatsappSolicitud::CANCELADA)
+        ->and(clienteEscribe($this->conversacion, ['texto' => 'Otra cosa'])->texto)->toContain('Pásame estos datos')
+        ->and(Pedido::withoutGlobalScopes()->count())->toBe(0);
+});
+
+it('con la flotilla en TEST no crea el pedido y lo avisa', function () {
+    ConfiguracionTenant::establecer(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_TEST);
+    Cliente::create(['nombre' => 'Abdias', 'telefono' => '4613581090', 'estado' => 'Activo']);
+    iaDevuelve(pedidoCompleto());
+    clienteEscribe($this->conversacion, ['texto' => 'Todo el pedido']);
+
+    expect(pulsa($this->conversacion, 'confirmar')->texto)->toContain('no estamos tomando envíos')
+        ->and(Pedido::withoutGlobalScopes()->count())->toBe(0);
+});
+
+it('un cliente inactivo no puede pedir', function () {
+    Cliente::create(['nombre' => 'Abdias', 'telefono' => '4613581090', 'estado' => 'Inactivo']);
+
+    expect(clienteEscribe($this->conversacion)->texto)->toContain('no puedo tomarte envíos por aquí')->toContain('4613581090');
+});
+
+it('una hoja sin actividad en 2 horas se descarta', function () {
+    iaDevuelve(['destinatario_nombre' => 'Alan'], ['intencion' => 'otra']);
+    clienteEscribe($this->conversacion, ['texto' => 'Para Alan']);
+    WhatsappSolicitud::query()->update(['updated_at' => now()->subHours(3)]);
+
+    expect(clienteEscribe($this->conversacion, ['texto' => 'Hola'])->texto)->toContain('Pásame estos datos')
+        ->and(WhatsappSolicitud::oldest('id_solicitud')->first()->estado)->toBe(WhatsappSolicitud::DESCARTADA);
 });
 
 it('si la IA falla contesta con una pregunta, nunca en silencio', function () {
     $this->mock(ExtractorPedidoIA::class)->shouldReceive('extraer')->andThrow(new ExtraccionFallida('caída'));
 
-    expect(app(AsistentePedidoWhatsapp::class)->responder($this->conversacion, null))
-        ->toContain('¿Me dices dónde recogemos el paquete y a dónde lo llevamos?');
+    expect(clienteEscribe($this->conversacion)->texto)->toContain('no te entendí bien');
 });
 
-it('le pasa a la IA la conversación reciente en orden, con lo que contestó el bot', function () {
-    $id = $this->conversacion->id_conversacion;
-    WhatsappMensaje::create(['id_conversacion' => $id, 'wamid' => 'wamid.VIEJO', 'direccion' => WhatsappMensaje::ENTRANTE,
-        'tipo' => 'text', 'texto' => 'Un pedido de ayer', 'enviado_en' => now()->subHours(3)]);
-    WhatsappMensaje::create(['id_conversacion' => $id, 'wamid' => 'wamid.BOT', 'direccion' => WhatsappMensaje::SALIENTE,
-        'tipo' => 'text', 'texto' => '¿Quién recibe?', 'enviado_en' => now()->addSecond()]);
-    WhatsappMensaje::create(['id_conversacion' => $id, 'wamid' => 'wamid.DOS', 'direccion' => WhatsappMensaje::ENTRANTE,
-        'tipo' => 'text', 'texto' => 'Juan', 'enviado_en' => now()->addSeconds(2)]);
+it('le pasa a la IA la hoja y la última pregunta, no todo el chat', function () {
+    iaDevuelve(['destinatario_nombre' => 'Alan']);
+    clienteEscribe($this->conversacion, ['texto' => 'Para Alan']);
 
-    $this->mock(ExtractorPedidoIA::class)
-        ->shouldReceive('extraer')
-        ->once()
-        ->with([
-            ['rol' => 'cliente', 'texto' => 'Quiero un envío'],
-            ['rol' => 'negocio', 'texto' => '¿Quién recibe?'],
-            ['rol' => 'cliente', 'texto' => 'Juan'],
-        ])
+    $this->mock(ExtractorPedidoIA::class)->shouldReceive('extraer')->once()
+        ->withArgs(fn ($hoja, $pregunta, $mensaje) => $hoja === ['Quien recibe' => 'Alan']
+            && str_ends_with($pregunta, '¿En qué calle y número vive Alan, y en qué colonia?')
+            && $mensaje === 'Morelos 20')
         ->andThrow(new ExtraccionFallida('no importa aquí'));
 
-    app(AsistentePedidoWhatsapp::class)->responder($this->conversacion, null);
+    clienteEscribe($this->conversacion, ['texto' => 'Morelos 20']);
 });
 
 it('la salida de la IA se vuelve a validar', function () {
@@ -278,7 +405,6 @@ it('la salida de la IA se vuelve a validar', function () {
 
     expect($pedido->intencion)->toBe(ExtraccionPedido::INTENCION_OTRA)
         ->and($pedido->recogidaDireccion)->toBe('Hidalgo 10')
-        ->and($pedido->entregaDireccion)->toBe('')
         ->and($pedido->destinatarioTelefono)->toBe('524611234567')
         ->and($pedido->quienPagaEnvio)->toBe(ExtraccionPedido::NO_DICHO)
         ->and($pedido->importeProducto)->toBe(0.0);

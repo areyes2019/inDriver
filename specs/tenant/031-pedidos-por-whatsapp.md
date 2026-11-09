@@ -62,6 +62,9 @@ Que el cliente de una flotilla pida un envío escribiendo al número de WhatsApp
 | D13 | El texto de los mensajes se borra a los 90 días. El pedido se conserva |
 | D14 | Si el vendedor no paga lo que debe por un regreso, se marca como inactivo hasta que pague |
 | D15 | Un regreso genera comisión sobre el envío y consume 1 viaje de la flotilla |
+| D16 | Conversación mixta en tono amable y familiar: el primer mensaje pide los datos principales en una lista corta, y después el bot pregunta de uno en uno solo lo que falte. Se eligió sobre "una pregunta a la vez" porque Meta cobra los mensajes del negocio desde octubre de 2026 (2026-11-09) |
+| D17 | Los textos del bot salen de frases fijas con 2 o 3 versiones al azar; la IA no redacta respuestas |
+| D18 | El pedido a medias se guarda en una hoja (`whatsapp_solicitudes`); la IA recibe la hoja y el mensaje nuevo, no todo el chat |
 
 ## 4. Reglas del dinero
 
@@ -193,7 +196,22 @@ La meta de capacidad es de 1,000 conversaciones al día por flotilla (40 por rep
 - **RN-31.** Los avisos de enviado, entregado y leído actualizan el estado del mensaje. No crean filas nuevas.
 - **RN-32.** Los botones y las ubicaciones compartidas no llaman a la IA.
 - **RN-33.** El modelo se elige con un conjunto de mensajes reales, empezando por Haiku 5.5. Se sube de modelo solo si no alcanza la precisión acordada.
-- **RN-34.** El bot agrupa sus preguntas y respuestas para enviar menos mensajes a Meta.
+- **RN-34.** Si el cliente manda varios mensajes antes de que el bot conteste, recibe una sola respuesta. Desde la etapa 6 el bot ya no junta varias preguntas en un mensaje (D16).
+
+### Conversación (etapa 6)
+
+- **RN-35.** Si el primer mensaje no trae datos del envío, el bot contesta con una lista corta de lo que necesita. Después pregunta lo que falta de uno en uno, en este orden: nombre de quien recibe, dirección de entrega, teléfono de quien recibe, dirección de recogida, quién paga el envío, si hay que cobrar un producto y, en ese caso, cuánto. Lo que el cliente ya dijo se salta, aunque lo diga todo en un mensaje.
+- **RN-36.** El primer mensaje de la conversación saluda según la hora de operación (`app.timezone_operacion`): buenos días, buenas tardes o buenas noches.
+- **RN-37.** Siempre se pregunta si hay que cobrar un producto. No se supone que no.
+- **RN-38.** Cada dato se anota en la hoja del pedido. Una dirección se guarda ya ubicada y no se vuelve a geocodificar mientras no cambie.
+- **RN-39.** A quien escribe por primera vez se le registra como cliente con el teléfono de su WhatsApp, y antes del resumen se le pregunta su nombre (RN-13, RN-14).
+- **RN-40.** Si el cliente tiene direcciones guardadas, al preguntar la recogida el bot ofrece la más reciente.
+- **RN-41.** Cuando el bot pregunta una dirección, una ubicación compartida la responde. No pasa por la IA (RN-32).
+- **RN-42.** El resumen completo, con precio y botones, aparece una sola vez, al final.
+- **RN-43.** "Corregir" pregunta qué se cambia; el cliente lo escribe con sus palabras y la IA actualiza la hoja. "Cancelar" descarta la hoja, y el siguiente mensaje empieza de cero.
+- **RN-44.** Al confirmar se crea el pedido "lo antes posible" con `CreacionPedidoService`, y el bot contesta con el folio. Con la flotilla en TEST, el bot avisa que el servicio no está disponible y no lo crea (D3).
+- **RN-45.** Una hoja sin actividad durante 2 horas se descarta.
+- **RN-46.** Después de crear el pedido, el bot no avisa los cambios de estado. Eso es la etapa 7.
 
 ## 7. Datos de Meta verificados
 
@@ -219,6 +237,8 @@ Consultado el 2026-11-05.
 - El formato real de los móviles mexicanos en `wa_id` (`52` o `521`). Se comprueba con mensajes reales.
 - Las restricciones a chatbots de propósito general que reportan fuentes de terceros. No aparecen en la política oficial leída; RN-25 mantiene el bot dentro de lo que sigue permitido en ambos casos.
 - La tarifa exacta por mensaje en México.
+
+**Verificado el 2026-11-09** en la [página de precios](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing): desde el 1 de octubre de 2026, los mensajes del negocio dentro de las 24 horas se cobran por mensaje entregado. Cada número tiene 1,000 gratis al mes. Sin método de pago, Meta deja de entregarlos al agotar ese cupo, así que hay que darlo de alta antes de atender clientes reales.
 
 ## 8. Etapas
 
@@ -247,6 +267,14 @@ La etapa 6 se prueba con una flotilla de prueba en LIVE y el número de prueba, 
 - Las direcciones se ubican con la Geocoding API de Google, con la misma llave de Maps, y solo se aceptan resultados de domicilio (`ROOFTOP` o `RANGE_INTERPOLATED`). La API debe estar habilitada en esa llave.
 - Si el cliente manda varios mensajes antes de que el bot conteste, recibe una sola respuesta con todo (RN-34).
 - Cada respuesta termina avisando que es una prueba y que no se crea el pedido.
+
+**Cómo quedó la etapa 6** (2026-11-09):
+
+- `ConversacionWhatsappService` reemplaza al asistente de la etapa 5. Las frases están en `FrasesBot`.
+- El saludo sale cuando el bot no ha escrito en 12 horas.
+- El cliente se reconoce por los últimos 10 dígitos de su teléfono, sin importar espacios o guiones del Panel. Un cliente nuevo queda con la referencia "Registrado por WhatsApp".
+- Al confirmar, la recogida se guarda entre las direcciones del cliente (alias "WhatsApp"), salvo que ya exista una a menos de unos 20 m.
+- La purga de los 90 días también borra las ubicaciones compartidas.
 
 ## 9. Componentes
 

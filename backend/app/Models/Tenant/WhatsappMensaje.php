@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['id_conversacion', 'wamid', 'direccion', 'tipo', 'texto', 'estado_envio', 'enviado_en', 'respondido_en'])]
+#[Fillable(['id_conversacion', 'wamid', 'direccion', 'tipo', 'texto', 'latitud', 'longitud', 'boton', 'estado_envio', 'enviado_en', 'respondido_en'])]
 class WhatsappMensaje extends Model
 {
     public const ENTRANTE = 'ENTRANTE';
@@ -27,6 +27,8 @@ class WhatsappMensaje extends Model
         return [
             'enviado_en' => 'datetime',
             'respondido_en' => 'datetime',
+            'latitud' => 'float',
+            'longitud' => 'float',
         ];
     }
 

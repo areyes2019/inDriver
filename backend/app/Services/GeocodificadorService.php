@@ -79,6 +79,36 @@ class GeocodificadorService
     }
 
     /**
+     * La dirección más cercana a una ubicación compartida (RN-41), solo para mostrarla. Las
+     * coordenadas ya son exactas, así que si Google no responde se describe como ubicación.
+     */
+    public function direccionDe(float $lat, float $lng): string
+    {
+        $llave = config('services.google_maps.key');
+        $respaldo = 'la ubicación que compartiste';
+
+        if (! is_string($llave) || $llave === '') {
+            return $respaldo;
+        }
+
+        try {
+            $respuesta = Http::timeout(10)->get('https://maps.googleapis.com/maps/api/geocode/json', [
+                'latlng' => "{$lat},{$lng}",
+                'language' => 'es',
+                'key' => $llave,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo geocodificar una ubicación', ['error' => $e->getMessage()]);
+
+            return $respaldo;
+        }
+
+        $direccion = $respuesta->json('results.0.formatted_address');
+
+        return $respuesta->json('status') === 'OK' && is_string($direccion) && $direccion !== '' ? $direccion : $respaldo;
+    }
+
+    /**
      * La cobertura si la flotilla la dibujó; si no, el área de su primera ciudad.
      *
      * @return array{north: float, south: float, east: float, west: float}|null

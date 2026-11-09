@@ -7,18 +7,19 @@ namespace App\Jobs;
 use App\Models\Tenant as TenantModel;
 use App\Models\Tenant\WhatsappMensaje;
 use App\Models\WhatsappNumero;
-use App\Services\Whatsapp\AsistentePedidoWhatsapp;
+use App\Services\Whatsapp\ConversacionWhatsappService;
 use App\Services\Whatsapp\WhatsappClient;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Atiende un mensaje recibido (spec tenant/031). Desde la etapa 5 contesta lo que entendió del
- * pedido y su precio, sin crearlo.
+ * Atiende un mensaje recibido (spec tenant/031). Desde la etapa 6 lleva la conversación con la que
+ * el cliente arma, confirma y crea su envío (`ConversacionWhatsappService`).
  *
  * Va en su propia cola para que una respuesta lenta no retrase `ExpirarOfertaPedido`.
  */
@@ -27,9 +28,6 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public const COLA = 'whatsapp';
-
-    /** RN-32: una ubicación, una foto o un audio no pasan por la IA. */
-    public const RESPUESTA_SIN_TEXTO = 'Por ahora solo leo mensajes de texto. Escríbeme dónde recogemos, dónde entregamos y quién recibe.';
 
     /** Fuera de esta ventana, Meta solo admite plantillas (RN-27). */
     private const VENTANA_HORAS = 24;
@@ -50,7 +48,7 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
         $this->onQueue(self::COLA);
     }
 
-    public function handle(WhatsappClient $cliente, AsistentePedidoWhatsapp $asistente): void
+    public function handle(WhatsappClient $cliente, ConversacionWhatsappService $conversacion): void
     {
         // Mismo cuidado que `ExpirarOfertaPedido`: con `sync` corre dentro de la petición que ya abrió
         // el tenant, y cerrarlo aquí le cortaría el piso.
@@ -61,7 +59,7 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
         }
 
         try {
-            $this->atender($cliente, $asistente);
+            $this->atender($cliente, $conversacion);
         } finally {
             if (! $yaInicializado) {
                 tenancy()->end();
@@ -78,7 +76,7 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
         ]);
     }
 
-    private function atender(WhatsappClient $cliente, AsistentePedidoWhatsapp $asistente): void
+    private function atender(WhatsappClient $cliente, ConversacionWhatsappService $conversacion): void
     {
         $mensaje = WhatsappMensaje::with('conversacion')->find($this->idMensaje);
         $numero = WhatsappNumero::find($this->idNumero);
@@ -103,11 +101,11 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
             return;
         }
 
-        $respuesta = $mensaje->tipo === 'text'
-            ? $asistente->responder($mensaje->conversacion, $this->tenant->telefono)
-            : self::RESPUESTA_SIN_TEXTO;
+        $respuesta = $conversacion->atender($mensaje->conversacion, $this->pendientes($mensaje), $this->tenant->telefono);
 
-        $wamid = $cliente->enviarTexto($numero, $mensaje->conversacion, $respuesta);
+        $wamid = $respuesta->botones === []
+            ? $cliente->enviarTexto($numero, $mensaje->conversacion, $respuesta->texto)
+            : $cliente->enviarBotones($numero, $mensaje->conversacion, $respuesta->texto, $respuesta->botones);
 
         $mensaje->update(['respondido_en' => now()]);
 
@@ -115,10 +113,30 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
             'id_conversacion' => $mensaje->id_conversacion,
             'wamid' => $wamid,
             'direccion' => WhatsappMensaje::SALIENTE,
-            'tipo' => 'text',
-            'texto' => $respuesta,
+            'tipo' => $respuesta->botones === [] ? 'text' : 'interactive',
+            'texto' => $respuesta->texto,
             'enviado_en' => now(),
         ]);
+    }
+
+    /**
+     * RN-34: lo que el cliente mandó desde la última respuesta del bot, incluidos los mensajes que
+     * otros jobs dieron por atendidos para que este los contestara juntos.
+     *
+     * @return Collection<int, WhatsappMensaje>
+     */
+    private function pendientes(WhatsappMensaje $mensaje): Collection
+    {
+        $ultimaRespuesta = WhatsappMensaje::where('id_conversacion', $mensaje->id_conversacion)
+            ->where('direccion', WhatsappMensaje::SALIENTE)
+            ->max('id_mensaje') ?? 0;
+
+        return WhatsappMensaje::where('id_conversacion', $mensaje->id_conversacion)
+            ->where('direccion', WhatsappMensaje::ENTRANTE)
+            ->where('id_mensaje', '>', $ultimaRespuesta)
+            ->where('id_mensaje', '<=', $mensaje->id_mensaje)
+            ->orderBy('id_mensaje')
+            ->get();
     }
 
     private function hayMensajeMasNuevoSinResponder(WhatsappMensaje $mensaje): bool

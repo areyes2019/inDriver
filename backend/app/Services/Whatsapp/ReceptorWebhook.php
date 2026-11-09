@@ -102,11 +102,18 @@ class ReceptorWebhook
         $conversacion->ultimo_mensaje_en = now();
         $conversacion->save();
 
+        $ubicacion = $mensaje['location'] ?? null;
+        $boton = $mensaje['interactive']['button_reply'] ?? null;
+
         $guardado = WhatsappMensaje::firstOrCreate(['wamid' => $wamid], [
             'id_conversacion' => $conversacion->id_conversacion,
             'direccion' => WhatsappMensaje::ENTRANTE,
             'tipo' => (string) ($mensaje['type'] ?? 'desconocido'),
-            'texto' => $mensaje['text']['body'] ?? null,
+            // Un botón guarda su título como texto, para que la conversación se lea completa.
+            'texto' => $mensaje['text']['body'] ?? (is_array($boton) ? ($boton['title'] ?? null) : null),
+            'latitud' => is_array($ubicacion) && is_numeric($ubicacion['latitude'] ?? null) ? (float) $ubicacion['latitude'] : null,
+            'longitud' => is_array($ubicacion) && is_numeric($ubicacion['longitude'] ?? null) ? (float) $ubicacion['longitude'] : null,
+            'boton' => is_array($boton) && is_string($boton['id'] ?? null) ? $boton['id'] : null,
             'enviado_en' => isset($mensaje['timestamp']) ? Carbon::createFromTimestamp((int) $mensaje['timestamp']) : now(),
         ]);
 
