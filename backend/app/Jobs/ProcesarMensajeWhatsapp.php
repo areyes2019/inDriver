@@ -127,8 +127,10 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
      */
     private function pendientes(WhatsappMensaje $mensaje): Collection
     {
+        // Un aviso de estado (etapa 7a) no contesta lo que el cliente escribió.
         $ultimaRespuesta = WhatsappMensaje::where('id_conversacion', $mensaje->id_conversacion)
             ->where('direccion', WhatsappMensaje::SALIENTE)
+            ->where('tipo', '!=', WhatsappMensaje::TIPO_AVISO)
             ->max('id_mensaje') ?? 0;
 
         return WhatsappMensaje::where('id_conversacion', $mensaje->id_conversacion)

@@ -65,6 +65,10 @@ Que el cliente de una flotilla pida un envío escribiendo al número de WhatsApp
 | D16 | Conversación mixta en tono amable y familiar: el primer mensaje pide los datos principales en una lista corta, y después el bot pregunta de uno en uno solo lo que falte. Se eligió sobre "una pregunta a la vez" porque Meta cobra los mensajes del negocio desde octubre de 2026 (2026-11-09) |
 | D17 | Los textos del bot salen de frases fijas con 2 o 3 versiones al azar; la IA no redacta respuestas |
 | D18 | El pedido a medias se guarda en una hoja (`whatsapp_solicitudes`); la IA recibe la hoja y el mensaje nuevo, no todo el chat |
+| D19 | Los pedidos de WhatsApp avisan con texto normal dentro de las 24 horas. Los del Panel avisan solo "repartidor asignado" y "entregado", con plantilla de utilidad, si el cliente aceptó avisos (2026-11-09) |
+| D20 | Las plantillas las da de alta un comando, con el texto exacto que usa el código |
+| D21 | El permiso para avisos se guarda en el cliente, con fecha y quién lo marcó |
+| D22 | La bandeja de conversaciones del Panel se actualiza por el canal en tiempo real que ya usa el Panel |
 
 ## 4. Reglas del dinero
 
@@ -184,8 +188,8 @@ a una persona             │
 ### Política de Meta
 
 - **RN-26.** Siempre debe existir una vía clara para hablar con una persona. Meta la exige al automatizar respuestas.
-- **RN-27.** Fuera de las 24 horas solo se envían plantillas aprobadas. Los avisos de pedido van como plantillas de utilidad, sin promociones.
-- **RN-28.** Los avisos de estado requieren permiso del cliente. El bot lo pide en el flujo y respeta la baja.
+- **RN-27.** Fuera de las 24 horas solo se envían plantillas aprobadas, de utilidad y sin promociones. Desde D19, un aviso de un pedido de WhatsApp con la ventana cerrada no se manda.
+- **RN-28.** Los avisos de estado requieren permiso del cliente (D21) y respetan la baja (RN-51).
 - **RN-29.** El bot nunca pide números completos de tarjeta, de cuenta bancaria o de identificación.
 
 ### Retención y consumo
@@ -212,6 +216,35 @@ La meta de capacidad es de 1,000 conversaciones al día por flotilla (40 por rep
 - **RN-44.** Al confirmar se crea el pedido "lo antes posible" con `CreacionPedidoService`, y el bot contesta con el folio. Con la flotilla en TEST, el bot avisa que el servicio no está disponible y no lo crea (D3).
 - **RN-45.** Una hoja sin actividad durante 2 horas se descarta.
 - **RN-46.** Después de crear el pedido, el bot no avisa los cambios de estado. Eso es la etapa 7.
+
+### Avisos (etapa 7a)
+
+- **RN-47.** Un pedido creado por WhatsApp avisa a quien lo pidió cuando: se asigna repartidor (con su nombre), va en camino a entregar, se entrega, se cancela o cierra por incidencia, y, en contra entrega, cuando va de regreso y cuando se devuelve. "Llegó a recoger" y "llegó a entregar" no se avisan.
+- **RN-48.** Esos avisos van como texto normal y solo si la ventana de 24 horas está abierta (D19).
+- **RN-49.** Un pedido del Panel avisa "repartidor asignado" y "entregado" con plantilla de utilidad, solo si tiene un cliente con teléfono que aceptó avisos. Los demás momentos no se avisan.
+- **RN-50.** El permiso se guarda en el cliente con la fecha y quién lo marcó (D21). En el Panel lo marca un usuario en la ficha del cliente; por WhatsApp queda marcado al confirmar el primer pedido, porque el resumen dice "Te aviso por aquí cómo va tu envío. Si no quieres avisos, escribe BAJA".
+- **RN-51.** Escribir "BAJA" apaga los avisos de ese cliente, y el bot lo confirma. "ALTA" los vuelve a activar. El bot sigue contestando cuando el cliente escribe. Ninguna de las dos pasa por la IA.
+- **RN-52.** Un aviso se manda desde la cola `whatsapp`, nunca dentro del cambio de estado: si Meta falla, el despacho no se entera.
+- **RN-53.** `php artisan whatsapp:crear-plantillas {slug} --waba={id}` da de alta las plantillas en la cuenta de WhatsApp del número de la flotilla y muestra si Meta ya las aprobó (D20). El identificador de la cuenta se guarda y las siguientes veces basta el slug. Un aviso con una plantilla sin aprobar no se manda y queda en la bitácora.
+
+**Cómo quedó la etapa 7a** (2026-11-09):
+
+- El aviso sale del `PedidoObserver` en cada cambio de estado y corre en el job `AvisarEstadoPedido`. Cada momento se registra en `whatsapp_avisos` como enviado, omitido o fallido, y no se repite.
+- Un envío en TEST no avisa a nadie.
+- El texto de las plantillas vive en `PlantillasWhatsapp` (`pedido_asignado_v1`, `pedido_entregado_v1`). Cambiar un texto obliga a cambiar el nombre, porque Meta vuelve a revisarla.
+- Un aviso queda en la conversación del cliente, si existe, pero no cuenta como respuesta a lo que escribió ni como última pregunta para la IA.
+- En la ficha del cliente, la casilla solo se envía si alguien la cambia, para que editar otro dato no registre un permiso que nadie decidió.
+- "STOP" también funciona como "BAJA".
+
+### Bandeja (etapa 7b)
+
+- **RN-54.** La pantalla "Conversaciones" del Panel la ven el administrador de la flotilla y los despachadores.
+- **RN-55.** La lista se ordena por el último mensaje y se actualiza sola (D22). Las conversaciones donde el cliente pidió una persona aparecen marcadas, y el menú muestra cuántas esperan.
+- **RN-56.** Al abrir una conversación se ve todo el historial: textos, ubicaciones como enlace al mapa, botones pulsados y avisos, con el folio del pedido si lo tiene. Un texto de más de 90 días aparece como "(texto borrado)".
+- **RN-57.** Desde la bandeja se contesta con texto, solo dentro de las 24 horas. Fuera de la ventana, el campo se bloquea y explica por qué.
+- **RN-58.** Cuando una persona contesta, el bot se pausa 2 horas en esa conversación. "Devolver al bot" lo reactiva antes.
+- **RN-59.** "Quiero hablar con alguien" marca la conversación, pausa el bot y deja el teléfono de la flotilla, por si nadie ve la bandeja.
+- **RN-60.** No hay sonido ni notificaciones push; solo el contador del menú.
 
 ## 7. Datos de Meta verificados
 
@@ -253,7 +286,8 @@ Cada etapa se detiene hasta el visto bueno del usuario, que la prueba en el sist
 | 4 | Webhook, firma, enrutamiento, guardado | El bot responde "Recibido"; sin IA ni pedidos |
 | 5 | IA y validaciones, sin crear pedidos | El bot dice lo que entendió y el precio; el Panel no recibe nada |
 | 6 | Conversación, confirmación y creación | Al confirmar, el pedido llega al Panel y a la app |
-| 7 | Avisos, bandeja y plantillas | Menú de conversaciones; el cliente recibe avisos |
+| 7a | Avisos, BAJA y plantillas | El cliente recibe avisos de su pedido; "BAJA" los apaga |
+| 7b | Bandeja de conversaciones | Menú de conversaciones en el Panel; el despachador contesta |
 | 8 | Conexión de números por flotilla | Una segunda flotilla se conecta sin cruce de datos |
 
 **Corrección de la etapa 1:** `fecha_servicio`, `hora_desde` y `hora_hasta` se capturan en hora local, pero se leían como UTC. Un agendado de 17:00 a 18:00 en Celaya se publicaba a las 10:45 hora local. Ahora se interpretan con `app.timezone_operacion` (`America/Mexico_City`, una sola zona para todas las flotillas) mediante `App\Support\HoraOperacion`. `app.timezone` sigue en UTC, porque es como están guardadas las demás fechas.

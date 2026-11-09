@@ -13,7 +13,7 @@ use Stancl\Tenancy\Database\Concerns\CentralConnection;
 /**
  * Un número de WhatsApp Business y la flotilla a la que pertenece (spec tenant/031).
  */
-#[Fillable(['phone_number_id', 'id_tenant', 'telefono', 'access_token', 'estado'])]
+#[Fillable(['phone_number_id', 'waba_id', 'id_tenant', 'telefono', 'access_token', 'estado'])]
 #[Hidden(['access_token'])]
 class WhatsappNumero extends Model
 {

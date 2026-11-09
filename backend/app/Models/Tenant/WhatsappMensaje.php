@@ -15,6 +15,9 @@ class WhatsappMensaje extends Model
 
     public const SALIENTE = 'SALIENTE';
 
+    /** Un aviso de estado del pedido: lo manda el sistema, no contesta al cliente (spec tenant/031, 7a). */
+    public const TIPO_AVISO = 'aviso';
+
     protected $table = 'whatsapp_mensajes';
 
     protected $primaryKey = 'id_mensaje';

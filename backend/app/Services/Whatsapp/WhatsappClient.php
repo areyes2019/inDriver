@@ -65,20 +65,91 @@ class WhatsappClient
     }
 
     /**
+     * Un aviso con plantilla aprobada (RN-27 y RN-49). Se manda a un teléfono, porque un pedido del
+     * Panel no siempre tiene conversación.
+     *
+     * @param  list<string>  $variables  En el orden de los `{{n}}` de la plantilla.
+     * @return string El id que Meta le asignó al mensaje.
+     *
+     * @throws RequestException si Meta rechaza el envío, por ejemplo con la plantilla sin aprobar.
+     * @throws RuntimeException si Meta acepta el envío sin devolver un id.
+     */
+    public function enviarPlantilla(WhatsappNumero $numero, string $telefono, string $plantilla, array $variables): string
+    {
+        return $this->enviar($numero, ['to' => $telefono], [
+            'type' => 'template',
+            'template' => [
+                'name' => $plantilla,
+                'language' => ['code' => PlantillasWhatsapp::IDIOMA],
+                'components' => [[
+                    'type' => 'body',
+                    'parameters' => array_map(fn (string $valor) => ['type' => 'text', 'text' => $valor], $variables),
+                ]],
+            ],
+        ]);
+    }
+
+    /**
+     * Da de alta una plantilla de utilidad en la cuenta de WhatsApp (RN-53).
+     *
+     * @param  list<string>  $ejemplo
+     * @return array<string, mixed>
+     *
+     * @throws RequestException
+     */
+    public function crearPlantilla(WhatsappNumero $numero, string $nombre, string $texto, array $ejemplo): array
+    {
+        return Http::withToken($numero->access_token)
+            ->timeout(15)
+            ->post($this->urlGraph("{$numero->waba_id}/message_templates"), [
+                'name' => $nombre,
+                'language' => PlantillasWhatsapp::IDIOMA,
+                'category' => 'UTILITY',
+                'components' => [[
+                    'type' => 'BODY',
+                    'text' => $texto,
+                    'example' => ['body_text' => [$ejemplo]],
+                ]],
+            ])
+            ->throw()
+            ->json();
+    }
+
+    /**
+     * El estado de cada plantilla en Meta: APPROVED, PENDING, REJECTED, PAUSED…
+     *
+     * @return array<string, string> nombre => estado
+     *
+     * @throws RequestException
+     */
+    public function estadoPlantillas(WhatsappNumero $numero): array
+    {
+        $plantillas = Http::withToken($numero->access_token)
+            ->timeout(15)
+            ->get($this->urlGraph("{$numero->waba_id}/message_templates"), ['fields' => 'name,status,language', 'limit' => 100])
+            ->throw()
+            ->json('data') ?? [];
+
+        return collect($plantillas)
+            ->filter(fn ($p) => ($p['language'] ?? null) === PlantillasWhatsapp::IDIOMA)
+            ->mapWithKeys(fn ($p) => [(string) $p['name'] => (string) $p['status']])
+            ->all();
+    }
+
+    /**
+     * @param  WhatsappConversacion|array{to: string}  $destino
      * @param  array<string, mixed>  $contenido
      */
-    private function enviar(WhatsappNumero $numero, WhatsappConversacion $conversacion, array $contenido): string
+    private function enviar(WhatsappNumero $numero, WhatsappConversacion|array $destino, array $contenido): string
     {
-        $url = sprintf(
-            'https://graph.facebook.com/%s/%s/messages',
-            config('services.whatsapp.graph_version'),
-            $numero->phone_number_id,
-        );
+        $url = $this->urlGraph("{$numero->phone_number_id}/messages");
 
         // Meta puede omitir el teléfono de quien adoptó un nombre de usuario (RN-12).
-        $destinatario = $conversacion->telefono !== null
-            ? ['to' => $conversacion->telefono]
-            : ['recipient' => $conversacion->usuario_whatsapp];
+        $destinatario = match (true) {
+            is_array($destino) => $destino,
+            $destino->telefono !== null => ['to' => $destino->telefono],
+            default => ['recipient' => $destino->usuario_whatsapp],
+        };
 
         $respuesta = Http::withToken($numero->access_token)
             ->timeout(15)
@@ -97,5 +168,10 @@ class WhatsappClient
         }
 
         return $wamid;
+    }
+
+    private function urlGraph(string $ruta): string
+    {
+        return sprintf('https://graph.facebook.com/%s/%s', config('services.whatsapp.graph_version'), $ruta);
     }
 }

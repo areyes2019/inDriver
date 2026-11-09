@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Observers;
 
+use App\Jobs\AvisarEstadoPedido;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\Pedido;
 use App\Services\OfertaPedidoService;
@@ -32,6 +33,7 @@ class PedidoObserver
     public function saved(Pedido $pedido): void
     {
         $this->soltarAvisosDiferidos($pedido);
+        $this->avisarPorWhatsapp($pedido);
 
         if (! $pedido->wasChanged('estado') || $pedido->id_conductor === null) {
             return;
@@ -55,6 +57,30 @@ class PedidoObserver
             Log::warning('No se pudo reactivar la cola tras cerrar el envío.', [
                 'id_pedido' => $pedido->id_pedido,
                 'id_conductor' => $pedido->id_conductor,
+                'estado' => $pedido->estado,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * spec tenant/031, etapa 7a: encola el aviso al cliente por WhatsApp. Aquí el estado ya quedó
+     * confirmado, y el envío corre en la cola `whatsapp` (RN-52): ni encolarlo puede tumbar la
+     * transición.
+     */
+    private function avisarPorWhatsapp(Pedido $pedido): void
+    {
+        $tenant = tenant();
+
+        if (! $pedido->wasChanged('estado') || ! isset(AvisarEstadoPedido::MOMENTOS[$pedido->estado]) || $tenant === null) {
+            return;
+        }
+
+        try {
+            AvisarEstadoPedido::dispatch($tenant, $pedido->id_pedido, $pedido->estado);
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo encolar el aviso de WhatsApp del pedido.', [
+                'id_pedido' => $pedido->id_pedido,
                 'estado' => $pedido->estado,
                 'error' => $e->getMessage(),
             ]);

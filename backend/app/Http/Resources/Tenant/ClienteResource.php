@@ -25,6 +25,9 @@ class ClienteResource extends JsonResource
             'email' => $this->email,
             'referencia' => $this->referencia,
             'estado' => $this->estado,
+            'avisos_whatsapp' => $this->avisos_whatsapp,
+            'avisos_whatsapp_en' => $this->avisos_whatsapp_en,
+            'avisos_whatsapp_por' => $this->avisos_whatsapp_por,
             'created_at' => $this->created_at,
         ];
     }

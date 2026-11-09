@@ -18,6 +18,12 @@ const form = reactive({
   referencia: '',
 })
 
+// spec tenant/031, D21: la casilla solo viaja si alguien la cambia, para que editar el teléfono no
+// registre un "no quiere avisos" que nadie decidió.
+const avisosWhatsapp = ref(false)
+const avisosOriginal = ref(false)
+const avisosEvidencia = ref('')
+
 const fieldErrors = reactive<Record<string, string>>({})
 const error = ref('')
 const success = ref('')
@@ -32,6 +38,12 @@ onMounted(async () => {
     form.telefono = cliente.telefono ?? ''
     form.email = cliente.email ?? ''
     form.referencia = cliente.referencia ?? ''
+    avisosWhatsapp.value = cliente.avisos_whatsapp === true
+    avisosOriginal.value = avisosWhatsapp.value
+    if (cliente.avisos_whatsapp_en) {
+      const fecha = new Date(cliente.avisos_whatsapp_en).toLocaleDateString('es-MX')
+      avisosEvidencia.value = `${cliente.avisos_whatsapp ? 'Aceptó' : 'No acepta'} desde el ${fecha} · ${cliente.avisos_whatsapp_por ?? ''}`
+    }
   } catch {
     error.value = 'No se pudo cargar el cliente.'
   } finally {
@@ -46,7 +58,11 @@ async function onSubmit() {
   loading.value = true
 
   try {
-    await http.put(`/t/${slug}/clientes/${clienteId}`, form)
+    const payload =
+      avisosWhatsapp.value !== avisosOriginal.value
+        ? { ...form, avisos_whatsapp: avisosWhatsapp.value }
+        : form
+    await http.put(`/t/${slug}/clientes/${clienteId}`, payload)
     success.value = 'Cliente actualizado correctamente.'
     setTimeout(() => router.push({ name: 'tenant-clientes-lista', params: { slug } }), 1200)
   } catch (err) {
@@ -118,6 +134,26 @@ async function onSubmit() {
             {{ fieldErrors.referencia }}
           </span>
         </label>
+
+        <div class="rounded-lg border border-gray-200 p-3">
+          <label class="flex items-start gap-3">
+            <input
+              v-model="avisosWhatsapp"
+              type="checkbox"
+              class="mt-0.5 h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent"
+            />
+            <span>
+              <span class="block text-sm font-medium text-heading">Acepta avisos por WhatsApp</span>
+              <span class="block text-xs text-gray-500">
+                Solo márcalo si el cliente aceptó. Recibirá "repartidor asignado" y "entregado" de sus envíos.
+              </span>
+              <span v-if="avisosEvidencia" class="mt-1 block text-xs text-gray-400">{{ avisosEvidencia }}</span>
+            </span>
+          </label>
+          <span v-if="fieldErrors.avisos_whatsapp" class="mt-1 block text-sm text-red-600">
+            {{ fieldErrors.avisos_whatsapp }}
+          </span>
+        </div>
 
         <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
         <p v-if="success" class="text-sm text-green-600">{{ success }}</p>

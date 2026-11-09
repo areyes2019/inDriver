@@ -18,6 +18,7 @@ use App\Services\PedidoEstadoService;
 use App\Services\RutaService;
 use App\Services\TarifaService;
 use App\Support\HoraOperacion;
+use App\Support\TelefonoMexicano;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -60,6 +61,15 @@ class ConversacionWhatsappService
     {
         $this->telefonoFlotilla = $telefonoFlotilla;
         $cliente = $this->clienteDe($conversacion);
+
+        // RN-51: va antes que todo, incluso para un cliente inactivo, y sin la IA.
+        $palabra = $this->palabraClave($pendientes);
+
+        if ($palabra !== null) {
+            $cliente?->cambiarAvisosWhatsapp($palabra === 'ALTA', 'Cliente por WhatsApp ('.$palabra.')');
+
+            return $this->texto($palabra === 'ALTA' ? 'alta' : 'baja');
+        }
 
         // RN-15.
         if ($cliente?->estado === 'Inactivo') {
@@ -174,9 +184,26 @@ class ConversacionWhatsappService
         $solicitud->save();
 
         return new RespuestaBot(
-            mb_substr($this->resumen($solicitud), 0, 1024),
+            mb_substr($this->resumen($solicitud, $cliente?->avisos_whatsapp !== false), 0, 1024),
             [self::BOTON_CONFIRMAR => 'Confirmar', self::BOTON_CORREGIR => 'Corregir', self::BOTON_CANCELAR => 'Cancelar'],
         );
+    }
+
+    /**
+     * "BAJA" o "ALTA" escritas solas, sin importar mayúsculas, acentos de más ni signos.
+     *
+     * @param  Collection<int, WhatsappMensaje>  $pendientes
+     */
+    private function palabraClave(Collection $pendientes): ?string
+    {
+        $ultimo = $pendientes->last(fn (WhatsappMensaje $m) => $m->tipo === 'text' && $m->texto !== null);
+        $palabra = mb_strtoupper(trim((string) preg_replace('/[^\p{L}]+/u', '', (string) $ultimo?->texto)));
+
+        return match ($palabra) {
+            'BAJA', 'STOP' => 'BAJA',
+            'ALTA' => 'ALTA',
+            default => null,
+        };
     }
 
     /** El dato que pregunta cada paso, para saber si un aviso ya lo cubre. */
@@ -441,7 +468,7 @@ class ConversacionWhatsappService
         return true;
     }
 
-    private function resumen(WhatsappSolicitud $solicitud): string
+    private function resumen(WhatsappSolicitud $solicitud, bool $conAvisos): string
     {
         $paga = $solicitud->quien_paga === ExtraccionPedido::PAGA_REMITENTE ? 'tú' : $solicitud->destinatario_nombre;
         $lineas = [
@@ -463,6 +490,12 @@ class ConversacionWhatsappService
             $lineas[] = '';
             // D9, D10 y RN-09.
             $lineas[] = "Al recoger, el repartidor te adelanta {$this->pesos($producto)} por el producto. Si {$solicitud->destinatario_nombre} no paga, te regresa el paquete y tú le devuelves {$this->pesos($producto + (float) $solicitud->importe_envio + $regreso)}: el adelanto, el envío y {$this->pesos($regreso)} por el regreso.";
+        }
+
+        // RN-50: confirmar con este aviso a la vista es dar el permiso.
+        if ($conAvisos) {
+            $lineas[] = '';
+            $lineas[] = $this->frases->decir('resumen_avisos');
         }
 
         $lineas[] = '';
@@ -534,6 +567,11 @@ class ConversacionWhatsappService
 
         WhatsappSolicitud::whereKey($solicitud->id_solicitud)->update(['id_pedido' => $pedido->id_pedido]);
         $this->guardarDireccion($cliente, $solicitud);
+
+        // RN-50: el primer pedido confirmado da el permiso; un "BAJA" anterior se respeta.
+        if ($cliente !== null && $cliente->avisos_whatsapp === null) {
+            $cliente->cambiarAvisosWhatsapp(true, 'Cliente por WhatsApp al confirmar su pedido');
+        }
 
         return $this->texto('confirmado', ['folio' => $pedido->numero_pedido]);
     }
@@ -716,6 +754,7 @@ class ConversacionWhatsappService
     {
         return $conversacion->mensajes()
             ->where('direccion', WhatsappMensaje::SALIENTE)
+            ->where('tipo', '!=', WhatsappMensaje::TIPO_AVISO)
             ->latest('id_mensaje')
             ->value('texto');
     }
@@ -728,14 +767,9 @@ class ConversacionWhatsappService
             ->exists();
     }
 
-    /**
-     * Acepta 10 dígitos, o 12 y 13 con lada de país (`52` y el `521` de los móviles viejos).
-     */
     private function telefonoMexicano(string $telefono): ?string
     {
-        $digitos = preg_replace('/\D+/', '', $telefono) ?? '';
-
-        return preg_match('/^(?:521|52)?(\d{10})$/', $digitos, $partes) === 1 ? $partes[1] : null;
+        return TelefonoMexicano::diezDigitos($telefono);
     }
 
     /**

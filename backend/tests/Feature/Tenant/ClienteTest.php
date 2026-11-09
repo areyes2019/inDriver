@@ -221,3 +221,30 @@ it('throttles clientes listing after 20 attempts per minute', function () {
         ->getJson('/api/v1/t/cafe-luna/clientes')
         ->assertStatus(429);
 });
+
+// spec tenant/031, D21 y RN-50: el permiso para avisos por WhatsApp se guarda con su evidencia, y
+// editar otro dato no lo toca.
+it('guarda el permiso para avisos por WhatsApp con fecha y quién lo marcó', function () {
+    $tenant = makeClienteTenant();
+    $admin = makeClienteAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $cliente = Cliente::create(['nombre' => 'Juan Pérez', 'estado' => 'Activo']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->putJson("/api/v1/t/cafe-luna/clientes/{$cliente->id_cliente}", ['nombre' => 'Juan Pérez', 'telefono' => '4611234567'])
+        ->assertOk()
+        ->assertJsonPath('avisos_whatsapp', null);
+
+    $this->actingAs($admin, 'usuario')
+        ->putJson("/api/v1/t/cafe-luna/clientes/{$cliente->id_cliente}", ['nombre' => 'Juan Pérez', 'avisos_whatsapp' => true])
+        ->assertOk()
+        ->assertJsonPath('avisos_whatsapp', true);
+
+    tenancy()->initialize($tenant);
+    $cliente->refresh();
+    expect($cliente->avisos_whatsapp_en)->not->toBeNull()
+        ->and($cliente->avisos_whatsapp_por)->toContain("usuario {$admin->id_usuario}");
+    tenancy()->end();
+});

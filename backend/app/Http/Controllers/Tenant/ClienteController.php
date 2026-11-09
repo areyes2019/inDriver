@@ -41,9 +41,11 @@ class ClienteController extends Controller
             'telefono' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
             'referencia' => ['nullable', 'string', 'max:255'],
+            'avisos_whatsapp' => ['sometimes', 'boolean'],
         ]);
 
-        $cliente = Cliente::create([...$data, 'estado' => 'Activo']);
+        $cliente = Cliente::create([...collect($data)->except('avisos_whatsapp')->all(), 'estado' => 'Activo']);
+        $this->guardarPermisoDeAvisos($request, $cliente, $data);
 
         Auditoria::create([
             'id_usuario' => $request->user('usuario')->id_usuario,
@@ -62,9 +64,11 @@ class ClienteController extends Controller
             'telefono' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
             'referencia' => ['nullable', 'string', 'max:255'],
+            'avisos_whatsapp' => ['sometimes', 'boolean'],
         ]);
 
-        $cliente->update($data);
+        $cliente->update(collect($data)->except('avisos_whatsapp')->all());
+        $this->guardarPermisoDeAvisos($request, $cliente, $data);
 
         Auditoria::create([
             'id_usuario' => $request->user('usuario')->id_usuario,
@@ -89,5 +93,21 @@ class ClienteController extends Controller
         ]);
 
         return response()->json(new ClienteResource($cliente));
+    }
+
+    /**
+     * spec tenant/031, D21 y RN-50: el permiso para avisos por WhatsApp se guarda con la fecha y
+     * quién lo marcó, como evidencia de que el cliente aceptó.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function guardarPermisoDeAvisos(Request $request, Cliente $cliente, array $data): void
+    {
+        if (! array_key_exists('avisos_whatsapp', $data)) {
+            return;
+        }
+
+        $usuario = $request->user('usuario');
+        $cliente->cambiarAvisosWhatsapp((bool) $data['avisos_whatsapp'], "Panel: {$usuario->nombre} (usuario {$usuario->id_usuario})");
     }
 }

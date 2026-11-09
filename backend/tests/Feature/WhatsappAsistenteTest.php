@@ -411,3 +411,35 @@ it('la salida de la IA se vuelve a validar', function () {
 
     expect(fn () => $extractor->interpretar('esto no es JSON'))->toThrow(ExtraccionFallida::class);
 });
+
+it('BAJA apaga los avisos y ALTA los enciende, sin pasar por la IA', function () {
+    $cliente = Cliente::create(['nombre' => 'Abdias', 'telefono' => '4613581090', 'estado' => 'Activo']);
+    $this->mock(ExtractorPedidoIA::class)->shouldNotReceive('extraer');
+
+    $baja = clienteEscribe($this->conversacion, ['texto' => ' baja. ']);
+    expect($baja->texto)->toContain('ya no te mandaremos avisos')
+        ->and($cliente->fresh()->avisos_whatsapp)->toBeFalse()
+        ->and($cliente->fresh()->avisos_whatsapp_por)->toContain('BAJA');
+
+    expect(clienteEscribe($this->conversacion, ['texto' => 'ALTA'])->texto)->toContain('Te volveremos a avisar')
+        ->and($cliente->fresh()->avisos_whatsapp)->toBeTrue();
+});
+
+it('el resumen avisa cómo darse de baja y confirmar da el permiso, salvo un BAJA anterior', function () {
+    $cliente = Cliente::create(['nombre' => 'Abdias', 'telefono' => '4613581090', 'estado' => 'Activo']);
+    iaDevuelve(pedidoCompleto());
+
+    $resumen = clienteEscribe($this->conversacion, ['texto' => 'Todo el pedido']);
+    pulsa($this->conversacion, 'confirmar');
+
+    expect($resumen->texto)->toContain('Si no quieres avisos, escribe BAJA')
+        ->and($cliente->fresh()->avisos_whatsapp)->toBeTrue();
+
+    $cliente->cambiarAvisosWhatsapp(false, 'BAJA');
+    iaDevuelve(pedidoCompleto());
+    $otro = clienteEscribe($this->conversacion, ['texto' => 'Otro pedido']);
+    pulsa($this->conversacion, 'confirmar');
+
+    expect($otro->texto)->not->toContain('escribe BAJA')
+        ->and($cliente->fresh()->avisos_whatsapp)->toBeFalse();
+});

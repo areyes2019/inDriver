@@ -133,6 +133,42 @@ class FrasesBot
         'solo_texto' => [
             'Por ahora solo leo mensajes de texto y ubicaciones. ¿Me lo escribes, porfa?',
         ],
+        'resumen_avisos' => [
+            'Te aviso por aquí cómo va tu envío. Si no quieres avisos, escribe BAJA.',
+        ],
+        'baja' => [
+            'Listo, ya no te mandaremos avisos de tus envíos. Si los quieres de nuevo, escribe ALTA.',
+        ],
+        'alta' => [
+            '¡Listo! Te volveremos a avisar por aquí cómo van tus envíos.',
+        ],
+
+        // Avisos de estado (RN-47).
+        'aviso_asignado' => [
+            '🏍️ ¡Ya tenemos moto! {repartidor} va por el paquete de tu envío {folio}.',
+            '🏍️ {repartidor} ya va por el paquete de tu envío {folio}.',
+        ],
+        'aviso_en_camino' => [
+            '📦 Tu envío {folio} ya va en camino con {destinatario}.',
+            '📦 ¡Va en camino! Tu envío {folio} ya salió rumbo a {destinatario}.',
+        ],
+        'aviso_entregado' => [
+            '✅ Tu envío {folio} ya fue entregado. ¡Gracias!',
+            '✅ ¡Entregado! Tu envío {folio} ya llegó con {destinatario}.',
+        ],
+        'aviso_cancelado' => [
+            'Tu envío {folio} se canceló. {contacto}',
+        ],
+        'aviso_incidencia' => [
+            'Hubo un problema con tu envío {folio}. {contacto}',
+        ],
+        'aviso_en_regreso' => [
+            '{destinatario} no pagó, así que el repartidor te regresa el paquete del envío {folio}. Al recibirlo le pagas {total}.',
+        ],
+        'aviso_devuelto' => [
+            'El paquete de tu envío {folio} ya te fue devuelto.',
+        ],
+
         'contacto_con_telefono' => [
             'Puedes hablar con una persona de la flotilla al {telefono}.',
         ],
