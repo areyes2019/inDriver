@@ -44,7 +44,11 @@ const cobroAlVendedor = computed(() => {
   const viaje = props.viaje
   if (viaje === null || (viaje.estado !== 'EN_REGRESO' && viaje.estado !== 'DEVUELTO')) return null
 
-  return Number(viaje.importe_cobro ?? 0) + Number(viaje.importe_envio ?? 0) + Number(viaje.tarifa_regreso ?? 0)
+  return (
+    Number(viaje.importe_cobro ?? 0) +
+    Number(viaje.importe_envio ?? 0) +
+    Number(viaje.tarifa_regreso ?? 0)
+  )
 })
 
 const cancelable = computed(() => (props.viaje ? sePuedeCancelar(props.viaje.estado) : false))
@@ -114,8 +118,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 <template>
   <aside
-    class="fixed left-0 top-[4.25rem] z-[35] flex h-[calc(100vh-4.25rem)] w-[20%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
-    :class="viaje ? 'translate-x-0' : '-translate-x-full'"
+    class="fixed left-(--riel-ocupado) top-(--alto-banda) z-[35] flex h-[calc(100vh-var(--alto-banda))] w-[20%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
+    :class="viaje ? 'translate-x-0' : '-translate-x-[calc(100%+var(--riel-ocupado))]'"
     aria-label="Detalle del envío"
   >
     <header class="flex items-start justify-between gap-3 border-b border-default px-5 py-4">

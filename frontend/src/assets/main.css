@@ -11,6 +11,13 @@
   --color-accent-hover: #4f46e5;
   --color-accent-soft: #eef0ff;
 
+  /* Menú lateral del tenant (spec tenant/032). */
+  --color-sidebar: #192a56;
+  --color-sidebar-hover: #23376b;
+  --color-sidebar-activo: #2e4580;
+  --color-sidebar-borde: #2b3d6e;
+  --color-sidebar-texto: #c7d0e8;
+
   --color-warning-bg: #fef3c7;
   --color-warning-text: #92400e;
   --color-info-bg: #dbeafe;

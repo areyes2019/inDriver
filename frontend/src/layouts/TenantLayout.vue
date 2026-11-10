@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import UiAmbienteSwitch from '@/components/ui/UiAmbienteSwitch.vue'
-import UiNavbar from '@/components/ui/UiNavbar.vue'
+import UiSidebar, { type ItemSidebar } from '@/components/ui/UiSidebar.vue'
 import http from '@/lib/http'
 import realtimeService from '@/services/realtime'
 import { useAmbienteStore } from '@/stores/ambiente'
@@ -12,9 +12,9 @@ const props = withDefaults(
   defineProps<{
     nuevaEntregaAbierta?: boolean
     /**
-     * spec tenant/023: solo el Panel lo activa. Saca al `<main>` del carril centrado de 1280px con
-     * padding para que el mapa llegue a los bordes de la ventana; el resto de las pantallas del
-     * tenant conserva el carril.
+     * spec tenant/023 y tenant/032: solo el Panel lo activa. Saca al `<main>` del carril centrado de
+     * 1280px y de todo relleno, para que el mapa llegue a los cuatro bordes de la ventana, también
+     * por detrás del menú lateral; el resto de las pantallas del tenant conserva el carril.
      */
     anchoCompleto?: boolean
   }>(),
@@ -55,7 +55,7 @@ watch(
 const esOperativo = computed(() => auth.esOperativo)
 const mostrarNuevaEntrega = computed(() => enPanel.value && esOperativo.value)
 
-const botonNuevaEntregaRef = ref<HTMLButtonElement>()
+const sidebarRef = ref<InstanceType<typeof UiSidebar>>()
 
 // spec tenant/031, RN-55 y RN-60: cuántas conversaciones de WhatsApp esperan a una persona. Sin
 // sonido ni push: solo el número en el menú, que se mueve con cada aviso del canal del Panel.
@@ -95,7 +95,7 @@ onUnmounted(() => {
 
 onMounted(() => {
   if (mostrarNuevaEntrega.value) {
-    nextTick(() => botonNuevaEntregaRef.value?.focus())
+    nextTick(() => sidebarRef.value?.focusAccion())
   }
 })
 
@@ -107,43 +107,90 @@ function onNuevaEntregaKeydown(event: KeyboardEvent) {
 }
 
 defineExpose({
-  focusNuevaEntrega: () => botonNuevaEntregaRef.value?.focus(),
+  focusNuevaEntrega: () => sidebarRef.value?.focusAccion(),
 })
 
-const items = computed(() => {
-  const conversaciones = {
+// Destinos del menú lateral (spec tenant/032), con las mismas reglas de rol que tenía la barra
+// superior. Panel es exacto: todas las demás rutas del tenant empiezan con `/panel`.
+const items = computed<ItemSidebar[]>(() => {
+  const panel: ItemSidebar = {
+    label: 'Panel',
+    to: `/${slug.value}/panel`,
+    icon: 'tabler:map',
+    exacto: true,
+  }
+  // Icono provisional: la forma final de Conversaciones en el menú está pendiente (spec 032, §10).
+  const conversaciones: ItemSidebar = {
     label: 'Conversaciones',
     to: `/${slug.value}/panel/conversaciones`,
+    icon: 'tabler:messages',
     badge: esperando.value,
   }
 
   if (esDespachador.value) {
-    return esOperativo.value
-      ? [{ label: 'Panel', to: `/${slug.value}/panel` }, conversaciones]
-      : [conversaciones]
+    return esOperativo.value ? [panel, conversaciones] : [conversaciones]
   }
 
-  const lista: Array<{ label: string; to: string; badge?: number }> = []
+  const lista: ItemSidebar[] = []
 
   if (esOperativo.value) {
-    lista.push({ label: 'Panel', to: `/${slug.value}/panel` })
+    lista.push(panel)
   }
 
   lista.push(conversaciones)
 
   lista.push(
-    { label: 'Clientes', to: `/${slug.value}/panel/clientes` },
-    { label: 'Usuarios', to: `/${slug.value}/panel/usuarios` },
+    { label: 'Clientes', to: `/${slug.value}/panel/clientes`, icon: 'tabler:user' },
+    { label: 'Usuarios', to: `/${slug.value}/panel/usuarios`, icon: 'tabler:users' },
   )
 
   if (usaDespachadores.value) {
-    lista.push({ label: 'Despachadores', to: `/${slug.value}/panel/despachadores` })
+    lista.push({
+      label: 'Despachadores',
+      to: `/${slug.value}/panel/despachadores`,
+      icon: 'tabler:headset',
+    })
   }
 
-  lista.push({ label: 'Conductores', to: `/${slug.value}/panel/conductores` })
+  lista.push({
+    label: 'Conductores',
+    to: `/${slug.value}/panel/conductores`,
+    icon: 'tabler:steering-wheel',
+  })
 
   return lista
 })
+
+const accionNuevaEntrega = computed(() =>
+  mostrarNuevaEntrega.value
+    ? { label: 'Nueva Entrega', icon: 'tabler:plus', expandida: props.nuevaEntregaAbierta }
+    : null,
+)
+
+const usuarioMenu = computed(() => {
+  const usuario = auth.usuario
+  if (!usuario) return null
+
+  return {
+    nombre: `${usuario.nombre} ${usuario.apellido_paterno}`,
+    correo: usuario.email,
+    iniciales: `${usuario.nombre.charAt(0)}${usuario.apellido_paterno.charAt(0)}`.toUpperCase(),
+  }
+})
+
+// Medidas del riel (spec tenant/032, §5). Los paneles del Panel las leen para colocarse junto al
+// riel y debajo de la banda de "Modo prueba".
+const variablesRiel = computed(() => ({
+  '--riel-ancho': '4rem',
+  '--riel-ancho-abierto': '15rem',
+  '--riel-margen': '0.75rem',
+  '--riel-ocupado': 'calc(var(--riel-ancho) + 2 * var(--riel-margen))',
+  '--alto-banda': ambientes.esTest ? '1.25rem' : '0px',
+}))
+
+function onCambiarPassword() {
+  router.push({ name: 'tenant-cambiar-password', params: { slug: slug.value } })
+}
 
 async function onLogout() {
   await auth.logout()
@@ -158,52 +205,48 @@ function onClickConfiguracion() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-black/[0.03]">
+  <div class="min-h-screen bg-black/[0.03]" :style="variablesRiel">
     <!--
-      spec tenant/025: en TEST, una banda a lo ancho de la ventana. El interruptor de la cabecera
-      es discreto por diseño, y confundir la pantalla de pruebas con la de operación real es
-      justamente lo que no puede pasar: los envíos de prueba descuentan saldo de verdad.
+      spec tenant/025: en TEST, una banda a lo ancho de la ventana, por encima de todo. El
+      interruptor del menú es discreto por diseño, y confundir la pantalla de pruebas con la de
+      operación real es justamente lo que no puede pasar: los envíos de prueba descuentan saldo de
+      verdad. Mide `--alto-banda`, y el menú y los paneles empiezan debajo de ella (spec 032).
     -->
     <div
       v-if="ambientes.esTest"
-      class="fixed inset-x-0 top-0 z-50 bg-amber-400 py-0.5 text-center text-xs font-semibold uppercase tracking-wider text-amber-950"
+      class="fixed inset-x-0 top-0 z-50 flex h-(--alto-banda) items-center justify-center bg-amber-400 text-xs font-semibold uppercase tracking-wider text-amber-950"
     >
       Modo prueba — los envíos que crees aquí son simulados
     </div>
-    <UiNavbar logo-text="inDriver" :items="items" @click-configuracion="onClickConfiguracion">
-      <template #actions>
-        <UiAmbienteSwitch :slug="slug" :editable="esAdminCliente" />
-        <button
-          v-if="mostrarNuevaEntrega"
-          ref="botonNuevaEntregaRef"
-          type="button"
-          :aria-expanded="nuevaEntregaAbierta"
-          class="rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
-          @click="emit('toggle-nueva-entrega')"
-          @keydown="onNuevaEntregaKeydown"
-        >
-          Nueva Entrega
-        </button>
-        <span v-if="auth.usuario" class="text-sm text-body">
-          {{ auth.usuario.nombre }} {{ auth.usuario.apellido_paterno }}
-        </span>
-        <button
-          type="button"
-          class="rounded-lg border border-default bg-neutral-primary px-3 py-1.5 text-sm font-medium text-heading hover:bg-black/5"
-          @click="onLogout"
-        >
-          Cerrar sesión
-        </button>
-      </template>
-    </UiNavbar>
-    <main
-      :class="
-        anchoCompleto
-          ? 'pt-[4.25rem]'
-          : 'mx-auto max-w-screen-xl px-4 pb-4 pt-[5.25rem] md:px-8 md:pb-8 md:pt-[6.25rem]'
-      "
+    <!-- Menú lateral en lugar de la barra superior: tenant/032-menu-lateral.md -->
+    <UiSidebar
+      ref="sidebarRef"
+      logo-text="inDriver"
+      :items="items"
+      :accion="accionNuevaEntrega"
+      :usuario="usuarioMenu"
+      @accion="emit('toggle-nueva-entrega')"
+      @accion-teclado="onNuevaEntregaKeydown"
+      @configuracion="onClickConfiguracion"
+      @cambiar-password="onCambiarPassword"
+      @cerrar-sesion="onLogout"
     >
+      <template #pie="{ abierto }">
+        <UiAmbienteSwitch :slug="slug" :editable="esAdminCliente" :compacto="!abierto" />
+      </template>
+    </UiSidebar>
+    <!--
+      Sin barra superior no hay franja que reservar arriba: solo la banda de TEST (`--alto-banda`)
+      y, a la izquierda, el riel cerrado (`--riel-ocupado`). El Panel no lleva relleno: el mapa va
+      de borde a borde, también por detrás del riel.
+    -->
+    <main v-if="anchoCompleto">
       <slot />
+    </main>
+    <main v-else class="pl-(--riel-ocupado) pt-(--alto-banda)">
+      <div class="mx-auto max-w-screen-xl p-4 md:p-8">
+        <slot />
+      </div>
     </main>
   </div>
 </template>

@@ -31,7 +31,7 @@ const texto = computed(() => {
   <!-- Centrada en la franja superior del mapa, entre los dos paneles laterales (spec 007, RN-A5): mismo
        z-index que la flotilla, por debajo de la navbar y de los paneles deslizantes, que pueden taparla. -->
   <div
-    class="fixed left-1/2 top-[4.75rem] z-30 -translate-x-1/2"
+    class="fixed left-1/2 top-[calc(var(--alto-banda)+0.5rem)] z-30 -translate-x-1/2"
     role="status"
     aria-live="polite"
     data-testid="saldo-viajes-tenant"

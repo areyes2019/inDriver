@@ -108,7 +108,7 @@ function onTransitionEnd(event: TransitionEvent) {
 
 <template>
   <aside
-    class="panel-deslizante fixed right-0 top-[4.25rem] z-30 flex h-[calc(100vh-4.25rem)] w-[20%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
+    class="panel-deslizante fixed right-0 top-(--alto-banda) z-30 flex h-[calc(100vh-var(--alto-banda))] w-[20%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
     :class="colapsado ? 'translate-x-full' : 'translate-x-0'"
     @transitionend="onTransitionEnd"
   >

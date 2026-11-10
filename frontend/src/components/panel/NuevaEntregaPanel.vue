@@ -262,11 +262,11 @@ async function onSubmit() {
 
 <template>
   <aside
-    class="fixed left-0 top-0 z-[35] flex h-screen w-[45%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
-    :class="abierto ? 'translate-x-0' : '-translate-x-full'"
+    class="fixed left-(--riel-ocupado) top-(--alto-banda) z-[35] flex h-[calc(100vh-var(--alto-banda))] w-[45%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
+    :class="abierto ? 'translate-x-0' : '-translate-x-[calc(100%+var(--riel-ocupado))]'"
     @keydown="onKeydown"
   >
-    <header class="border-b border-default px-5 pb-4 pt-[4.25rem]">
+    <header class="border-b border-default px-5 pb-4 pt-5">
       <h2 class="text-base font-semibold text-heading">Nueva Entrega</h2>
     </header>
 
@@ -301,7 +301,9 @@ async function onSubmit() {
         </label>
 
         <label class="block">
-          <span class="mb-1 block text-sm font-medium text-heading">📞 Teléfono de quien recibe</span>
+          <span class="mb-1 block text-sm font-medium text-heading"
+            >📞 Teléfono de quien recibe</span
+          >
           <input
             v-model="form.telefono_solicitante"
             type="tel"

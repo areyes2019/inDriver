@@ -89,10 +89,10 @@ function onColapsoTerminado() {
     :nueva-entrega-abierta="nuevaEntregaAbierta"
     @toggle-nueva-entrega="alternarNuevaEntrega"
   >
-    <!-- Columna izquierda (viajes en turno), fija sobre el 20% izquierdo: tenant/008-servicios.md, tenant/012-datos-reales-servicios-en-turno.md -->
+    <!-- Columna izquierda (viajes en turno), fija junto al menú lateral, 20% de ancho: tenant/008-servicios.md, tenant/012-datos-reales-servicios-en-turno.md -->
     <ServiciosEnTurno :seleccionado-id="idViajeSeleccionado" @seleccionar="onSeleccionarViaje" />
-    <!-- Mapa de fondo, a toda la ventana bajo la navbar; los dos paneles flotan encima: tenant/009-mapa.md, tenant/023-rediseno-panel-flotilla.md -->
-    <div class="h-[calc(100vh-4.25rem)] w-full">
+    <!-- Mapa de fondo, a toda la ventana de borde a borde (también por detrás del menú lateral); los paneles flotan encima: tenant/009-mapa.md, tenant/023-rediseno-panel-flotilla.md, tenant/032-menu-lateral.md -->
+    <div class="h-screen w-screen">
       <MapaConductores ref="mapaRef" />
     </div>
     <!-- Saldo de viajes del tenant, píldora fija centrada sobre el mapa: tenant/007-panel-despachador.md (ampliación "vista principal"), tenant/027 §12 -->

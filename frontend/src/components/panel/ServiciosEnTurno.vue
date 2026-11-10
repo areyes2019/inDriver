@@ -127,7 +127,7 @@ const filas = computed<Fila[]>(() =>
 
 <template>
   <aside
-    class="fixed left-0 top-[4.25rem] z-30 flex h-[calc(100vh-4.25rem)] w-[20%] flex-col bg-white shadow-xl"
+    class="fixed left-(--riel-ocupado) top-(--alto-banda) z-30 flex h-[calc(100vh-var(--alto-banda))] w-[20%] flex-col bg-white shadow-xl"
   >
     <header class="flex items-center gap-2 border-b border-default bg-white px-5 py-4">
       <h2 class="text-base font-semibold text-heading">Viajes en turno</h2>

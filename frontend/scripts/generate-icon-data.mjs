@@ -1,15 +1,16 @@
 // Extrae solo los íconos de Iconify que la app realmente usa desde las colecciones completas
-// (@iconify-json/flat-color-icons, @iconify-json/fluent-color) y los guarda en
+// (@iconify-json/flat-color-icons, @iconify-json/fluent-color, @iconify-json/tabler) y los guarda en
 // src/assets/icon-data.json. Ese archivo chico es el que se importa en tiempo de ejecución —
 // las colecciones completas (miles de íconos) nunca llegan al bundle de producción.
 //
 // Para agregar un ícono nuevo: agrega su nombre a FLAT_COLOR_ICON_NAMES o
-// FLUENT_COLOR_ICON_NAMES abajo y vuelve a correr `npm run icons:build`.
+// FLUENT_COLOR_ICON_NAMES o TABLER_ICON_NAMES abajo y vuelve a correr `npm run icons:build`.
 import { writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { getIconData } from '@iconify/utils'
 import flatColorIcons from '@iconify-json/flat-color-icons/icons.json' with { type: 'json' }
 import fluentColor from '@iconify-json/fluent-color/icons.json' with { type: 'json' }
+import tabler from '@iconify-json/tabler/icons.json' with { type: 'json' }
 
 const FLAT_COLOR_ICON_NAMES = [
   'menu',
@@ -38,6 +39,24 @@ const FLAT_COLOR_ICON_NAMES = [
 // un pin de ubicación).
 const FLUENT_COLOR_ICON_NAMES = ['alert-badge-24', 'pin-24']
 
+// tabler: iconos de línea de un solo color para el menú lateral oscuro (spec tenant/032). Los
+// iconos a color de las otras dos colecciones chocan con ese fondo.
+const TABLER_ICON_NAMES = [
+  'map',
+  'messages',
+  'user',
+  'users',
+  'headset',
+  'steering-wheel',
+  'settings',
+  'plus',
+  'key',
+  'logout',
+  'bolt',
+  'layout-sidebar-left-expand',
+  'layout-sidebar-left-collapse',
+]
+
 const output = {}
 
 for (const name of FLAT_COLOR_ICON_NAMES) {
@@ -50,6 +69,12 @@ for (const name of FLUENT_COLOR_ICON_NAMES) {
   const data = getIconData(fluentColor, name)
   if (!data) throw new Error(`Ícono no encontrado en fluent-color: ${name}`)
   output[`fluent-color:${name}`] = data
+}
+
+for (const name of TABLER_ICON_NAMES) {
+  const data = getIconData(tabler, name)
+  if (!data) throw new Error(`Ícono no encontrado en tabler: ${name}`)
+  output[`tabler:${name}`] = data
 }
 
 const outPath = fileURLToPath(new URL('../src/assets/icon-data.json', import.meta.url))
