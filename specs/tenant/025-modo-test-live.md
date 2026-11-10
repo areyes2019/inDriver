@@ -22,7 +22,8 @@ son todos reales; lo único simulado es de dónde salen las coordenadas.**
 
 Deja funcionando:
 
-- Un interruptor TEST/LIVE por tenant en la cabecera del Panel, al estilo Facturapi/Stripe.
+- Un interruptor TEST/LIVE por tenant en el pie del menú lateral (spec 032), al estilo
+  Facturapi/Stripe.
 - Cada envío sella su ambiente al nacer y lo conserva para siempre.
 - En TEST, cuando el conductor acepta desde su app real, el servidor lo desplaza por una ruta real
   de calles a 120 km/h, desde donde está hasta la recogida y de la recogida a la entrega.
@@ -197,8 +198,8 @@ que en LIVE: son acciones humanas, no llegadas geográficas.
 
 - **RN-01**: El ambiente es por tenant, vive en `configuraciones_tenant` bajo la clave `ambiente`, y
   por omisión es `live`. Es persistente entre sesiones.
-- **RN-02**: Solo el AdminCliente puede cambiarlo. El Despachador lo ve en la cabecera y no puede
-  moverlo.
+- **RN-02**: Solo el AdminCliente puede cambiarlo. El Despachador lo ve en el menú lateral y no
+  puede moverlo.
 - **RN-03**: Un envío sella `pedidos.ambiente` en el momento de crearse, copiando el switch de ese
   instante. Es inmutable: no existe forma de convertir un TEST en LIVE ni al revés.
 - **RN-04**: Cambiar el switch no altera ningún envío ya creado, ni siquiera los que están en curso.
@@ -278,9 +279,11 @@ que en LIVE: son acciones humanas, no llegadas geográficas.
 
 - **`stores/ambiente.ts`** (nuevo): estado del switch, carga desde `GET /configuracion` y lo cambia
   con `PUT /configuracion/ambiente`.
-- **`layouts/TenantLayout.vue`**: interruptor TEST/LIVE en la cabecera, siempre visible. En TEST,
-  banda de color a lo ancho del Panel para que nadie confunda la pantalla con la de operación real.
-  Deshabilitado si el rol no es AdminCliente.
+- **`layouts/TenantLayout.vue`**: interruptor TEST/LIVE en el pie del menú lateral, siempre
+  visible: compacto con el menú cerrado y completo con el menú abierto (spec 032). En TEST, banda de
+  color a lo ancho de la ventana, por encima de todo, para que nadie confunda la pantalla con la de
+  operación real; el menú y los paneles empiezan debajo de ella (`--alto-banda`). Deshabilitado si
+  el rol no es AdminCliente.
 - **Listados de envíos**: sin cambios. El filtrado ocurre en el servidor por el global scope.
 
 ## Frontend (`panda_express`)
@@ -340,8 +343,8 @@ Sin cambios de ningún tipo.
 
 1. El switch es por tenant, no global del sistema: cada empresa cliente decide su ambiente sin
    afectar a las demás.
-2. Vive en la cabecera del Panel, siempre visible, con banda de color en TEST — modelo
-   Facturapi/Stripe.
+2. Vive en el pie del menú lateral (spec 032), siempre visible, con banda de color en TEST —
+   modelo Facturapi/Stripe.
 3. Solo el AdminCliente lo cambia; el Despachador lo ve.
 4. Es persistente: no se reinicia al cerrar sesión.
 5. Cambiar el switch no toca ningún envío ya creado.

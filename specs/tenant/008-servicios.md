@@ -34,8 +34,8 @@ de carga y error, `AbortController`, recarga tras agendar) vive en
 
 Deja funcionando:
 
-- Panel con título "Viajes en turno", pegado al borde izquierdo real de la ventana del navegador,
-  justo debajo del navbar fijo de `TenantLayout`, con el resto del alto de la pantalla.
+- Panel con título "Viajes en turno", pegado al borde derecho del menú lateral de `TenantLayout`
+  (spec 032), con todo el alto de la pantalla (debajo de la banda de "Modo prueba" en TEST).
 - Lista scrolleable de tarjetas de viaje construidas con los pedidos reales del tenant que devuelve
   `GET /t/{slug}/pedidos`.
 - Cada tarjeta muestra: ícono de calendario a color, folio con prefijo `#`, fecha y hora en color de
@@ -72,21 +72,22 @@ ve y puede operar sobre todos los pedidos... por igual".
 
 ### Posición: `fixed` contra el viewport, no `absolute` contra un contenedor
 
-El panel debe pegarse al borde izquierdo real de la ventana del navegador, no al borde del área de
-contenido con padding que usa el resto de `TenantLayout` (`max-w-screen-xl`, `px-4`/`md:px-8`).
+El panel debe posicionarse contra la ventana del navegador —pegado al borde derecho del menú
+lateral, `left: var(--riel-ocupado)` (spec 032)—, no contra el área de contenido con padding que usa
+el resto de `TenantLayout` (`max-w-screen-xl`, `px-4`/`md:px-8`).
 `position: fixed` logra esto sin romper el layout general: mientras ningún ancestro tenga
 `transform`/`filter`/`contain` (no es el caso en `TenantLayout.vue` ni en `App.vue` para las rutas
 `/t/*`), un elemento `fixed` se posiciona contra el viewport sin importar el padding o el centrado
 de sus contenedores. Por eso no hace falta envolver el componente en una caja `relative` especial en
 `PanelView.vue`.
 
-### El panel empieza debajo del navbar, no se lo tapa
+### El panel empieza junto al menú lateral, no debajo de él
 
-`UiNavbar.vue` ya es `fixed inset-x-0 top-0 z-40` y mide `4.25rem` de alto (franja de color de
-`0.25rem` + barra de `4rem`) — el mismo valor que ya usa el propio navbar para su menú móvil
-(`top-[4.25rem]`). El panel usa `top-[4.25rem]` y `h-[calc(100vh-4.25rem)]` para ocupar el resto de
-la pantalla sin superponerse al navbar, y `z-30` (por debajo del `z-40` del navbar) para no competir
-con él si algún ajuste futuro llegara a solaparlos.
+El tenant no tiene barra superior: su navegación es un menú lateral flotante a la izquierda
+(spec 032, `z-40`). El panel usa `left: var(--riel-ocupado)` para empezar justo a la derecha del
+riel cerrado, `top: var(--alto-banda)` y `height: calc(100vh - var(--alto-banda))` para ocupar todo
+el alto (debajo de la banda de "Modo prueba" en TEST), y `z-30` (por debajo del menú lateral, que al
+abrirse flota encima).
 
 ### No se reusa `UiCard`
 
@@ -190,10 +191,12 @@ texto del diálogo de confirmación lo dice explícitamente para que nadie lea "
 
 `NuevaEntregaPanel.vue` ya resolvió el patrón de panel deslizante en este mismo layout: `fixed`,
 `z-[35]`, `transition-transform duration-[400ms] ease-in-out` y alternancia entre `translate-x-0` y
-`-translate-x-full`. `DetalleEnvioPanel` usa exactamente lo mismo. La única diferencia deliberada es
-la geometría: `NuevaEntregaPanel` ocupa `top-0 h-screen w-[45%]`, mientras que el detalle usa
-`top-[4.25rem] h-[calc(100vh-4.25rem)] w-[20%]` para calzar **exacto** sobre la columna de la lista
-sin invadir el mapa central.
+una posición oculta fuera de la pantalla. `DetalleEnvioPanel` usa exactamente lo mismo, incluida la
+posición oculta `translateX(calc(-100% - var(--riel-ocupado)))`, que lo saca por completo sin que
+asome un borde junto al menú lateral (spec 032). La única diferencia deliberada es el ancho:
+`NuevaEntregaPanel` ocupa `w-[45%]`, mientras que el detalle usa `w-[20%]` para calzar **exacto**
+sobre la columna de la lista sin invadir el mapa central. Los dos arrancan en
+`left: var(--riel-ocupado)` y `top: var(--alto-banda)`, con todo el alto restante.
 
 ## Reglas de negocio
 
@@ -263,8 +266,9 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
 - `emits`: `seleccionar: [viaje: ViajeEnTurno]`.
 - `defineExpose({ recargar })` se conserva sin cambios (`tenant/012`).
 - Template:
-  - El `<aside>` mantiene `fixed left-0 top-[4.25rem] z-30 h-[calc(100vh-4.25rem)] w-[20%] bg-white
-    shadow-xl` y el `<header>` blanco con el título.
+  - El `<aside>` mantiene `fixed z-30 w-[20%] bg-white shadow-xl`, con `left: var(--riel-ocupado)`,
+    `top: var(--alto-banda)` y `height: calc(100vh - var(--alto-banda))` (spec 032), y el
+    `<header>` blanco con el título.
   - El contenedor scrolleable pasa de `p-4` a `bg-slate-50 p-4`.
   - Cada `<li>` contiene un `<button type="button">` a ancho completo con
     `w-full rounded-lg border-l-4 border-accent bg-white p-3 text-left shadow-md`, más un anillo de
@@ -286,9 +290,10 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
 ### `frontend/src/components/panel/DetalleEnvioPanel.vue` (nuevo)
 
 - `props`: `viaje: ViajeEnTurno | null`. `emits`: `cerrar: []`, `cancelado: []`.
-- Raíz `<aside>` con `fixed left-0 top-[4.25rem] z-[35] flex h-[calc(100vh-4.25rem)] w-[20%]
-  flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out` y
-  `:class="viaje ? 'translate-x-0' : '-translate-x-full'"`.
+- Raíz `<aside>` con `fixed z-[35] flex w-[20%] flex-col bg-white shadow-xl transition-transform
+  duration-[400ms] ease-in-out`, con `left: var(--riel-ocupado)`, `top: var(--alto-banda)` y
+  `height: calc(100vh - var(--alto-banda))` (spec 032). Abierto usa `translate-x-0`; cerrado,
+  `translateX(calc(-100% - var(--riel-ocupado)))`.
 - `<header>`: etiqueta "VIAJE SELECCIONADO" (`text-xs font-semibold uppercase tracking-wide
   text-body`), título "Detalle del envío" (`text-lg font-semibold text-heading`) y botón `×` con
   `rounded-lg bg-slate-100 p-2`, que emite `cerrar`.
@@ -349,8 +354,9 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
 
 ## Criterios de aceptación
 
-1. El panel "Viajes en turno" está pegado al borde izquierdo real de la ventana (`left: 0` del
-   viewport), empieza justo debajo del navbar y llega hasta el borde inferior.
+1. El panel "Viajes en turno" está pegado al borde derecho del menú lateral
+   (`left: var(--riel-ocupado)`, spec 032), empieza en el borde superior (debajo de la banda de
+   "Modo prueba" en TEST) y llega hasta el borde inferior.
 2. El panel tiene esquinas rectas y fondo blanco en su encabezado; el área scrolleable de la lista
    tiene fondo gris claro.
 3. Cada tarjeta de viaje tiene esquinas redondeadas, fondo blanco, sombra y una barra vertical de
@@ -401,11 +407,12 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
    `tenant/012`) y se exporta desde ahí para que `DetalleEnvioPanel` lo reuse.
 8. Los componentes viven en `frontend/src/components/panel/`, carpeta separada de `components/ui/`.
 9. El mapa de colores de estado (`estadoColor`) se elimina junto con el badge.
-10. "Pegado al borde izquierdo" es el borde real de la ventana del navegador (`position: fixed`),
-    no el borde del área de contenido con padding de `TenantLayout`.
-11. El panel empieza en `top-[4.25rem]` (justo debajo del navbar fijo, que mide esa altura); el
-    navbar se ve siempre completo.
-12. `z-index`: lista `z-30`, panel de detalle `z-[35]` (igual que `NuevaEntregaPanel`), navbar
+10. El panel se posiciona respecto de la ventana del navegador (`position: fixed`), pegado al borde
+    derecho del riel cerrado del menú lateral (`left: var(--riel-ocupado)`, spec 032), no respecto
+    del área de contenido con padding de `TenantLayout`.
+11. El panel empieza en `top: var(--alto-banda)` (el borde superior en LIVE, debajo de la banda de
+    "Modo prueba" en TEST); no hay barra superior que lo tape.
+12. `z-index`: lista `z-30`, panel de detalle `z-[35]` (igual que `NuevaEntregaPanel`), menú lateral
     `z-40`.
 13. El panel no usa `UiCard` — tiene su propio marcado, porque necesita una posición y una altura
     que `UiCard` no soporta.

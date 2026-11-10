@@ -20,8 +20,8 @@ Deja funcionando:
 - Panel derecho reducido de `w-[30%]` a `w-[20%]`, con encabezado nuevo ("FLOTILLA" + ícono de
   camioneta + píldora "N en línea") y tarjetas nuevas (avatar de inicial, nombre, saldo de viajes,
   vehículo, badge).
-- Mapa a pantalla completa: todo el ancho de la ventana y todo el alto bajo la navbar
-  (`calc(100vh - 4.25rem)`), con los dos paneles flotando encima en vez de robarle espacio.
+- Mapa a pantalla completa: toda la ventana de borde a borde (`h-screen w-screen`), también por
+  detrás del menú lateral (spec 032), con los paneles flotando encima en vez de robarle espacio.
 - Flecha en la esquina superior izquierda del panel que lo desliza fuera de la pantalla por la
   derecha, y pestaña de reapertura pegada al borde derecho cuando está escondido.
 - Badge calculado: `Ocupado` (naranja) si el conductor trae un pedido activo, `Disponible` (verde)
@@ -49,25 +49,23 @@ Deja funcionando:
 Ese carril de 1280px con padding es lo que hoy impide que el mapa toque los bordes de la ventana,
 por más grande que sea el monitor; los paneles nunca lo notaron porque son `fixed` y se salen del
 flujo. Se agrega a `TenantLayout` una prop booleana `anchoCompleto` (default `false`): cuando es
-`true`, el `<main>` pierde `mx-auto max-w-screen-xl` y todo su padding, y queda como
-`<main class="pt-[4.25rem]">` — el alto exacto de la navbar fija (`UiNavbar.vue:25-29`: barra de
-gradiente `h-1` + `nav` `h-16` = `4.25rem`), sin margen ni relleno.
+`true`, el `<main>` pierde `mx-auto max-w-screen-xl` y todo su padding, sin margen ni relleno: el
+tenant no tiene barra superior (spec 032), así que no hay franja que reservar arriba.
 
 Solo `PanelView.vue` la activa; el resto de las pantallas del tenant (Clientes, Usuarios,
 Despachadores, Conductores, Configuración) siguen renderizándose exactamente igual. Se descarta un
 `<slot name="full-bleed">` alternativo: obligaría a cada vista a saber en qué ranura va, cuando la
 diferencia es una sola decisión booleana de la vista.
 
-### El mapa cubre el área bajo la navbar; los paneles flotan encima
+### El mapa cubre toda la ventana; los paneles flotan encima
 
 `PanelView.vue` pierde el `<div class="ml-[20%] mr-[30%] min-h-[calc(100vh-4.25rem-2rem)]">` que
 envolvía a `<MapaConductores />`. En su lugar, el contenedor del mapa pasa a
-`class="h-[calc(100vh-4.25rem)] w-full"`, que dentro del `<main>` sin padding equivale a todo el
-ancho de la ventana y todo el alto bajo la navbar.
+`class="h-screen w-screen"`, que dentro del `<main>` sin padding equivale a toda la ventana de borde
+a borde, también por detrás del menú lateral (spec 032).
 
-Los dos `<aside>` fijos ya viven en esa misma franja (`top-[4.25rem]`,
-`h-[calc(100vh-4.25rem)]`, `z-30`), así que quedan encima del mapa sin ningún cambio de
-posicionamiento. Se conserva el estilo de "losa": pegados al borde, de arriba a abajo, sin margen ni
+Los dos `<aside>` fijos van de `top: var(--alto-banda)` al borde inferior, con `z-30` (spec 032), así
+que quedan encima del mapa. Se conserva el estilo de "losa": pegados al borde, de arriba a abajo, sin margen ni
 esquinas redondeadas, separados del mapa por `shadow-xl`. Se descartan las variantes de tarjeta
 flotante con margen y de panel semitransparente: la primera desperdicia ancho en un panel que
 justamente se está angostando al 20%, y la segunda baja el contraste de nombres y saldos sobre un
@@ -224,9 +222,9 @@ dinero— pero queda registrado porque contradice lo que sugiere `tenant/022`.
 ## Reglas de negocio
 
 1. El panel derecho mide el 20% del ancho de la ventana (antes 30%), sigue fijo al borde derecho,
-   bajo la navbar y hasta el borde inferior.
-2. El mapa ocupa todo el ancho de la ventana y todo el alto bajo la navbar; los dos paneles se
-   dibujan encima de él.
+   desde el borde superior (debajo de la banda de "Modo prueba" en TEST) hasta el borde inferior.
+2. El mapa ocupa toda la ventana de borde a borde, también por detrás del menú lateral (spec 032);
+   los paneles se dibujan encima de él.
 3. El encabezado del panel muestra un ícono de camioneta, el texto "FLOTILLA" en mayúsculas, y a la
    derecha una píldora verde suave con "N en línea", donde N es la cantidad de conductores de la
    lista.
@@ -284,12 +282,12 @@ dinero— pero queda registrado porque contradice lo que sugiere `tenant/022`.
 ## Frontend (Vue 3)
 
 - **`frontend/src/layouts/TenantLayout.vue`**: prop nueva `anchoCompleto?: boolean` (default
-  `false`). El `<main>` se vuelve `:class`: con `false`, las clases actuales; con `true`,
-  `pt-[4.25rem]` a secas.
+  `false`). El `<main>` se vuelve `:class`: con `false`, las clases del carril (con el relleno
+  izquierdo del menú lateral, spec 032); con `true`, sin clases de relleno ni carril.
 - **`frontend/src/views/tenant/panel/PanelView.vue`**:
   - Pasa `ancho-completo` a `TenantLayout`.
   - El `<div>` del mapa cambia de `class="ml-[20%] mr-[30%] min-h-[calc(100vh-4.25rem-2rem)]"` a
-    `class="h-[calc(100vh-4.25rem)] w-full"`.
+    `class="h-screen w-screen"` (spec 032).
   - `mapaRef` nuevo; escucha `@colapso-terminado` de `<ConductoresActivos>` y llama a
     `mapaRef.value?.redimensionar()`.
 - **`frontend/src/components/panel/MapaConductores.vue`**: pierde el envoltorio `<UiCard title="Mapa">`
@@ -308,7 +306,8 @@ dinero— pero queda registrado porque contradice lo que sugiere `tenant/022`.
     (texto + color).
   - `<aside>`: `w-[20%]` (era `w-[30%]`), más `transition-transform duration-[400ms] ease-in-out` y
     `:class="colapsado ? 'translate-x-full' : 'translate-x-0'"`; conserva
-    `fixed right-0 top-[4.25rem] z-30 h-[calc(100vh-4.25rem)] bg-white shadow-xl`.
+    `fixed right-0 z-30 bg-white shadow-xl`, con `top: var(--alto-banda)` y
+    `height: calc(100vh - var(--alto-banda))` (spec 032).
   - `<header>`: ícono de camioneta (`@iconify/vue`, ya instalado y ya usado en
     `ServiciosEnTurno.vue:4`), "FLOTILLA" en
     `text-xs font-semibold uppercase tracking-wide text-body`, y píldora "N en línea" a la derecha.
@@ -343,9 +342,10 @@ dinero— pero queda registrado porque contradice lo que sugiere `tenant/022`.
 
 ## Criterios de aceptación
 
-1. En `/t/{slug}/panel`, el mapa llega a los cuatro bordes del área bajo la navbar, sin franjas
-   grises ni carril centrado, en pantallas anchas.
-2. Las demás pantallas del tenant conservan su carril centrado de 1280px, sin cambios visuales.
+1. En `/t/{slug}/panel`, el mapa llega a los cuatro bordes de la ventana, también por detrás del
+   menú lateral, sin franjas grises ni carril centrado, en pantallas anchas.
+2. Las demás pantallas del tenant conservan su carril centrado de 1280px, sin quedar debajo del menú
+   lateral (spec 032).
 3. El panel derecho mide 20% del ancho y flota sobre el mapa, pegado al borde, de arriba a abajo.
 4. El encabezado muestra ícono + "FLOTILLA" + píldora "N en línea", con N igual a la cantidad de
    ítems listados.
@@ -376,9 +376,9 @@ dinero— pero queda registrado porque contradice lo que sugiere `tenant/022`.
 
 1. "Reducir al 20%" se refiere al ancho del panel, no al tamaño de la tipografía; el panel sigue
    fijo al borde derecho.
-2. El mapa ocupa todo el ancho de la ventana y todo el alto bajo la navbar; la navbar sigue siendo
-   una franja sólida y el mapa no pasa por detrás de ella. Los dos paneles flotan encima del mapa en
-   vez de reducirle el área.
+2. El mapa ocupa toda la ventana de borde a borde y pasa por detrás del menú lateral flotante
+   (spec 032); no hay barra superior. Los paneles flotan encima del mapa en vez de reducirle el
+   área.
 3. Al angostar el panel, los textos largos se truncan con "…"; no se reduce el tamaño de fuente.
 4. El título pasa a "FLOTILLA" en mayúsculas, pequeño y en gris, con ícono de camioneta a la
    izquierda.

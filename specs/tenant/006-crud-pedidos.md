@@ -58,19 +58,21 @@ expone un select de solo lectura sobre ella, ver más abajo), `despachadores` (0
 
 Deja funcionando:
 
-- En `/t/{slug}/panel`, el navbar (`UiNavbar`, dentro de `TenantLayout`) muestra un botón destacado
-  "Nueva Entrega", visible **únicamente** en esa ruta y **únicamente** para el rol `Despachador`.
+- En `/t/{slug}/panel`, el menú lateral (`UiSidebar`, dentro de `TenantLayout`, spec 032) muestra
+  un botón **+** destacado de "Nueva Entrega" arriba de los destinos, visible **únicamente** en esa
+  ruta y **únicamente** para el rol `Despachador`.
 - Al entrar a `/t/{slug}/panel` como Despachador, el foco del teclado se posiciona automáticamente
   sobre ese botón.
-- Al activarlo (clic, o Enter/Espacio con el foco puesto en él), un panel se **desliza** desde fuera
-  de la pantalla por la izquierda hasta cubrir el 45% del ancho del viewport — más ancho que
-  `ServiciosEnTurno` (que ocupa 20%, spec `tenant/008`), así que al abrirse tapa visualmente tanto a
-  Servicios en turno como una franja adicional del contenido a su derecha. La animación usa `transform:
-  translateX(...)` con una transición de `0.4s ease-in-out` (el panel siempre está en el DOM; lo que
-  cambia es su posición, no su visibilidad, para que el deslizamiento se vea).
-- El panel ocupa la altura completa del navegador (de `top: 0` a `bottom: 100vh`) — a diferencia de
-  `ServiciosEnTurno`, que arranca debajo del navbar. El navbar, con `z-index` más alto, queda
-  visualmente por encima de la parte superior del panel.
+- Al activarlo (clic, o Enter/Espacio con el foco puesto en él), un panel se **desliza** desde la
+  izquierda, a partir del borde derecho del menú lateral (`left: var(--riel-ocupado)`, spec 032),
+  hasta cubrir el 45% del ancho del viewport — más ancho que `ServiciosEnTurno` (que ocupa 20%, spec
+  `tenant/008`), así que al abrirse tapa visualmente tanto a Servicios en turno como una franja
+  adicional del mapa a su derecha. La animación usa `transform: translateX(...)` con una transición
+  de `0.4s ease-in-out` (el panel siempre está en el DOM; lo que cambia es su posición, no su
+  visibilidad, para que el deslizamiento se vea).
+- El panel ocupa la altura completa del navegador, desde `top: var(--alto-banda)` (debajo de la
+  banda de "Modo prueba" en TEST, desde el borde superior en LIVE; spec 032) hasta el borde
+  inferior. No hay barra superior que lo tape.
 - El mismo botón actúa como interruptor: si el panel está abierto, volver a activarlo lo cierra
   (se desliza de regreso hacia la izquierda, fuera de la pantalla).
 - Con el foco en el botón, `ArrowRight`/`ArrowDown` abre el panel y mueve el foco al primer campo
@@ -434,7 +436,8 @@ solución no está en su mano: depende de que el `AdminCliente` configure las ta
 
 ### Comunicación por props/emits, no por estado compartido en un módulo aparte
 
-El botón vive en `TenantLayout.vue` (navbar) y el formulario vive en `NuevaEntregaPanel.vue`,
+El botón vive en `TenantLayout.vue` (slot `acciones` del menú lateral `UiSidebar`, spec 032) y el
+formulario vive en `NuevaEntregaPanel.vue`,
 montado por `PanelView.vue`. En vez de un composable con estado "global", el estado "¿está abierto?"
 vive en `PanelView.vue` — el único lugar que realmente lo necesita — y viaja hacia abajo como prop y
 hacia arriba como evento:
@@ -449,7 +452,7 @@ hacia arriba como evento:
 - `NuevaEntregaPanel.vue` recibe `abierto` por prop. Al confirmar "Agendar", hace `POST /pedidos`
   directamente (mismo patrón de `http`, `fieldErrors`, `loading` que usaría cualquier formulario del
   panel), y solo tras la respuesta exitosa emite `agendado` (para que `PanelView` cierre el panel y
-  devuelva el foco al botón del navbar) y `cerrar` (Cancelar/Escape, sin guardar). Los errores `422`
+  devuelva el foco al botón + del menú lateral) y `cerrar` (Cancelar/Escape, sin guardar). Los errores `422`
   del backend se muestran por campo (`fieldErrors`); un `403` (rol distinto de `Despachador`, caso
   ya cubierto por no mostrar el botón, pero posible si la sesión cambia de rol a mitad de uso)
   muestra un mensaje general y cierra el panel. La carga del catálogo de clientes (`GET /clientes`)
@@ -460,24 +463,24 @@ hacia arriba como evento:
 
 Si el panel se montara/desmontara con `v-if` según el estado, aparecería y desaparecería de golpe,
 sin animación. Por eso el panel está siempre en el DOM (dentro de `PanelView.vue`) y lo único que
-cambia es su posición horizontal: `translate-x-0` cuando está abierto, `-translate-x-full` cuando
-está cerrado (equivalente a moverlo exactamente su propio ancho hacia la izquierda, fuera de la
-pantalla), con `transition: transform 0.4s ease-in-out`.
+cambia es su posición horizontal: `translate-x-0` cuando está abierto y
+`translateX(calc(-100% - var(--riel-ocupado)))` cuando está cerrado — su propio ancho más la franja
+del menú lateral, para que no asome ningún borde entre los márgenes del riel (spec 032) —, con
+`transition: transform 0.4s ease-in-out`.
 
 ### Por qué tapa a `ServiciosEnTurno` en vez de convivir a su lado
 
-El panel usa `left: 0` igual que `ServiciosEnTurno` (spec 008), pero un ancho mayor (`45%` contra el
-`20%` de `ServiciosEnTurno`): al abrirse no solo coincide con su lugar, sino que se extiende más
-allá. Su `z-index` va entre el de `ServiciosEnTurno` (30) y el del navbar (40): por encima de
-Servicios en turno y de lo que haya a su derecha dentro de ese 45% (los tapa mientras está abierto)
-pero por debajo del navbar (que siempre queda visible y utilizable).
+El panel arranca en `left: var(--riel-ocupado)` igual que `ServiciosEnTurno` (spec 008), pero con un
+ancho mayor (`45%` contra el `20%` de `ServiciosEnTurno`): al abrirse no solo coincide con su lugar,
+sino que se extiende más allá. Su `z-index` va entre el de `ServiciosEnTurno` (30) y el del menú
+lateral (40): por encima de Servicios en turno y de lo que haya a su derecha dentro de ese 45% (los
+tapa mientras está abierto), pero por debajo del menú lateral, que siempre queda visible y
+utilizable.
 
-### Por qué ocupa toda la altura del navegador y no solo debajo del navbar
+### Por qué ocupa toda la altura del navegador
 
-A diferencia de `ServiciosEnTurno`, que empieza en `top-[4.25rem]` para no meterse debajo del
-navbar, este panel usa `top: 0` y `height: 100vh`. Como su `z-index` es menor que el del navbar, el
-navbar lo sigue tapando visualmente en esa franja superior — el contenido visible del formulario
-arranca con suficiente espacio (`padding-top`) para no quedar oculto detrás del navbar.
+Ya no hay barra superior (spec 032): el panel va de `top: var(--alto-banda)` hasta el borde
+inferior, igual que `ServiciosEnTurno`. Su encabezado no necesita relleno superior extra.
 
 ## Máquina de estados del pedido (fuente única)
 
@@ -773,15 +776,18 @@ Cualquier otra combinación responde `422`.
    clientes o direcciones siguen respondiendo `403` con sesión de `Despachador`.
 9. `GET /configuracion` responde `200` con sesión de `Despachador`; `PUT /configuracion` sigue
    respondiendo `403` con sesión de `Despachador`.
-10. En `/t/{slug}/panel`, el navbar muestra el botón "Nueva Entrega" solo cuando la sesión activa es
-    de `Despachador`; con sesión de `AdminCliente` en la misma ruta, el botón no aparece.
+10. En `/t/{slug}/panel`, el menú lateral muestra el botón + de "Nueva Entrega" solo cuando la
+    sesión activa es de `Despachador`; con sesión de `AdminCliente` en la misma ruta, el botón no
+    aparece.
 11. Ninguna ruta del frontend expone `/t/:slug/panel/pedidos` (ni `/crear` ni `/:id/editar`); el
     menú lateral no incluye un ítem "Pedidos".
-12. Al activar el botón, el panel se desliza desde la izquierda hasta cubrir el 45% del ancho del
-    viewport, tapando a `ServiciosEnTurno` (20%) y la franja adicional a su derecha, con una
-    transición de 0.4s; ocupa toda la altura del navegador, con el navbar visible por encima.
+12. Al activar el botón, el panel se desliza desde la izquierda, a partir del borde del menú
+    lateral, hasta cubrir el 45% del ancho del viewport, tapando a `ServiciosEnTurno` (20%) y la
+    franja adicional a su derecha, con una transición de 0.4s; ocupa toda la altura del navegador
+    (debajo de la banda de "Modo prueba" en TEST), con el menú lateral visible por encima.
 13. Activar el botón de nuevo, o "Cancelar", o `Escape` con el foco dentro del formulario, desliza el
-    panel de regreso fuera de la pantalla y devuelve el foco al botón del navbar.
+    panel de regreso fuera de la pantalla, sin que asome ningún borde junto al menú lateral, y
+    devuelve el foco al botón +.
 14. Con el foco en el botón, `ArrowRight`/`ArrowDown` abre el panel y mueve el foco al primer campo.
 15. El formulario muestra un select "Cliente frecuente" poblado con los clientes activos del tenant.
     Elegir uno autocompleta nombre y teléfono del solicitante; si ese cliente tiene exactamente una
@@ -858,17 +864,18 @@ Cualquier otra combinación responde `422`.
 6. `numero_pedido` autogenerado por el backend, formato `PED-######`.
 7. Sin `DELETE` — un pedido se cancela, no se borra (aunque el cambio de estado en sí queda fuera de
    la UI de esta spec).
-8. El botón "Nueva Entrega" vive en el navbar (`UiNavbar`, slot de acciones), no dentro de la
-   página del Panel, y solo se muestra cuando la ruta activa es `/panel` **y** el rol de la sesión
-   es `Despachador`.
-9. La comunicación entre el botón (navbar) y el formulario se hace con props/emits a través del
-   árbol de componentes (`TenantLayout` ⇄ `PanelView` ⇄ `NuevaEntregaPanel`), sin ningún estado
+8. El botón "Nueva Entrega" es el + del menú lateral (`UiSidebar`, slot `acciones`, spec 032), no
+   vive dentro de la página del Panel, y solo se muestra cuando la ruta activa es `/panel` **y** el
+   rol de la sesión es `Despachador`.
+9. La comunicación entre el botón (menú lateral) y el formulario se hace con props/emits a través
+   del árbol de componentes (`TenantLayout` ⇄ `PanelView` ⇄ `NuevaEntregaPanel`), sin ningún estado
    compartido en un módulo aparte.
-10. El panel deslizante (`transform: translateX`, transición `0.4s ease-in-out`) cubre el 45% del
-    viewport al abrirse, superponiéndose a `ServiciosEnTurno` y a la franja adicional a su derecha,
-    ocupando toda la altura del navegador (el navbar se mantiene visualmente por encima).
-11. El foco inicial al entrar a `/panel` como Despachador se posiciona sobre el botón del navbar; no
-    hay tratamiento especial para pantallas angostas en el resto del panel deslizante.
+10. El panel deslizante (`transform: translateX`, transición `0.4s ease-in-out`) arranca en el borde
+    del menú lateral y cubre el 45% del viewport al abrirse, superponiéndose a `ServiciosEnTurno` y
+    a la franja adicional a su derecha, ocupando toda la altura del navegador (el menú lateral se
+    mantiene visualmente por encima).
+11. El foco inicial al entrar a `/panel` como Despachador se posiciona sobre el botón + del menú
+    lateral; no hay tratamiento especial para pantallas angostas en el resto del panel deslizante.
 12. Latitud/longitud se elimina de formulario, validación, modelo, resource, API y tabla; las
     coordenadas que devuelve el autocompletado de direcciones (o una dirección guardada de cliente
     con coordenadas) se mantienen solo como estado local del componente, para alimentar la vista
