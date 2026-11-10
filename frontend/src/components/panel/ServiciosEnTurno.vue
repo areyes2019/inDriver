@@ -19,9 +19,22 @@ import UiEstadoConexion from '@/components/ui/UiEstadoConexion.vue'
  * una sola lista y este componente la parte al renderizar.
  */
 
-withDefaults(defineProps<{ seleccionadoId?: number | null }>(), { seleccionadoId: null })
+/**
+ * `abierto` (spec tenant/032, paso 2): la lista ya no es una columna fija, se abre y cierra desde su
+ * icono del menú lateral. Se queda siempre montada para conservar su orden y sus animaciones.
+ */
+const props = withDefaults(defineProps<{ abierto: boolean; seleccionadoId?: number | null }>(), {
+  seleccionadoId: null,
+})
 
-const emit = defineEmits<{ seleccionar: [viaje: ViajeEnTurno] }>()
+const emit = defineEmits<{ seleccionar: [viaje: ViajeEnTurno]; cerrar: [] }>()
+
+// Con el detalle abierto, Escape es suyo: cierra primero el detalle (spec 008).
+function onKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || props.seleccionadoId !== null) return
+  event.preventDefault()
+  emit('cerrar')
+}
 
 const panel = usePanelStore()
 
@@ -127,7 +140,11 @@ const filas = computed<Fila[]>(() =>
 
 <template>
   <aside
-    class="fixed left-(--riel-ocupado) top-(--alto-banda) z-30 flex h-[calc(100vh-var(--alto-banda))] w-[20%] flex-col bg-white shadow-xl"
+    class="fixed left-(--riel-ocupado) top-(--alto-banda) z-30 flex h-[calc(100vh-var(--alto-banda))] w-[20%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
+    :class="abierto ? 'translate-x-0' : '-translate-x-[calc(100%+var(--riel-ocupado))]'"
+    :inert="!abierto"
+    aria-label="Viajes en turno"
+    @keydown="onKeydown"
   >
     <header class="flex items-center gap-2 border-b border-default bg-white px-5 py-4">
       <h2 class="text-base font-semibold text-heading">Viajes en turno</h2>

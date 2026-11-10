@@ -2,9 +2,9 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import UiAmbienteSwitch from '@/components/ui/UiAmbienteSwitch.vue'
-import UiSidebar, { type ItemSidebar } from '@/components/ui/UiSidebar.vue'
+import UiSidebar, { type AccionSidebar, type ItemSidebar } from '@/components/ui/UiSidebar.vue'
 import http from '@/lib/http'
-import realtimeService from '@/services/realtime'
+import realtimeService, { type EstadoConexion } from '@/services/realtime'
 import { useAmbienteStore } from '@/stores/ambiente'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
 
@@ -17,16 +17,30 @@ const props = withDefaults(
      * por detrás del menú lateral; el resto de las pantallas del tenant conserva el carril.
      */
     anchoCompleto?: boolean
+    /**
+     * spec tenant/032 (paso 2) y tenant/008: el icono de Viajes en turno del menú lateral. El Panel
+     * es dueño del estado y de los datos; el layout no depende del store del Panel.
+     */
+    viajesEnTurnoAbierto?: boolean
+    viajesPendientes?: number
+    conexionPanel?: EstadoConexion
   }>(),
   {
     nuevaEntregaAbierta: false,
     anchoCompleto: false,
+    viajesEnTurnoAbierto: false,
+    viajesPendientes: 0,
+    conexionPanel: 'vivo',
   },
 )
 
 const emit = defineEmits<{
   'toggle-nueva-entrega': []
+  'toggle-viajes-en-turno': []
 }>()
+
+const ACCION_NUEVA_ENTREGA = 'nueva-entrega'
+const ACCION_VIAJES_EN_TURNO = 'viajes-en-turno'
 
 const route = useRoute()
 const router = useRouter()
@@ -53,7 +67,9 @@ watch(
 // El rol "operativo" (el que crea pedidos y ve el Panel) lo decide el store (spec tenant/011),
 // que es el mismo que consultan el router y el login.
 const esOperativo = computed(() => auth.esOperativo)
-const mostrarNuevaEntrega = computed(() => enPanel.value && esOperativo.value)
+// Nueva Entrega y Viajes en turno se muestran con la misma condición: solo en el Panel y para el rol
+// operativo (spec 032, RN-05).
+const mostrarAccionesPanel = computed(() => enPanel.value && esOperativo.value)
 
 const sidebarRef = ref<InstanceType<typeof UiSidebar>>()
 
@@ -94,20 +110,50 @@ onUnmounted(() => {
 })
 
 onMounted(() => {
-  if (mostrarNuevaEntrega.value) {
-    nextTick(() => sidebarRef.value?.focusAccion())
+  if (mostrarAccionesPanel.value) {
+    nextTick(() => sidebarRef.value?.focusAccion(ACCION_NUEVA_ENTREGA))
   }
 })
 
-function onNuevaEntregaKeydown(event: KeyboardEvent) {
+function onAccion(id: string) {
+  if (id === ACCION_NUEVA_ENTREGA) emit('toggle-nueva-entrega')
+  else if (id === ACCION_VIAJES_EN_TURNO) emit('toggle-viajes-en-turno')
+}
+
+// Solo el + tiene atajo con flechas (spec 006); Viajes en turno no (spec 032).
+function onAccionTeclado(id: string, event: KeyboardEvent) {
+  if (id !== ACCION_NUEVA_ENTREGA) return
   if ((event.key === 'ArrowRight' || event.key === 'ArrowDown') && !props.nuevaEntregaAbierta) {
     event.preventDefault()
     emit('toggle-nueva-entrega')
   }
 }
 
+const accionesPanel = computed<AccionSidebar[]>(() => {
+  if (!mostrarAccionesPanel.value) return []
+
+  return [
+    {
+      id: ACCION_NUEVA_ENTREGA,
+      label: 'Nueva Entrega',
+      icon: 'tabler:plus',
+      expandida: props.nuevaEntregaAbierta,
+      destacada: true,
+    },
+    {
+      id: ACCION_VIAJES_EN_TURNO,
+      label: 'Viajes en turno',
+      icon: 'tabler:truck-delivery',
+      expandida: props.viajesEnTurnoAbierto,
+      badge: props.viajesPendientes,
+      conexion: props.conexionPanel,
+    },
+  ]
+})
+
 defineExpose({
-  focusNuevaEntrega: () => sidebarRef.value?.focusAccion(),
+  focusNuevaEntrega: () => sidebarRef.value?.focusAccion(ACCION_NUEVA_ENTREGA),
+  focusViajesEnTurno: () => sidebarRef.value?.focusAccion(ACCION_VIAJES_EN_TURNO),
 })
 
 // Destinos del menú lateral (spec tenant/032), con las mismas reglas de rol que tenía la barra
@@ -160,12 +206,6 @@ const items = computed<ItemSidebar[]>(() => {
 
   return lista
 })
-
-const accionNuevaEntrega = computed(() =>
-  mostrarNuevaEntrega.value
-    ? { label: 'Nueva Entrega', icon: 'tabler:plus', expandida: props.nuevaEntregaAbierta }
-    : null,
-)
 
 const usuarioMenu = computed(() => {
   const usuario = auth.usuario
@@ -223,10 +263,10 @@ function onClickConfiguracion() {
       ref="sidebarRef"
       logo-text="inDriver"
       :items="items"
-      :accion="accionNuevaEntrega"
+      :acciones="accionesPanel"
       :usuario="usuarioMenu"
-      @accion="emit('toggle-nueva-entrega')"
-      @accion-teclado="onNuevaEntregaKeydown"
+      @accion="onAccion"
+      @accion-teclado="onAccionTeclado"
       @configuracion="onClickConfiguracion"
       @cambiar-password="onCambiarPassword"
       @cerrar-sesion="onLogout"

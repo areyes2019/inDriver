@@ -120,6 +120,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   <aside
     class="fixed left-(--riel-ocupado) top-(--alto-banda) z-[35] flex h-[calc(100vh-var(--alto-banda))] w-[20%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
     :class="viaje ? 'translate-x-0' : '-translate-x-[calc(100%+var(--riel-ocupado))]'"
+    :inert="!viaje"
     aria-label="Detalle del envío"
   >
     <header class="flex items-start justify-between gap-3 border-b border-default px-5 py-4">

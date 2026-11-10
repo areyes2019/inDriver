@@ -20,25 +20,42 @@ export interface ItemSidebar {
   exacto?: boolean
 }
 
+/**
+ * Botón del Panel que abre y cierra un panel sobre el mapa, sin cambiar de pantalla (spec 032, §4):
+ * Nueva Entrega y Viajes en turno.
+ */
+export interface AccionSidebar {
+  id: string
+  label: string
+  icon: string
+  /** Si su panel está abierto: pinta `aria-expanded` y, si no es destacada, el fondo de activo. */
+  expandida: boolean
+  /** Fondo de acento. Solo el + de Nueva Entrega. */
+  destacada?: boolean
+  /** Contador rojo sobre el icono; con 0 o sin él no se ve nada. */
+  badge?: number
+  /** Punto ámbar (conectando) o rojo (caído) sobre el icono; en vivo no se ve (spec 027, RN-20). */
+  conexion?: 'conectando' | 'vivo' | 'caido'
+}
+
 withDefaults(
   defineProps<{
     logoText: string
     items: ItemSidebar[]
-    /** El botón destacado arriba de los destinos (Nueva Entrega, spec 006). */
-    accion?: { label: string; icon: string; expandida: boolean } | null
+    acciones?: AccionSidebar[]
     usuario?: { nombre: string; correo: string; iniciales: string } | null
     mostrarConfiguracion?: boolean
   }>(),
   {
-    accion: null,
+    acciones: () => [],
     usuario: null,
     mostrarConfiguracion: true,
   },
 )
 
 const emit = defineEmits<{
-  accion: []
-  'accion-teclado': [event: KeyboardEvent]
+  accion: [id: string]
+  'accion-teclado': [id: string, event: KeyboardEvent]
   configuracion: []
   'cambiar-password': []
   'cerrar-sesion': []
@@ -46,7 +63,20 @@ const emit = defineEmits<{
 
 const route = useRoute()
 const raizRef = ref<HTMLElement>()
-const accionRef = ref<HTMLButtonElement>()
+const botonesAccion = new Map<string, HTMLButtonElement>()
+
+function registrarBotonAccion(id: string, el: unknown) {
+  if (el instanceof HTMLButtonElement) botonesAccion.set(id, el)
+  else botonesAccion.delete(id)
+}
+
+function etiquetaAccion(accion: AccionSidebar): string {
+  const partes = [accion.label]
+  if (accion.badge) partes.push(`${accion.badge} pendientes`)
+  if (accion.conexion === 'caido') partes.push('sin conexión')
+  if (accion.conexion === 'conectando') partes.push('reconectando')
+  return partes.length > 1 ? `${partes[0]} (${partes.slice(1).join(', ')})` : accion.label
+}
 
 // Siempre arranca cerrado y no se recuerda entre cargas (spec 032, RN-02).
 const abierto = ref(false)
@@ -65,9 +95,9 @@ function cerrarTodo() {
   menuUsuarioAbierto.value = false
 }
 
-function onAccion() {
+function onAccion(id: string) {
   abierto.value = false
-  emit('accion')
+  emit('accion', id)
 }
 
 function elegirDelMenuUsuario(evento: 'cambiar-password' | 'cerrar-sesion') {
@@ -110,7 +140,7 @@ onBeforeUnmount(() => {
 watch(() => route.fullPath, cerrarTodo)
 
 defineExpose({
-  focusAccion: () => accionRef.value?.focus(),
+  focusAccion: (id: string) => botonesAccion.get(id)?.focus(),
 })
 </script>
 
@@ -160,20 +190,45 @@ defineExpose({
       </button>
 
       <button
-        v-if="accion"
-        ref="accionRef"
+        v-for="accion in acciones"
+        :key="accion.id"
+        :ref="(el) => registrarBotonAccion(accion.id, el)"
         type="button"
-        class="group relative mt-2 flex h-11 w-full shrink-0 items-center rounded-md bg-accent text-white transition-colors hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        class="group relative mt-2 flex h-11 w-full shrink-0 items-center rounded-md transition-colors focus:outline-none"
+        :class="
+          accion.destacada
+            ? 'bg-accent text-white hover:bg-accent-hover focus-visible:ring-2 focus-visible:ring-white'
+            : [
+                'focus-visible:ring-2 focus-visible:ring-white/70',
+                accion.expandida
+                  ? 'bg-sidebar-activo text-white'
+                  : 'hover:bg-sidebar-hover hover:text-white',
+              ]
+        "
         :aria-expanded="accion.expandida"
-        :aria-label="accion.label"
-        @click="onAccion"
-        @keydown="emit('accion-teclado', $event)"
+        :aria-label="abierto ? undefined : etiquetaAccion(accion)"
+        @click="onAccion(accion.id)"
+        @keydown="emit('accion-teclado', accion.id, $event)"
       >
-        <span class="flex h-11 w-12 shrink-0 items-center justify-center">
+        <span class="relative flex h-11 w-12 shrink-0 items-center justify-center">
           <Icon :icon="accion.icon" width="20" height="20" aria-hidden="true" />
+          <span
+            v-if="accion.badge"
+            aria-hidden="true"
+            class="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-none text-white"
+            >{{ accion.badge }}</span
+          >
+          <span
+            v-if="accion.conexion && accion.conexion !== 'vivo'"
+            aria-hidden="true"
+            class="absolute bottom-1.5 right-2 h-2.5 w-2.5 rounded-full ring-2 ring-sidebar"
+            :class="accion.conexion === 'caido' ? 'bg-red-500' : 'bg-amber-400'"
+          ></span>
         </span>
-        <span v-if="abierto" class="truncate text-sm font-semibold">{{ accion.label }}</span>
-        <span v-else aria-hidden="true" :class="claseGlobo">{{ accion.label }}</span>
+        <span v-if="abierto" class="min-w-0 flex-1 truncate text-left text-sm font-semibold">
+          {{ etiquetaAccion(accion) }}
+        </span>
+        <span v-else aria-hidden="true" :class="claseGlobo">{{ etiquetaAccion(accion) }}</span>
       </button>
 
       <ul class="mt-3 flex flex-col gap-1 border-t border-sidebar-borde pt-3">

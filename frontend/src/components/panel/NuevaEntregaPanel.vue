@@ -264,6 +264,7 @@ async function onSubmit() {
   <aside
     class="fixed left-(--riel-ocupado) top-(--alto-banda) z-[35] flex h-[calc(100vh-var(--alto-banda))] w-[45%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
     :class="abierto ? 'translate-x-0' : '-translate-x-[calc(100%+var(--riel-ocupado))]'"
+    :inert="!abierto"
     @keydown="onKeydown"
   >
     <header class="border-b border-default px-5 pb-4 pt-5">

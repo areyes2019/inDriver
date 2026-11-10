@@ -50,6 +50,7 @@ const TABLER_ICON_NAMES = [
   'steering-wheel',
   'settings',
   'plus',
+  'truck-delivery',
   'key',
   'logout',
   'bolt',
