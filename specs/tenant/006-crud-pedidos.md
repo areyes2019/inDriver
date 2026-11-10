@@ -33,6 +33,13 @@
 > `null` para considerarla configurada. Además, el banderazo deja de cubrir toda la distancia como
 > tarifa plana: ahora cubre solo los primeros `km_incluidos_banderazo` kilómetros, y el kilómetro
 > adicional se cobra únicamente sobre el exceso (ver "Cálculo del total del viaje").
+>
+> **Redondeo del total del viaje**: el total nunca lleva centavos. El resultado de la fórmula se
+> redondea a un múltiplo de $5: si pasa menos de $1.50 del múltiplo inferior baja, y si pasa $1.50 o
+> más sube; con un mínimo de $5 — $68.80 → $70, $63.25 → $65, $65.01 → $65, $66.00 → $65,
+> $67.00 → $70. Las tarifas configuradas sí pueden llevar centavos; solo se redondea el total final.
+> La misma regla aplica al canal de WhatsApp (spec 031), que calcula en el servidor (ver "Redondeo
+> del total a múltiplos de $5").
 
 ## Historia de usuario
 
@@ -91,8 +98,10 @@ Deja funcionando:
      "Importe de envío": ese monto lo aporta el bloque de "Total del viaje" (punto siguiente).
   7. **Total del viaje / Importe de envío**: bloque calculado a partir de la distancia entre
      recogida y entrega y las tarifas configuradas por el tenant (ver "Cálculo del total del
-     viaje"), visible solo cuando ambas direcciones están resueltas **y** el tenant tiene
-     configuradas las tres tarifas. Es el valor que viaja como `importe_envio` en el `POST /pedidos` —
+     viaje"), ya redondeado a múltiplo de $5, visible solo cuando ambas direcciones
+     están resueltas **y** el tenant tiene configuradas las tres tarifas. Muestra solo el importe
+     redondeado, sin desglose ni el monto previo al redondeo. Es el valor que viaja como
+     `importe_envio` en el `POST /pedidos` —
      mientras no haya una distancia calculada (alguna dirección sin resolver) o falte alguna tarifa
      por configurar, no hay `importe_envio` que enviar y "Agendar" queda deshabilitado, con un
      mensaje que distingue cuál de las dos causas aplica.
@@ -290,7 +299,8 @@ no tiene sentido pedirle al despachador que lo teclee a mano — el campo "Impor
 libre) desaparece del formulario. Fórmula:
 
 ```
-importe_envio = tarifa_banderazo + max(0, distancia_km − km_incluidos_banderazo) × tarifa_km_adicional
+total_sin_redondear = tarifa_banderazo + max(0, distancia_km − km_incluidos_banderazo) × tarifa_km_adicional
+importe_envio       = redondearTarifa(total_sin_redondear)   // múltiplo de $5 (sube desde x1.50), mínimo $5
 ```
 
 - `tarifa_banderazo`, `km_incluidos_banderazo` y `tarifa_km_adicional` son las tres tarifas globales
@@ -316,8 +326,71 @@ importe_envio = tarifa_banderazo + max(0, distancia_km − km_incluidos_banderaz
 - El total **sí viaja** en el `POST /pedidos` como `importe_envio` y se persiste en la columna que
   ya existía en `pedidos` para ese campo (no se agrega columna nueva). El despachador ya no puede
   sobrescribir manualmente ese monto — queda 100% determinado por la fórmula. El cálculo se hace en
-  el frontend; el backend lo recibe y guarda tal cual, sin recalcular la fórmula del lado del
-  servidor.
+  el frontend; el backend no recalcula la fórmula (no conoce la distancia que obtuvo Google en el
+  navegador), pero sí valida que el importe recibido cumpla la regla de redondeo (ver la sección
+  siguiente) y, si cumple, lo guarda tal cual.
+
+### Redondeo del total a múltiplos de $5
+
+El total del viaje nunca lleva centavos: siempre es un múltiplo de $5. La regla:
+
+- Se redondea **una sola vez, sobre el total final** de la fórmula — no el banderazo ni el kilómetro
+  adicional por separado. Las tarifas configuradas en la spec 015 pueden seguir teniendo centavos
+  (por ejemplo `$8.50` por km); la pantalla de Configuración no cambia ni exige múltiplos de 5.
+- Puede subir o bajar. Lo que decide es **cuánto pasa el total del múltiplo de 5 inferior**:
+  - menos de **$1.50** → **baja** a ese múltiplo;
+  - **$1.50 o más** → **sube** al siguiente múltiplo.
+
+  El corte está en `x1.50` y `x6.50`, no a la mitad del tramo: de los $5 de cada tramo, $1.50 bajan
+  y $3.50 suben.
+
+  | Total calculado | Pasa del múltiplo inferior | Importe del viaje |
+  |---|---|---|
+  | $65.00 | 0.00 | $65 (un múltiplo exacto no cambia) |
+  | $65.01 | 0.01 | $65 |
+  | $66.00 | 1.00 | $65 |
+  | $66.49 | 1.49 | $65 |
+  | $66.50 | 1.50 | $70 |
+  | $67.00 | 2.00 | $70 |
+  | $68.80 | 3.80 | $70 |
+  | $63.25 | 3.25 | $65 |
+  | $32.00 | 2.00 | $35 |
+  | $1.20 | 1.20 | $5 (mínimo) |
+
+- **Mínimo $5**: si el total calculado queda por debajo de $1.50, el viaje cuesta $5 y no $0, para
+  que el redondeo nunca produzca un viaje gratis.
+- Aplica también cuando la distancia no supera `km_incluidos_banderazo`: el total es el banderazo
+  redondeado (un banderazo de $31 da $30; uno de $32 da $35).
+
+**Cálculo en centavos enteros.** Con aritmética de punto flotante, un total que debería ser `66.50`
+puede llegar como `66.4999999` y bajar a $65 en vez de subir a $70. Para evitarlo, el total se
+convierte primero a centavos enteros y el redondeo opera sobre ese entero (sumar 350 centavos lleva
+cualquier total que pase $1.50 o más del múltiplo inferior al tramo siguiente):
+
+```
+centavos   = round(total_sin_redondear × 100)
+redondeado = floor((centavos + 350) / 500) × 5
+importe    = max(5, redondeado)
+```
+
+**Una función por lado, con la misma operación.** El Panel calcula en el navegador y WhatsApp
+(spec 031) en el servidor, así que la regla existe dos veces y debe dar exactamente el mismo
+resultado:
+
+- Frontend: `redondearTarifa(total: number): number` en `frontend/src/lib/tarifa.ts`. `totalViaje`
+  de `NuevaEntregaPanel.vue` la aplica como último paso.
+- Backend: `TarifaService::importe()` aplica el mismo redondeo como último paso, en lugar del
+  `round(..., 2)` actual. Como WhatsApp ya cotiza con ese servicio, hereda la regla sin más cambios.
+
+**El backend valida, no recalcula.** `POST /pedidos` rechaza con `422` un `importe_envio` que no sea
+múltiplo de 5 o que sea menor a 5 (`required|numeric|min:5|multiple_of:5`). Así ni un frontend
+desactualizado ni una llamada directa a la API pueden guardar un importe como $68.80.
+
+En pantalla, el total se sigue mostrando con el formato de moneda actual (`$70.00`): al ser siempre
+múltiplo de 5, los centavos siempre son `00`. Se guarda en la misma columna `importe_envio`
+(`decimal`), sin migración.
+
+No es retroactivo: los pedidos ya creados conservan su `importe_envio`.
 
 ### Por qué se bloquea la creación cuando falta configurar alguna tarifa
 
@@ -353,7 +426,7 @@ En el frontend, `NuevaEntregaPanel.vue` deja de calcular `tarifaBanderazo`/`tari
 leído igual que las otras dos tarifas). `totalViaje` devuelve `null` (oculta el bloque, igual que ya
 hace cuando falta `distanceKm`) si `tarifasConfiguradas` es `false`, sin importar que ambas
 direcciones estén resueltas; cuando sí están configuradas, calcula
-`tarifaBanderazo + Math.max(0, distanceKm - kmIncluidosBanderazo) * tarifaKmAdicional`. El mensaje
+`redondearTarifa(tarifaBanderazo + Math.max(0, distanceKm - kmIncluidosBanderazo) * tarifaKmAdicional)`. El mensaje
 que reemplaza al bloque distingue las dos causas posibles ("faltan tarifas por configurar" vs.
 "resuelve ambas direcciones") para que el Despachador sepa qué hacer — en el primer caso, la
 solución no está en su mano: depende de que el `AdminCliente` configure las tarifas en
@@ -475,9 +548,11 @@ Cualquier otra combinación responde `422`.
 - `modalidad_pago` fija los tres casos de pago documentados
   (`RECEPTOR_PAGA_ENVIO`, `REMITENTE_PAGA_ENVIO`, `RECEPTOR_PAGA_ENVIO_PRODUCTOS`), capturados con
   el selector de botones descrito arriba.
-- `importe_envio` es numérico ≥ 0 y **obligatorio**: ya no tiene un default `0` de respaldo, porque
-  siempre llega calculado desde el frontend (ver "Cálculo del total del viaje, y por qué reemplaza
-  al campo manual de importe de envío"). `importe_cobro` sigue siendo numérico ≥ 0 con default `0`,
+- `importe_envio` es **obligatorio**, múltiplo de 5 y al menos 5: ya no tiene un default `0` de
+  respaldo, porque siempre llega calculado y redondeado desde el frontend (ver "Cálculo del total del
+  viaje, y por qué reemplaza al campo manual de importe de envío" y "Redondeo del total a múltiplos
+  de $5"). Nunca lleva centavos. `importe_cobro` no se redondea: sigue siendo numérico
+  ≥ 0 con default `0`,
   y el backend lo fuerza a `0` cuando `modalidad_pago` no es `RECEPTOR_PAGA_ENVIO_PRODUCTOS` (ver
   "Importe de cobro condicionado a la modalidad").
 - `fecha_servicio` es obligatoria solo si `lo_antes_posible = false`; si es `true`, el backend la
@@ -519,9 +594,10 @@ Cualquier otra combinación responde `422`.
   - `store(Request $request)` / `validarDatos()`: `fecha_servicio` pasa de `required` fijo a
     validación manual (mismo patrón que las horas): obligatoria solo si `lo_antes_posible` es
     `false`; si es `true` y no llega, se completa con `now()->toDateString()` antes de guardar.
-    `importe_envio` pasa de `numeric|min:0` con default `0` a `required|numeric|min:0`: ya no hay
-    campo manual en el frontend que pueda dejarlo vacío, así que si no llega se rechaza con `422` en
-    vez de asumir `0`. `importe_cobro` se fuerza a `0` cuando `modalidad_pago` no es
+    `importe_envio` se valida con `required|numeric|min:5|multiple_of:5`: ya no hay campo manual en
+    el frontend que pueda dejarlo vacío, así que si no llega se rechaza con `422` en vez de asumir
+    `0`; y como siempre llega redondeado, un importe con centavos, que no sea múltiplo de 5 o menor a
+    5 también se rechaza con `422`. `importe_cobro` se fuerza a `0` cuando `modalidad_pago` no es
     `RECEPTOR_PAGA_ENVIO_PRODUCTOS`, sin importar qué llegue en el payload. `id_cliente` sigue
     validándose igual (`nullable|integer|exists:clientes,id_cliente`). Sigue siendo el único método
     consumido por el frontend de esta spec (`NuevaEntregaPanel.vue`).
@@ -530,6 +606,9 @@ Cualquier otra combinación responde `422`.
     API sin consumidor propio en esta spec.
   - Todas las mutaciones registran `Auditoria` (`ALTA`/`EDICION`/`CAMBIO_ESTADO`) sobre
     `tabla_afectada = 'pedidos'`.
+- **Servicio** `App\Services\TarifaService` (lo usa WhatsApp, spec 031): `importe()` sustituye su
+  `round(..., 2)` final por `redondear()`, el redondeo a múltiplo de $5, calculado en centavos enteros
+  y con mínimo de 5 (ver "Redondeo del total a múltiplos de $5"). `vigentes()` no cambia.
 - **Rutas** (`routes/api.php`): se agrega el rol `Despachador` a las rutas de solo lectura de
   clientes y configuración; el resto de esos módulos sigue exclusivo de `AdminCliente`.
 
@@ -587,6 +666,12 @@ Cualquier otra combinación responde `422`.
 - **`services/maps/BaseProvider.ts`** / **`GoogleProvider.ts`**: `drawRoute()` calcula `distanceKm`
   a partir de `leg.distance.value` (metros, devuelto por Directions API) dividido entre 1000, sin
   quitar los campos de texto que ya usa `UiVistaPreviaRuta`.
+- **`lib/tarifa.ts`** (nuevo): exporta `redondearTarifa(total: number): number`, que convierte a
+  centavos enteros, redondea a múltiplo de $5 (baja si pasa menos de $1.50 del múltiplo inferior,
+  sube desde $1.50) y aplica el mínimo
+  de 5. Es la contraparte de `TarifaService::importe()` en el backend y debe dar el mismo resultado
+  para el mismo total. Se prueba en `lib/__tests__/tarifa.test.ts` con la tabla de ejemplos de
+  "Redondeo del total a múltiplos de $5".
 - **`layouts/TenantLayout.vue`**: sin cambios en esta ronda (prop `nuevaEntregaAbierta`, evento
   `toggle-nueva-entrega`, visibilidad condicionada a ruta y rol, foco automático,
   `focusNuevaEntrega()` expuesto).
@@ -612,7 +697,8 @@ Cualquier otra combinación responde `422`.
     el propio componente (sin store ni composable con estado compartido) a partir de `distanceKm`
     (obtenido de `UiVistaPreviaRuta`/`drawRoute` cuando ambas direcciones están resueltas) y las
     tres tarifas leídas de `GET /configuracion` al montar
-    (`tarifaBanderazo + Math.max(0, distanceKm - kmIncluidosBanderazo) * tarifaKmAdicional`). Solo
+    (`redondearTarifa(tarifaBanderazo + Math.max(0, distanceKm - kmIncluidosBanderazo) * tarifaKmAdicional)`,
+    con `redondearTarifa` importada de `lib/tarifa.ts`). Muestra solo el importe redondeado. Solo
     se muestra cuando hay `distanceKm` disponible **y** `tarifas_configuradas` es `true`, y su valor
     alimenta directamente `form.importe_envio` (se recalcula cada vez que cambia `distanceKm`).
   - Al leer `GET /configuracion`, guarda `tarifas_configuradas` (booleano de la respuesta) en un
@@ -650,6 +736,11 @@ Cualquier otra combinación responde `422`.
 - Persistir cualquier campo de distancia (`distancia_km`) en el pedido — solo `importe_envio` (el
   resultado del cálculo) se guarda; la distancia en sí sigue siendo solo un valor en memoria del
   frontend.
+- Redondear el cargo extra por cambio de destino (`CambioEnvioService`): es otra regla, con su propio
+  cálculo sobre la tarifa por km, y sigue llevando centavos. El redondeo a múltiplos de $5 aplica solo
+  al total del viaje (`importe_envio`).
+- Exigir múltiplos de 5 en las tarifas configuradas (spec 015): se redondea el total, no las tarifas.
+- Recalcular el `importe_envio` de pedidos ya creados con la regla de redondeo.
 - Gestión de clientes o de sus direcciones desde el panel de Despachador — el nuevo acceso es de
   solo lectura (`GET`), para poblar el select; crear/editar clientes o direcciones sigue siendo
   exclusivo de `AdminCliente` en su propia pantalla.
@@ -711,7 +802,8 @@ Cualquier otra combinación responde `422`.
     + producto"; al cambiar a cualquiera de las otras dos modalidades, el campo se oculta.
 21. Cuando ambas direcciones están resueltas, se muestra un bloque "Total del viaje" con el importe
     calculado (`tarifa_banderazo + max(0, distancia_km − km_incluidos_banderazo) ×
-    tarifa_km_adicional`, usando las tarifas configuradas del tenant), y ese valor es el que viaja
+    tarifa_km_adicional`, usando las tarifas configuradas del tenant) y redondeado a múltiplo de $5,
+    sin centavos ni desglose, y ese valor es el que viaja
     como `importe_envio` en el `POST /pedidos`; mientras falte alguna dirección, el bloque no se
     muestra y el botón "Agendar" queda deshabilitado, porque no hay `importe_envio` que enviar.
 22. El formulario no muestra ni envía campos de latitud/longitud; ya no existe un campo manual de
@@ -737,8 +829,17 @@ Cualquier otra combinación responde `422`.
     (con `distanceKm` disponible), el bloque "Total del viaje" no se muestra, aparece un mensaje
     indicando que faltan tarifas por configurar, y "Agendar" está deshabilitado.
 30. Con `distancia_km` menor o igual a `km_incluidos_banderazo`, el "Total del viaje" es igual a
-    `tarifa_banderazo` (no se cobra kilómetro adicional).
-31. Pint y ESLint/Prettier corren sin errores; `php artisan test` pasa.
+    `tarifa_banderazo` redondeado a múltiplo de $5 (no se cobra kilómetro adicional).
+31. `redondearTarifa()` (frontend) y `TarifaService::redondear()` (backend) dan el mismo resultado
+    para cada total de la tabla de ejemplos: $65.00 → $65, $65.01 → $65, $66.00 → $65,
+    $66.49 → $65, $66.50 → $70, $67.00 → $70, $68.80 → $70, $63.25 → $65, $32.00 → $35 y
+    $1.20 → $5.
+32. `POST /pedidos` con `importe_envio` que no es múltiplo de 5 (por ejemplo `68.80` o `67`) o menor
+    a 5 responde `422`; con `70` responde `201`.
+33. Una cotización por WhatsApp (spec 031) devuelve el mismo importe redondeado que mostraría el
+    Panel para la misma distancia y las mismas tarifas.
+34. Los pedidos creados antes de este cambio conservan su `importe_envio` sin redondear.
+35. Pint y ESLint/Prettier corren sin errores; `php artisan test` y `npm run test:unit` pasan.
 
 ## Supuestos asumidos (registro completo)
 
@@ -807,7 +908,8 @@ Cualquier otra combinación responde `422`.
     Ya no es puramente informativo: es el valor que se envía como `importe_envio` en el
     `POST /pedidos` y se persiste en la columna que ya existía para ese campo (no requiere ninguna
     migración nueva). El campo manual de "Importe de envío" desaparece del formulario, y "Agendar"
-    queda deshabilitado mientras el cálculo no esté disponible.
+    queda deshabilitado mientras el cálculo no esté disponible. El resultado de esa fórmula se
+    redondea antes de mostrarse y enviarse (supuesto 30).
 22. `km_incluidos_banderazo` es el mínimo de kilómetros que ya cubre el banderazo: si la distancia
     del viaje es menor o igual a ese valor, el cliente paga únicamente el banderazo — el kilómetro
     adicional solo se cobra sobre el exceso, nunca sobre un valor negativo.
@@ -833,4 +935,17 @@ Cualquier otra combinación responde `422`.
 29. Como el sistema está en fase beta y no tiene tenants reales operando todavía, el bloqueo por
     `km_incluidos_banderazo` faltante aplica de inmediato para todos, sin backfill ni período de
     transición.
+30. El total del viaje se redondea una sola vez, sobre el resultado final de la fórmula, a un
+    múltiplo de $5: si pasa menos de $1.50 del múltiplo inferior baja a él, y si pasa $1.50 o más
+    sube al siguiente (corte en `x1.50` y `x6.50`); un múltiplo exacto no cambia; y el mínimo es $5.
+    Nunca lleva centavos.
+31. Las tarifas configuradas (spec 015) pueden llevar centavos y no se redondean ni se validan como
+    múltiplos de 5; tampoco se redondean `importe_cobro` ni el cargo extra por cambio de destino. La
+    comisión del conductor (spec 030) se calcula sobre el `importe_envio` ya redondeado y puede
+    llevar centavos (25 % de $70 = $17.50).
+32. El redondeo se calcula en centavos enteros para evitar errores de punto flotante, con la misma
+    operación en `redondearTarifa()` (frontend) y `TarifaService::importe()` (backend), para que el
+    Panel y WhatsApp (spec 031) den siempre el mismo importe.
+33. El backend no recalcula el total del Panel, pero valida que `importe_envio` sea múltiplo de 5 y
+    al menos 5. El redondeo no es retroactivo.
 </content>

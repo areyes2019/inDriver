@@ -368,7 +368,8 @@ class PedidoController extends Controller
                 'REMITENTE_PAGA_ENVIO',
                 'RECEPTOR_PAGA_ENVIO_PRODUCTOS',
             ])],
-            'importe_envio' => ['required', 'numeric', 'min:0'],
+            // Siempre llega redondeado al múltiplo de $5 más cercano (spec 006).
+            'importe_envio' => ['required', 'numeric', 'min:5', 'multiple_of:5'],
             'importe_cobro' => ['nullable', 'numeric', 'min:0'],
             'id_despachador' => ['nullable', 'integer', 'exists:despachadores,id_despachador'],
             'id_conductor' => ['nullable', 'integer', 'exists:conductores,id_conductor'],

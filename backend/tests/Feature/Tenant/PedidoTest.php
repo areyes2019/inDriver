@@ -219,6 +219,31 @@ it('rejects creating a pedido without importe_envio', function () {
         ->assertJsonValidationErrors(['importe_envio']);
 });
 
+it('rejects an importe_envio that is not rounded to a multiple of 5 (spec 006)', function (float|int $importe) {
+    $tenant = pedidoTenant();
+    $admin = pedidoUsuario($tenant);
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos(['importe_envio' => $importe]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['importe_envio']);
+})->with([
+    'con centavos' => [68.80],
+    'entero que no es múltiplo de 5' => [67],
+    'por debajo del mínimo' => [0],
+]);
+
+it('accepts an importe_envio rounded to a multiple of 5', function () {
+    $tenant = pedidoTenant();
+    $admin = pedidoUsuario($tenant);
+
+    $response = $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/pedidos', pedidoDatosValidos(['importe_envio' => 70]))
+        ->assertCreated();
+
+    expect((float) $response->json('importe_envio'))->toBe(70.0);
+});
+
 it('forces importe_cobro to zero when modalidad_pago does not involve producto', function () {
     $tenant = pedidoTenant();
     $admin = pedidoUsuario($tenant);

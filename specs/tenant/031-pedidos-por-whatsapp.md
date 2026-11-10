@@ -82,7 +82,7 @@ Que el cliente de una flotilla pida un envío escribiendo al número de WhatsApp
 
 ### Reglas
 
-- **RN-01.** `importe_envio` lo calcula siempre el servidor: `banderazo + max(0, km − km_incluidos) × km_adicional`, con la distancia por calles. Nunca lo fija la IA.
+- **RN-01.** `importe_envio` lo calcula siempre el servidor con la misma fórmula y el mismo redondeo que el Panel: `banderazo + max(0, km − km_incluidos) × km_adicional`, redondeado a múltiplo de $5 (baja si pasa menos de $1.50 del múltiplo inferior, sube desde $1.50) con mínimo de $5 (spec 006, "Redondeo del total a múltiplos de $5"), con la distancia por calles. Nunca lo fija la IA.
 - **RN-02.** Si no se obtiene una ruta real, no se cotiza. La línea recta de `RutaService` no sirve para cobrar.
 - **RN-03.** `importe_cobro` sale del mensaje del cliente, y el cliente lo confirma en el resumen.
 - **RN-04.** Si no queda claro quién paga o cuánto, el bot pregunta. No supone.

@@ -44,6 +44,20 @@ class TarifaService
     {
         $kmCobrables = max(0.0, $km - $tarifas['km_incluidos']);
 
-        return round($tarifas['banderazo'] + $kmCobrables * $tarifas['km_adicional'], 2);
+        return $this->redondear($tarifas['banderazo'] + $kmCobrables * $tarifas['km_adicional']);
+    }
+
+    /**
+     * Lleva el total a un múltiplo de $5, con mínimo de $5 (spec 006): si pasa menos de $1.50 del
+     * múltiplo inferior baja a él; si pasa $1.50 o más, sube al siguiente.
+     *
+     * Opera en centavos enteros para que un `66.50` que llega como `66.4999999` no baje a 65. Es la
+     * misma operación que `redondearTarifa()` en `frontend/src/lib/tarifa.ts`.
+     */
+    public function redondear(float $total): float
+    {
+        $centavos = max(0, (int) round($total * 100));
+
+        return (float) max(5, intdiv($centavos + 350, 500) * 5);
     }
 }

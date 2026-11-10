@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import http from '@/lib/http'
+import { redondearTarifa } from '@/lib/tarifa'
 import UiAddressAutocomplete from '@/components/ui/UiAddressAutocomplete.vue'
 import UiVistaPreviaRuta from '@/components/ui/UiVistaPreviaRuta.vue'
 import UiModalidadPagoSelector, {
@@ -161,7 +162,7 @@ function onDistancia(km: number | null) {
 const totalViaje = computed(() => {
   if (!tarifasConfiguradas.value || distanciaKm.value === null) return null
   const kmCobrables = Math.max(0, distanciaKm.value - kmIncluidosBanderazo.value)
-  return tarifaBanderazo.value + kmCobrables * tarifaKmAdicional.value
+  return redondearTarifa(tarifaBanderazo.value + kmCobrables * tarifaKmAdicional.value)
 })
 
 watch(

@@ -148,8 +148,28 @@ it('calcula la tarifa con la misma fórmula del Panel', function (float $km, flo
     'sin distancia' => [0.0, 40.0],
     'dentro de lo incluido' => [2.5, 40.0],
     'justo en el límite' => [3.0, 40.0],
-    'con km adicionales' => [8.3, 77.1],
-    'redondea a centavos' => [3.333, 42.33],
+    'con km adicionales: 40.70 baja a 40' => [3.1, 40.0],
+    'con km adicionales: 77.10 sube a 80' => [8.3, 80.0],
+    'con km adicionales: 68.00 sube a 70' => [7.0, 70.0],
+    'en el corte: 61.50 sube a 65' => [6.071428571428571, 65.0],
+]);
+
+it('baja si pasa menos de $1.50 del múltiplo inferior y sube desde $1.50, como el Panel', function (float $total, float $esperado) {
+    expect(app(TarifaService::class)->redondear($total))->toBe($esperado);
+})->with([
+    [65.0, 65.0],
+    [65.01, 65.0],
+    [66.0, 65.0],
+    [66.49, 65.0],
+    [66.5, 70.0],
+    [66.49999999, 70.0],
+    [67.0, 70.0],
+    [68.8, 70.0],
+    [63.25, 65.0],
+    [31.0, 30.0],
+    [32.0, 35.0],
+    [1.2, 5.0],
+    [0.0, 5.0],
 ]);
 
 it('no tiene tarifas vigentes si falta alguna', function () {
