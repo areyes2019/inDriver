@@ -175,6 +175,12 @@ const router = createRouter({
       meta: { requiresTenantAuth: true },
     },
     {
+      path: '/:slug/panel/conversaciones',
+      name: 'tenant-conversaciones',
+      component: () => import('../views/tenant/conversaciones/ConversacionesView.vue'),
+      meta: { requiresTenantAuth: true },
+    },
+    {
       path: '/:slug/panel/clientes',
       name: 'tenant-clientes-lista',
       component: () => import('../views/tenant/clientes/ListaClientesView.vue'),

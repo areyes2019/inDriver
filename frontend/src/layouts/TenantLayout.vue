@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import UiAmbienteSwitch from '@/components/ui/UiAmbienteSwitch.vue'
 import UiNavbar from '@/components/ui/UiNavbar.vue'
+import http from '@/lib/http'
+import realtimeService from '@/services/realtime'
 import { useAmbienteStore } from '@/stores/ambiente'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
 
@@ -55,6 +57,42 @@ const mostrarNuevaEntrega = computed(() => enPanel.value && esOperativo.value)
 
 const botonNuevaEntregaRef = ref<HTMLButtonElement>()
 
+// spec tenant/031, RN-55 y RN-60: cuántas conversaciones de WhatsApp esperan a una persona. Sin
+// sonido ni push: solo el número en el menú, que se mueve con cada aviso del canal del Panel.
+const puedeVerBandeja = computed(() => esAdminCliente.value || esDespachador.value)
+const esperando = ref(0)
+
+function onConversacionActualizada(datos: { esperando?: number }) {
+  if (typeof datos.esperando === 'number') esperando.value = datos.esperando
+}
+
+async function cargarEsperando() {
+  try {
+    const { data } = await http.get(`/t/${slug.value}/whatsapp/conversaciones/esperando`)
+    esperando.value = data.esperando ?? 0
+  } catch {
+    // El contador es una ayuda; si falla, el menú sigue funcionando.
+  }
+}
+
+watch(
+  [slug, puedeVerBandeja],
+  ([slugActual, puede]) => {
+    if (!slugActual || !puede) return
+    cargarEsperando()
+    realtimeService
+      .subscribePanel(slugActual)
+      ?.bind('whatsapp.conversacion', onConversacionActualizada)
+  },
+  { immediate: true },
+)
+
+onUnmounted(() => {
+  realtimeService
+    .subscribePanel(slug.value)
+    ?.unbind('whatsapp.conversacion', onConversacionActualizada)
+})
+
 onMounted(() => {
   if (mostrarNuevaEntrega.value) {
     nextTick(() => botonNuevaEntregaRef.value?.focus())
@@ -73,15 +111,25 @@ defineExpose({
 })
 
 const items = computed(() => {
-  if (esDespachador.value) {
-    return esOperativo.value ? [{ label: 'Panel', to: `/${slug.value}/panel` }] : []
+  const conversaciones = {
+    label: 'Conversaciones',
+    to: `/${slug.value}/panel/conversaciones`,
+    badge: esperando.value,
   }
 
-  const lista: Array<{ label: string; to: string }> = []
+  if (esDespachador.value) {
+    return esOperativo.value
+      ? [{ label: 'Panel', to: `/${slug.value}/panel` }, conversaciones]
+      : [conversaciones]
+  }
+
+  const lista: Array<{ label: string; to: string; badge?: number }> = []
 
   if (esOperativo.value) {
     lista.push({ label: 'Panel', to: `/${slug.value}/panel` })
   }
+
+  lista.push(conversaciones)
 
   lista.push(
     { label: 'Clientes', to: `/${slug.value}/panel/clientes` },

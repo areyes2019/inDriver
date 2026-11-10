@@ -55,9 +55,11 @@ class ConversacionWhatsappService
     ) {}
 
     /**
+     * Nulo cuando el bot no debe contestar porque una persona atiende la conversación (RN-58).
+     *
      * @param  Collection<int, WhatsappMensaje>  $pendientes  Lo que el cliente mandó desde la última respuesta, del más viejo al más nuevo.
      */
-    public function atender(WhatsappConversacion $conversacion, Collection $pendientes, ?string $telefonoFlotilla): RespuestaBot
+    public function atender(WhatsappConversacion $conversacion, Collection $pendientes, ?string $telefonoFlotilla): ?RespuestaBot
     {
         $this->telefonoFlotilla = $telefonoFlotilla;
         $cliente = $this->clienteDe($conversacion);
@@ -69,6 +71,11 @@ class ConversacionWhatsappService
             $cliente?->cambiarAvisosWhatsapp($palabra === 'ALTA', 'Cliente por WhatsApp ('.$palabra.')');
 
             return $this->texto($palabra === 'ALTA' ? 'alta' : 'baja');
+        }
+
+        // RN-58: BAJA sigue funcionando, pero lo demás lo contesta la persona que tomó la conversación.
+        if ($conversacion->botPausado()) {
+            return null;
         }
 
         // RN-15.
@@ -114,7 +121,7 @@ class ConversacionWhatsappService
 
             switch ($extraccion->intencion) {
                 case ExtraccionPedido::INTENCION_PERSONA:
-                    return $this->texto('persona', ['contacto' => $this->frases->contacto($telefonoFlotilla)]);
+                    return $this->pedirPersona($conversacion);
                 case ExtraccionPedido::INTENCION_CANCELAR:
                     return $this->cancelar($esNueva ? null : $solicitud);
                 case ExtraccionPedido::INTENCION_CONFIRMAR:
@@ -142,6 +149,23 @@ class ConversacionWhatsappService
         }
 
         return $this->avanzar($solicitud, $conversacion, $cliente, $saludo, $cambio, $avisos);
+    }
+
+    /**
+     * RN-59: la conversación queda marcada en la bandeja y el bot se calla, pero el cliente se
+     * lleva el teléfono de la flotilla por si nadie la ve a tiempo.
+     */
+    private function pedirPersona(WhatsappConversacion $conversacion): RespuestaBot
+    {
+        $conversacion->pide_persona_en ??= now();
+        $conversacion->pausarBot();
+        $conversacion->save();
+
+        $urgente = $this->telefonoFlotilla !== null && $this->telefonoFlotilla !== ''
+            ? $this->frases->decir('persona_urgente', ['telefono' => $this->telefonoFlotilla])
+            : '';
+
+        return new RespuestaBot($this->frases->decir('persona').$urgente);
     }
 
     /**

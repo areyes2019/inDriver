@@ -246,6 +246,14 @@ La meta de capacidad es de 1,000 conversaciones al día por flotilla (40 por rep
 - **RN-59.** "Quiero hablar con alguien" marca la conversación, pausa el bot y deja el teléfono de la flotilla, por si nadie ve la bandeja.
 - **RN-60.** No hay sonido ni notificaciones push; solo el contador del menú.
 
+**Cómo quedó la etapa 7b** (2026-11-10):
+
+- La bandeja vive en `/{slug}/panel/conversaciones` y la atiende `WhatsappBandejaController`. Muestra las 50 conversaciones con movimiento más reciente y, de cada una, los últimos 200 mensajes.
+- El aviso en tiempo real va por un canal nuevo, `tenant.{slug}.panel`, que solo autoriza a AdminCliente y Despachador. No usa el de conductores porque ese lo escucha la app de cada repartidor. El aviso solo trae el id de la conversación y el contador; el Panel vuelve a pedir el texto.
+- Con el bot en pausa, "BAJA" y "ALTA" siguen contestándose (RN-51); lo demás queda en la bandeja sin respuesta.
+- "Quiero hablar con alguien" también pausa el bot 2 horas. Contestar desde la bandeja quita la marca; "Devolver al bot" quita la marca y la pausa.
+- Cada mensaje escrito desde el Panel guarda quién lo escribió.
+
 ## 7. Datos de Meta verificados
 
 Consultado el 2026-11-05.

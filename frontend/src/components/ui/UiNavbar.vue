@@ -6,7 +6,8 @@ import { Icon } from '@iconify/vue'
 withDefaults(
   defineProps<{
     logoText: string
-    items: Array<{ label: string; to: string }>
+    /** `badge` pinta un contador junto a la etiqueta; con 0 o sin él no se ve nada. */
+    items: Array<{ label: string; to: string; badge?: number }>
     mostrarConfiguracion?: boolean
   }>(),
   {
@@ -37,6 +38,12 @@ const mobileOpen = ref(false)
               active-class="bg-accent text-white hover:bg-accent"
             >
               {{ item.label }}
+              <span
+                v-if="item.badge"
+                class="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-semibold text-white"
+                :aria-label="`${item.badge} esperando`"
+                >{{ item.badge }}</span
+              >
             </RouterLink>
           </li>
         </ul>
@@ -94,6 +101,12 @@ const mobileOpen = ref(false)
             @click="mobileOpen = false"
           >
             {{ item.label }}
+            <span
+              v-if="item.badge"
+              class="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-semibold text-white"
+              :aria-label="`${item.badge} esperando`"
+              >{{ item.badge }}</span
+            >
           </RouterLink>
         </li>
       </ul>

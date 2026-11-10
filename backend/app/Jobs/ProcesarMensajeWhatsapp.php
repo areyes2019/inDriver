@@ -103,6 +103,13 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
 
         $respuesta = $conversacion->atender($mensaje->conversacion, $this->pendientes($mensaje), $this->tenant->telefono);
 
+        // RN-58: una persona atiende; el mensaje queda en la bandeja y el bot no contesta.
+        if ($respuesta === null) {
+            $mensaje->update(['respondido_en' => now()]);
+
+            return;
+        }
+
         $wamid = $respuesta->botones === []
             ? $cliente->enviarTexto($numero, $mensaje->conversacion, $respuesta->texto)
             : $cliente->enviarBotones($numero, $mensaje->conversacion, $respuesta->texto, $respuesta->botones);

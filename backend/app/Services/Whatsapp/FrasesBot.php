@@ -121,7 +121,11 @@ class FrasesBot
             'Por ahora no puedo tomarte envíos por aquí. {contacto}',
         ],
         'persona' => [
-            'Claro. {contacto}',
+            'Claro, ya le aviso a alguien de la flotilla para que te conteste por aquí.',
+            'Va, en un momento te escribe una persona de la flotilla por aquí.',
+        ],
+        'persona_urgente' => [
+            ' Si es urgente, llama al {telefono}.',
         ],
         'sin_precio' => [
             'Ahorita no puedo calcular el precio de ese envío. {contacto}',

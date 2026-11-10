@@ -24,6 +24,8 @@ export type EstadoConexion = 'conectando' | 'vivo' | 'caido'
 class RealtimeService {
   private pusher: Pusher | null = null
   private channel: Channel | null = null
+  /** El canal solo del Panel (spec tenant/031, D22): la app de los repartidores no lo escucha. */
+  private panelChannel: Channel | null = null
   private connected = false
   private estado: EstadoConexion = 'conectando'
   private observadores = new Set<(estado: EstadoConexion) => void>()
@@ -152,6 +154,33 @@ class RealtimeService {
     return this.channel
   }
 
+  /**
+   * Se suscribe al canal del Panel (bandeja de WhatsApp). Va aparte del de conductores para que
+   * `unsubscribe()` —que el Panel llama al salir de su pantalla— no le quite los avisos al menú.
+   */
+  subscribePanel(slug: string): Channel | null {
+    if (this.panelChannel && currentSlug !== slug) {
+      this.unsubscribePanel()
+    }
+
+    this.connect(slug)
+    if (!this.pusher) return null
+
+    if (!this.panelChannel) {
+      this.panelChannel = this.pusher.subscribe(`private-tenant.${slug}.panel`)
+    }
+
+    return this.panelChannel
+  }
+
+  private unsubscribePanel() {
+    if (this.panelChannel) {
+      this.panelChannel.unbind_all()
+      this.pusher?.unsubscribe(this.panelChannel.name)
+      this.panelChannel = null
+    }
+  }
+
   unsubscribe() {
     if (this.channel) {
       this.channel.unbind_all()
@@ -162,6 +191,7 @@ class RealtimeService {
 
   disconnect() {
     this.unsubscribe()
+    this.unsubscribePanel()
     if (this.pusher) {
       this.pusher.disconnect()
       this.pusher = null

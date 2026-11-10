@@ -24,6 +24,7 @@ use App\Http\Controllers\Tenant\PedidoController;
 use App\Http\Controllers\Tenant\SaldoConductorController;
 use App\Http\Controllers\Tenant\UsuarioController;
 use App\Http\Controllers\Tenant\VentaViajeConductorController;
+use App\Http\Controllers\Tenant\WhatsappBandejaController;
 use App\Http\Controllers\Tenant\ZonaCoberturaController;
 use App\Http\Controllers\WhatsappWebhookController;
 use Illuminate\Broadcasting\BroadcastController;
@@ -102,6 +103,12 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
                 Route::get('/conductores/activos', [ConductorController::class, 'activos']);
                 // Antes que GET /pedidos/{pedido}, o "en-turno" se tomaría por un id.
                 Route::get('/pedidos/en-turno', [PedidoController::class, 'enTurno']);
+
+                // Bandeja de WhatsApp (spec tenant/031, etapa 7b): se relee sola con cada aviso del
+                // socket, igual que el Panel, así que va en el mismo bucket de lectura.
+                Route::get('/whatsapp/conversaciones', [WhatsappBandejaController::class, 'index']);
+                Route::get('/whatsapp/conversaciones/esperando', [WhatsappBandejaController::class, 'esperando']);
+                Route::get('/whatsapp/conversaciones/{conversacion}', [WhatsappBandejaController::class, 'show']);
             });
 
         Route::middleware(['throttle:tenant-usuarios', 'rol.tenant:AdminCliente'])->group(function () {
@@ -169,6 +176,9 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::get('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'show']);
 
             Route::get('/configuracion', [ConfiguracionController::class, 'show']);
+
+            Route::post('/whatsapp/conversaciones/{conversacion}/mensajes', [WhatsappBandejaController::class, 'responder']);
+            Route::post('/whatsapp/conversaciones/{conversacion}/devolver-al-bot', [WhatsappBandejaController::class, 'devolverAlBot']);
         });
     });
 

@@ -443,3 +443,34 @@ it('el resumen avisa cómo darse de baja y confirmar da el permiso, salvo un BAJ
     expect($otro->texto)->not->toContain('escribe BAJA')
         ->and($cliente->fresh()->avisos_whatsapp)->toBeFalse();
 });
+
+it('pedir una persona marca la conversación, calla al bot y deja el teléfono de la flotilla', function () {
+    iaDevuelve(['intencion' => 'hablar_con_persona']);
+
+    expect(clienteEscribe($this->conversacion, ['texto' => 'quiero hablar con alguien'])->texto)
+        ->toBe('Claro, ya le aviso a alguien de la flotilla para que te conteste por aquí. Si es urgente, llama al 4613581090.');
+
+    $conversacion = $this->conversacion->fresh();
+    expect($conversacion->pide_persona_en)->not->toBeNull()
+        ->and($conversacion->botPausado())->toBeTrue();
+});
+
+it('con el bot pausado no contesta, pero BAJA sí', function () {
+    $this->conversacion->pausarBot();
+    $this->conversacion->save();
+    $this->mock(ExtractorPedidoIA::class)->shouldNotReceive('extraer');
+    $atender = fn (string $texto) => app(ConversacionWhatsappService::class)->atender(
+        $this->conversacion->fresh(),
+        collect([WhatsappMensaje::create([
+            'id_conversacion' => $this->conversacion->id_conversacion, 'wamid' => 'wamid.'.uniqid(), 'direccion' => WhatsappMensaje::ENTRANTE,
+            'tipo' => 'text', 'texto' => $texto, 'enviado_en' => now(),
+        ])]),
+        '4613581090',
+    );
+
+    expect($atender('¿ya viene?'))->toBeNull()
+        ->and($atender('BAJA')?->texto)->toContain('ya no te mandaremos avisos');
+
+    $this->travel(121)->minutes();
+    expect($this->conversacion->fresh()->botPausado())->toBeFalse();
+});

@@ -19,3 +19,11 @@ use Illuminate\Support\Facades\Broadcast;
 Broadcast::channel('tenant.{slug}.conductores', function (Usuario $usuario, string $slug) {
     return tenant()?->slug === $slug;
 });
+
+/*
+| Canal del Panel (spec tenant/031, D22): la bandeja de WhatsApp. Un conductor también es un
+| `Usuario`, así que aquí se filtra por rol: las conversaciones con clientes no llegan a la app.
+*/
+Broadcast::channel('tenant.{slug}.panel', function (Usuario $usuario, string $slug) {
+    return tenant()?->slug === $slug && in_array($usuario->rol, ['AdminCliente', 'Despachador'], true);
+});
