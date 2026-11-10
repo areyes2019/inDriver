@@ -65,9 +65,9 @@ Deja funcionando:
   sobre ese botón.
 - Al activarlo (clic, o Enter/Espacio con el foco puesto en él), un panel se **desliza** desde la
   izquierda, a partir del borde derecho del menú lateral (`left: var(--riel-ocupado)`, spec 032),
-  hasta cubrir el 45% del ancho del viewport — más ancho que `ServiciosEnTurno` (que ocupa 20%, spec
-  `tenant/008`), así que al abrirse tapa visualmente tanto a Servicios en turno como una franja
-  adicional del mapa a su derecha. La animación usa `transform: translateX(...)` con una transición
+  hasta cubrir el 45% del ancho del viewport, sobre el mapa. Si "Viajes en turno" (spec
+  `tenant/008`) estaba abierto, se cierra al abrir Nueva Entrega, junto con el detalle de envío:
+  los dos paneles nunca están abiertos a la vez (spec 032). La animación usa `transform: translateX(...)` con una transición
   de `0.4s ease-in-out` (el panel siempre está en el DOM; lo que cambia es su posición, no su
   visibilidad, para que el deslizamiento se vea).
 - El panel ocupa la altura completa del navegador, desde `top: var(--alto-banda)` (debajo de la
@@ -468,14 +468,15 @@ cambia es su posición horizontal: `translate-x-0` cuando está abierto y
 del menú lateral, para que no asome ningún borde entre los márgenes del riel (spec 032) —, con
 `transition: transform 0.4s ease-in-out`.
 
-### Por qué tapa a `ServiciosEnTurno` en vez de convivir a su lado
+### Por qué cierra a `ServiciosEnTurno` en vez de taparlo
 
-El panel arranca en `left: var(--riel-ocupado)` igual que `ServiciosEnTurno` (spec 008), pero con un
-ancho mayor (`45%` contra el `20%` de `ServiciosEnTurno`): al abrirse no solo coincide con su lugar,
-sino que se extiende más allá. Su `z-index` va entre el de `ServiciosEnTurno` (30) y el del menú
-lateral (40): por encima de Servicios en turno y de lo que haya a su derecha dentro de ese 45% (los
-tapa mientras está abierto), pero por debajo del menú lateral, que siempre queda visible y
-utilizable.
+El panel arranca en `left: var(--riel-ocupado)`, en el mismo lugar que `ServiciosEnTurno` (spec
+008), con un ancho mayor (`45%` contra `20%`). Antes simplemente lo tapaba; desde que "Viajes en
+turno" se abre y cierra desde el menú lateral (spec 032), abrir Nueva Entrega **lo cierra**, junto
+con el detalle de envío, y abrir "Viajes en turno" cierra Nueva Entrega. Así nunca hay dos paneles
+encimados en la misma franja, y el icono de cada uno en el menú dice la verdad sobre qué está
+abierto. La exclusión la aplica `PanelView.vue`, dueño de los tres paneles. Su `z-index` (35) queda
+por debajo del menú lateral (40), que siempre queda visible y utilizable.
 
 ### Por qué ocupa toda la altura del navegador
 
@@ -782,8 +783,8 @@ Cualquier otra combinación responde `422`.
 11. Ninguna ruta del frontend expone `/t/:slug/panel/pedidos` (ni `/crear` ni `/:id/editar`); el
     menú lateral no incluye un ítem "Pedidos".
 12. Al activar el botón, el panel se desliza desde la izquierda, a partir del borde del menú
-    lateral, hasta cubrir el 45% del ancho del viewport, tapando a `ServiciosEnTurno` (20%) y la
-    franja adicional a su derecha, con una transición de 0.4s; ocupa toda la altura del navegador
+    lateral, hasta cubrir el 45% del ancho del viewport, con una transición de 0.4s, y cierra
+    "Viajes en turno" y el detalle de envío si estaban abiertos; ocupa toda la altura del navegador
     (debajo de la banda de "Modo prueba" en TEST), con el menú lateral visible por encima.
 13. Activar el botón de nuevo, o "Cancelar", o `Escape` con el foco dentro del formulario, desliza el
     panel de regreso fuera de la pantalla, sin que asome ningún borde junto al menú lateral, y
@@ -871,9 +872,9 @@ Cualquier otra combinación responde `422`.
    del árbol de componentes (`TenantLayout` ⇄ `PanelView` ⇄ `NuevaEntregaPanel`), sin ningún estado
    compartido en un módulo aparte.
 10. El panel deslizante (`transform: translateX`, transición `0.4s ease-in-out`) arranca en el borde
-    del menú lateral y cubre el 45% del viewport al abrirse, superponiéndose a `ServiciosEnTurno` y
-    a la franja adicional a su derecha, ocupando toda la altura del navegador (el menú lateral se
-    mantiene visualmente por encima).
+    del menú lateral y cubre el 45% del viewport al abrirse, ocupando toda la altura del navegador
+    (el menú lateral se mantiene visualmente por encima). Abrirlo cierra `ServiciosEnTurno` y el
+    detalle de envío, y abrir `ServiciosEnTurno` lo cierra a él (spec 032).
 11. El foco inicial al entrar a `/panel` como Despachador se posiciona sobre el botón + del menú
     lateral; no hay tratamiento especial para pantallas angostas en el resto del panel deslizante.
 12. Latitud/longitud se elimina de formulario, validación, modelo, resource, API y tabla; las

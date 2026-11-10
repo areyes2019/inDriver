@@ -354,7 +354,9 @@ máquina de estados de SPEC-006 agrega dos caminos, y cada uno necesita su event
   cuando el servidor confirmó cero, nunca como consecuencia de un fallo.
 - **RN-20:** El estado de conexión es visible sin ser ruidoso: un punto junto al título de cada panel
   — vivo, reconectando, caído. La operación tiene derecho a saber si lo que ve es de hace un segundo
-  o de hace diez minutos.
+  o de hace diez minutos. Como Viajes en turno arranca cerrado (spec 032), su icono en el menú
+  lateral repite el punto cuando el Panel no está en vivo (ámbar reconectando, rojo caído), para
+  que una desconexión no pase inadvertida con la lista cerrada.
 
 ### Capa visual
 

@@ -23,17 +23,19 @@ Panel, el mapa ocupa toda la ventana de borde a borde y todos los demás element
 
 ## 2. Alcance
 
-**Incluye (paso 1):**
+**Incluye:**
 
-- Un menú lateral nuevo (`UiSidebar`) en todas las pantallas del tenant, en lugar de `UiNavbar`.
-- La eliminación de la barra superior del tenant.
-- El mapa del Panel a pantalla completa, y los paneles flotantes reubicados para no quedar debajo
-  del menú.
+- **Paso 1.** Un menú lateral nuevo (`UiSidebar`) en todas las pantallas del tenant, en lugar de
+  `UiNavbar`; la eliminación de la barra superior; y el mapa del Panel a pantalla completa, con los
+  paneles flotantes reubicados para no quedar debajo del menú.
+- **Paso 2.** Viajes en turno deja de ser una columna fija y se abre y cierra desde un icono del
+  menú, como Nueva Entrega.
 
 **No incluye:**
 
-- Cambiar el aspecto de los paneles flotantes (Viajes en turno, Detalle, Nueva Entrega, Flotilla,
-  Saldo): en este paso solo se mueven. Su rediseño corresponde a los pasos siguientes.
+- Cambiar el aspecto interno de los paneles flotantes (Viajes en turno, Detalle, Nueva Entrega,
+  Flotilla, Saldo): solo se mueven, y Viajes en turno además se abre y cierra. Su rediseño
+  corresponde a los pasos siguientes.
 - El layout de ADMIN_CENTRAL: `AdminLayout` sigue usando `UiNavbar`, que se conserva sin cambios.
 - Un tratamiento específico para móvil.
 - Recordar si el menú quedó abierto entre recargas.
@@ -51,6 +53,8 @@ Panel, el mapa ocupa toda la ventana de borde a borde y todos los demás element
 | D-07 | Iconos de línea y de un solo color (set `tabler` de Iconify). Los iconos a color actuales chocan con el fondo oscuro. |
 | D-08 | La barra superior desaparece en **todas** las pantallas del tenant, no solo en el Panel. |
 | D-09 | "Nueva Entrega" pasa a ser un botón **+** destacado arriba del menú, solo en el Panel y solo para el rol operativo. |
+| D-13 | "Viajes en turno" deja de ser una columna fija y pasa a ser un panel que se abre y cierra desde un icono del menú, justo debajo del +, igual que Nueva Entrega. Arranca cerrado. |
+| D-14 | Viajes en turno y Nueva Entrega son excluyentes: abrir uno cierra el otro. |
 | D-10 | La campana de notificaciones se elimina, porque no hacía nada. |
 | D-11 | En el Panel, el mapa ocupa toda la ventana, también por detrás del menú. |
 | D-12 | Conversaciones se queda en el menú con un icono de chat **provisional**. Su forma final queda pendiente (sección 10). |
@@ -82,8 +86,18 @@ En este orden, con las mismas reglas de visibilidad por rol que ya tenía el men
    "inDriver" al lado.
 2. **Botón de abrir/cerrar**, debajo del logo: `tabler:layout-sidebar-left-expand` cerrado y
    `tabler:layout-sidebar-left-collapse` abierto, con `aria-expanded` y `aria-label`.
-3. **Nueva Entrega** (solo en el Panel y para el rol operativo): un botón **+** (`tabler:plus`) con
-   fondo de acento, para que se distinga de los destinos. Abierto, dice "Nueva Entrega".
+3. **Acciones del Panel** (solo en el Panel y para el rol operativo). No cambian de pantalla: abren y
+   cierran un panel sobre el mapa, y llevan `aria-expanded`.
+   - **Nueva Entrega**: un botón **+** (`tabler:plus`) con fondo de acento, el único botón
+     destacado del menú. Abierto, dice "Nueva Entrega".
+   - **Viajes en turno**: `tabler:truck-delivery`, justo debajo del +, sin fondo de acento. Mientras
+     su panel está abierto lleva el fondo de "activo". Abierto, dice "Viajes en turno". Lleva dos
+     marcas en la esquina del icono:
+     - un **contador rojo** con los viajes pendientes (`PENDIENTE` o `PUBLICADO`, el mismo criterio
+       de la sección "Viajes pendientes" de la spec 008). Con 0 no se ve;
+     - un **punto de conexión** ámbar (reconectando) o rojo (caído) cuando el Panel no está en
+       vivo (spec 027, RN-20). En vivo no se ve. Así el despachador se entera de una desconexión
+       aunque la lista esté cerrada.
 4. **Destinos** (tabla de arriba).
 5. **Pie**, pegado al borde inferior:
    - **Configuración** (`tabler:settings`), con el mismo destino que el engranaje actual:
@@ -119,6 +133,18 @@ El botón + conserva el comportamiento que tenía en la barra superior:
 - `ArrowRight` o `ArrowDown` con el foco en el botón abre el panel de Nueva Entrega.
 - Al cerrar el panel (Cancelar o `Escape`), el foco vuelve a este botón.
 - `TenantLayout` sigue exponiendo `focusNuevaEntrega()` y emitiendo `toggle-nueva-entrega`.
+
+### Viajes en turno (spec 008)
+
+- El icono abre y cierra el panel de Viajes en turno. Arranca cerrado en cada carga.
+- `Escape` con el foco dentro del panel lo cierra y devuelve el foco a este icono. No tiene atajo
+  con flechas, y el foco al entrar al Panel sigue yendo al +.
+- Abrir Viajes en turno cierra Nueva Entrega, y abrir Nueva Entrega cierra Viajes en turno y el
+  Detalle.
+- `TenantLayout` recibe `viajesEnTurnoAbierto`, `viajesPendientes` y el estado de conexión del Panel,
+  emite `toggle-viajes-en-turno` y expone `focusViajesEnTurno()`. El estado lo tiene `PanelView`,
+  con el mismo esquema de props y eventos que Nueva Entrega: `TenantLayout` no depende del store
+  del Panel.
 
 ## 5. Medidas y capas
 
@@ -158,16 +184,18 @@ siguientes cambien un número y no cada componente:
 
 | Panel | Antes | Ahora |
 |---|---|---|
-| Viajes en turno (`ServiciosEnTurno`) | `left-0 top-[4.25rem]`, alto `100vh − 4.25rem` | `left: var(--riel-ocupado)`, `top: var(--alto-banda)`, alto `100vh − --alto-banda` |
+| Viajes en turno (`ServiciosEnTurno`) | columna fija, `left-0 top-[4.25rem]`, alto `100vh − 4.25rem` | panel que se abre y cierra desde el menú; `left: var(--riel-ocupado)`, `top: var(--alto-banda)`, alto `100vh − --alto-banda` |
 | Detalle (`DetalleEnvioPanel`) | igual que Viajes en turno | igual que Viajes en turno |
 | Nueva Entrega (`NuevaEntregaPanel`) | `left-0 top-0 h-screen`, encabezado con `pt-[4.25rem]` | `left: var(--riel-ocupado)`, `top: var(--alto-banda)`, alto `100vh − --alto-banda`; el encabezado pierde el `pt-[4.25rem]` |
 | Flotilla (`ConductoresActivos`) | `right-0 top-[4.25rem]`, alto `100vh − 4.25rem` | `right-0`, `top: var(--alto-banda)`, alto `100vh − --alto-banda` |
 | Saldo (`SaldoViajesTenant`) | `top-[4.75rem]` | `top: calc(var(--alto-banda) + 0.5rem)` |
 
 - Los anchos (20 % y 45 %) no cambian.
-- Detalle y Nueva Entrega se ocultan deslizándose a la izquierda. Como ahora arrancan después del
-  riel, su posición oculta es `translateX(calc(-100% - var(--riel-ocupado)))`, para que no asome un
-  borde entre los márgenes del riel.
+- Viajes en turno, Detalle y Nueva Entrega se ocultan deslizándose a la izquierda, en 0.4 s. Como
+  arrancan después del riel, su posición oculta es `translateX(calc(-100% - var(--riel-ocupado)))`,
+  para que no asome un borde entre los márgenes del riel. Se quedan siempre montados (para que el
+  deslizamiento se vea y la lista no pierda su estado), y cerrados llevan `inert`, para que el
+  tabulador no pueda entrar a un panel escondido fuera de la pantalla.
 
 ## 7. Las demás pantallas del tenant
 
@@ -182,7 +210,10 @@ siguientes cambien un número y no cada componente:
 - **RN-02.** El menú arranca cerrado en cada carga.
 - **RN-03.** Abrir el menú nunca mueve ni redimensiona el mapa ni los paneles.
 - **RN-04.** Cada destino del menú respeta las mismas reglas de rol que tenía en la barra superior.
-- **RN-05.** El botón + de Nueva Entrega solo existe en el Panel y para el rol operativo.
+- **RN-05.** Los botones de Nueva Entrega y de Viajes en turno solo existen en el Panel y para el
+  rol operativo.
+- **RN-08.** Viajes en turno y Nueva Entrega nunca están abiertos a la vez. El Detalle solo está
+  abierto junto con Viajes en turno.
 - **RN-06.** El cambio de ambiente (TEST/LIVE) sigue siendo exclusivo de AdminCliente.
 - **RN-07.** Los colores del menú salen de tokens de `@theme`, no de valores sueltos en el componente.
 
@@ -193,8 +224,11 @@ siguientes cambien un número y no cada componente:
 - **`components/ui/UiSidebar.vue`**: el riel y el menú abierto. Recibe:
   - `items`: `Array<{ label: string; to: string; icon: string; badge?: number; exacto?: boolean }>`.
     `exacto` activa la comparación exacta de ruta (la usa Panel).
-  - Slot `acciones`: el botón + de Nueva Entrega.
-  - Slot `pie`: Configuración, TEST/LIVE y el usuario.
+  - `acciones`: `Array<{ id: string; label: string; icon: string; expandida: boolean;
+    destacada?: boolean; badge?: number; conexion?: 'vivo' | 'reconectando' | 'caido' }>`, los
+    botones de la sección 4 que abren y cierran paneles. Emite `accion(id)` y
+    `accion-teclado(id, event)`, y expone `focusAccion(id)`.
+  - Slot `pie`: TEST/LIVE. Configuración y el usuario los pinta el propio componente.
   - Expone `abierto` como estado interno. No usa un store: nadie fuera del menú necesita saberlo.
 
 ### A modificar
@@ -203,8 +237,8 @@ siguientes cambien un número y no cada componente:
   necesite el menú (activo, separador, texto atenuado), también como tokens.
 - **`scripts/generate-icon-data.mjs`** y **`assets/icon-data.json`**: se agrega la colección
   `tabler` con solo los iconos de esta spec: `map`, `messages`, `user`, `users`, `headset`,
-  `steering-wheel`, `settings`, `plus`, `key`, `logout`, `bolt`, `layout-sidebar-left-expand` y
-  `layout-sidebar-left-collapse`. Los iconos se siguen empaquetando localmente, sin pedirlos a la API
+  `steering-wheel`, `settings`, `plus`, `truck-delivery`, `key`, `logout`, `bolt`,
+  `layout-sidebar-left-expand` y `layout-sidebar-left-collapse`. Los iconos se siguen empaquetando localmente, sin pedirlos a la API
   de Iconify.
 - **`package.json`**: `@iconify-json/tabler` como dependencia de desarrollo, igual que las dos
   colecciones actuales.
@@ -214,7 +248,11 @@ siguientes cambien un número y no cada componente:
   - Define las variables CSS de la sección 5.
   - `<main>` cambia su relleno (sección 7). Con `anchoCompleto` no lleva relleno.
 - **`components/ui/UiAmbienteSwitch.vue`**: una prop `compacto` para la píldora del riel cerrado.
-- **`views/tenant/panel/PanelView.vue`**: el contenedor del mapa pasa a `h-screen w-screen`.
+- **`views/tenant/panel/PanelView.vue`**: el contenedor del mapa pasa a `h-screen w-screen`. Es
+  dueño de qué panel está abierto (Viajes en turno, Nueva Entrega, Detalle) y aplica la exclusión
+  de RN-08. Calcula los viajes pendientes desde `usePanelStore` y se los pasa a `TenantLayout` junto
+  con el estado de conexión.
+- **`components/panel/ServiciosEnTurno.vue`**: recibe `abierto` y emite `cerrar` (con `Escape`).
 - **`components/panel/ServiciosEnTurno.vue`**, **`DetalleEnvioPanel.vue`**,
   **`NuevaEntregaPanel.vue`**, **`ConductoresActivos.vue`** y **`SaldoViajesTenant.vue`**: posiciones
   según la sección 6.
@@ -227,7 +265,8 @@ siguientes cambien un número y no cada componente:
 
 - **Conversaciones**: icono y lugar definitivos en el menú. Por ahora es `tabler:messages` en la
   segunda posición.
-- **Pasos siguientes** del cambio de aspecto, empezando por el rediseño de los paneles flotantes.
+- **Pasos siguientes** del cambio de aspecto, empezando por el rediseño interno de los paneles
+  flotantes.
 
 ## 11. Criterios de aceptación
 
@@ -256,9 +295,17 @@ siguientes cambien un número y no cada componente:
     de ella.
 14. En el Panel, el mapa llega a los cuatro bordes de la ventana, también por detrás del riel.
 15. Viajes en turno, Detalle y Nueva Entrega empiezan a la derecha del riel y ocupan todo el alto; al
-    ocultarse, no asoma ningún borde entre los márgenes del riel. La Flotilla ocupa todo el alto a la
-    derecha y Saldo queda centrado arriba.
+    ocultarse, no asoma ningún borde entre los márgenes del riel, y el tabulador no entra en ellos.
+    La Flotilla ocupa todo el alto a la derecha y Saldo queda centrado arriba.
 16. En las demás pantallas, el contenido no queda debajo del riel cerrado.
 17. La campana de notificaciones ya no existe.
 18. Los iconos del menú se cargan sin pedir nada a la API de Iconify.
-19. ESLint, Prettier y la revisión de tipos corren sin errores.
+19. Al entrar al Panel, Viajes en turno está cerrado y el mapa se ve completo entre el riel y la
+    Flotilla. El icono de camioneta, debajo del +, lo abre y lo cierra deslizándose desde el riel;
+    abierto, el icono se marca como activo.
+20. El icono de Viajes en turno muestra en rojo los viajes pendientes y se actualiza en vivo; con 0
+    no se ve. Con el Panel reconectando o caído muestra un punto ámbar o rojo.
+21. Abrir Viajes en turno cierra Nueva Entrega; abrir Nueva Entrega cierra Viajes en turno y el
+    Detalle; cerrar Viajes en turno con un Detalle abierto cierra los dos.
+22. `Escape` con el foco dentro de Viajes en turno lo cierra y devuelve el foco a su icono.
+23. ESLint, Prettier y la revisión de tipos corren sin errores.

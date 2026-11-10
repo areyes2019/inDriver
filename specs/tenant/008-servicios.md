@@ -12,9 +12,9 @@ operativo sin salir del Panel.
 
 ## Objetivo / Alcance
 
-Componente `ServiciosEnTurno.vue`: un panel fijo que se sobrepone al mapa central
-(`tenant/009-mapa.md`) descrito en la ampliación de `tenant/007-panel-despachador.md`, y su panel
-deslizante de detalle `DetalleEnvioPanel.vue`.
+Componente `ServiciosEnTurno.vue`: un panel que se abre y cierra desde un icono del menú lateral
+(spec 032) y se sobrepone al mapa (`tenant/009-mapa.md`), descrito en la ampliación de
+`tenant/007-panel-despachador.md`, y su panel deslizante de detalle `DetalleEnvioPanel.vue`.
 
 Esta spec describe el **estado final** del panel: estructura, estilo de las tarjetas, apertura del
 detalle y cancelación del viaje. La mecánica de carga de datos reales (paginación completa, estados
@@ -36,6 +36,9 @@ Deja funcionando:
 
 - Panel con título "Viajes en turno", pegado al borde derecho del menú lateral de `TenantLayout`
   (spec 032), con todo el alto de la pantalla (debajo de la banda de "Modo prueba" en TEST).
+- El panel **arranca cerrado** y se abre y cierra con el icono de camioneta del menú lateral, justo
+  debajo del + de Nueva Entrega, deslizándose desde el borde del menú. Ese icono muestra el número
+  de viajes pendientes y, si el Panel no está en vivo, un punto de conexión (spec 032).
 - Lista scrolleable de tarjetas de viaje construidas con los pedidos reales del tenant que devuelve
   `GET /t/{slug}/pedidos`.
 - Cada tarjeta muestra: ícono de calendario a color, folio con prefijo `#`, fecha y hora en color de
@@ -88,6 +91,22 @@ El tenant no tiene barra superior: su navegación es un menú lateral flotante a
 riel cerrado, `top: var(--alto-banda)` y `height: calc(100vh - var(--alto-banda))` para ocupar todo
 el alto (debajo de la banda de "Modo prueba" en TEST), y `z-30` (por debajo del menú lateral, que al
 abrirse flota encima).
+
+### Se abre y cierra desde el menú, y arranca cerrado
+
+La lista dejó de ser una columna fija: se abre y cierra desde un icono del menú lateral, como Nueva
+Entrega, para que el mapa se vea completo mientras nadie la necesita. Con el panel cerrado, lo
+urgente no se pierde: el icono muestra los viajes pendientes y, si la conexión se cae, el punto de
+conexión que antes solo estaba junto al título de la lista (spec 027, RN-20).
+
+El panel se queda siempre montado y se esconde con `translateX`, igual que el detalle y Nueva
+Entrega: así el deslizamiento se ve, y la lista conserva su estado, su orden estable y sus
+animaciones mientras está cerrada. Cerrado lleva `inert`, para que el tabulador no entre a una lista
+escondida fuera de la pantalla.
+
+Viajes en turno y Nueva Entrega no pueden estar abiertos a la vez: abrir uno cierra el otro. El
+detalle depende de la lista: se abre desde una de sus tarjetas, encima de ella, y si se cierra la
+lista se cierra también el detalle.
 
 ### No se reusa `UiCard`
 
@@ -147,8 +166,9 @@ esta vista** (sigue vigente en el listado de Pedidos de `tenant/006`).
 
 ### Cuál viaje está seleccionado vive en `PanelView`, no en `ServiciosEnTurno`
 
-`PanelView.vue` es el único punto que ve a los dos paneles deslizantes (`NuevaEntregaPanel` y
-`DetalleEnvioPanel`), así que es donde puede garantizarse que nunca estén los dos abiertos a la vez.
+`PanelView.vue` es el único punto que ve a los tres paneles deslizantes (`ServiciosEnTurno`,
+`NuevaEntregaPanel` y `DetalleEnvioPanel`), así que es donde puede garantizarse cuáles pueden estar
+abiertos a la vez. También es dueño de si la lista está abierta.
 `ServiciosEnTurno` solo emite `seleccionar(viaje)` y recibe de vuelta cuál está seleccionado para
 marcarlo; no guarda esa decisión.
 
@@ -213,9 +233,14 @@ sobre la columna de la lista sin invadir el mapa central. Los dos arrancan en
   `null`). Ambas variantes se pintan con el mismo estilo de acento.
 - Solo puede haber un viaje seleccionado a la vez. Clickear otra tarjeta reemplaza el contenido del
   panel de detalle sin cerrarlo.
+- La lista arranca cerrada en cada carga y se abre y cierra con su icono del menú lateral.
+- Nunca están abiertos a la vez la lista y el panel de "Nueva Entrega": abrir uno cierra el otro.
 - Nunca están abiertos a la vez el detalle del envío y el panel de "Nueva Entrega": abrir uno cierra
   el otro.
+- El detalle solo está abierto junto con la lista: cerrar la lista cierra también el detalle.
 - El detalle se cierra con el botón `×` o con la tecla `Escape`.
+- La lista se cierra con su icono o con `Escape` cuando el foco está dentro de ella; en ese caso el
+  foco vuelve al icono. Con el detalle abierto, `Escape` cierra primero el detalle.
 - El botón "Cancelar viaje" solo se muestra en Pendiente, Publicado y En recogida (máquina de estados
   de `tenant/006-crud-pedidos.md`).
 - En En entrega se muestra en su lugar "Cerrar por incidencia", con motivo obligatorio. Es para
@@ -262,13 +287,15 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
   `lo_antes_posible`, y si no compone la fecha con `Intl.DateTimeFormat('es-MX', ...)` a partir de
   `fecha_servicio` + `hora_desde` (normalizando `hora_desde` a `HH:mm` antes de construir la fecha).
   Si falta `fecha_servicio`, cae a mostrar solo la hora.
-- `props`: `seleccionadoId?: number | null`, para marcar la tarjeta abierta.
-- `emits`: `seleccionar: [viaje: ViajeEnTurno]`.
+- `props`: `abierto: boolean` y `seleccionadoId?: number | null`, para marcar la tarjeta abierta.
+- `emits`: `seleccionar: [viaje: ViajeEnTurno]` y `cerrar: []` (con `Escape` dentro del panel, si
+  el detalle no está abierto).
 - `defineExpose({ recargar })` se conserva sin cambios (`tenant/012`).
 - Template:
   - El `<aside>` mantiene `fixed z-30 w-[20%] bg-white shadow-xl`, con `left: var(--riel-ocupado)`,
     `top: var(--alto-banda)` y `height: calc(100vh - var(--alto-banda))` (spec 032), y el
-    `<header>` blanco con el título.
+    `<header>` blanco con el título. Gana `transition-transform duration-[400ms] ease-in-out`:
+    abierto usa `translate-x-0`; cerrado, `translateX(calc(-100% - var(--riel-ocupado)))` e `inert`.
   - El contenedor scrolleable pasa de `p-4` a `bg-slate-50 p-4`.
   - Cada `<li>` contiene un `<button type="button">` a ancho completo con
     `w-full rounded-lg border-l-4 border-accent bg-white p-3 text-left shadow-md`, más un anillo de
@@ -293,7 +320,7 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
 - Raíz `<aside>` con `fixed z-[35] flex w-[20%] flex-col bg-white shadow-xl transition-transform
   duration-[400ms] ease-in-out`, con `left: var(--riel-ocupado)`, `top: var(--alto-banda)` y
   `height: calc(100vh - var(--alto-banda))` (spec 032). Abierto usa `translate-x-0`; cerrado,
-  `translateX(calc(-100% - var(--riel-ocupado)))`.
+  `translateX(calc(-100% - var(--riel-ocupado)))` e `inert`.
 - `<header>`: etiqueta "VIAJE SELECCIONADO" (`text-xs font-semibold uppercase tracking-wide
   text-body`), título "Detalle del envío" (`text-lg font-semibold text-heading`) y botón `×` con
   `rounded-lg bg-slate-100 p-2`, que emite `cerrar`.
@@ -334,6 +361,14 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
   @cancelado="onViajeCancelado" />`.
 - `onViajeCancelado()` limpia `viajeSeleccionado` y llama `serviciosRef.value?.recargar()` — el
   mismo camino que ya usa `onAgendado()`.
+- Nuevo estado `viajesEnTurnoAbierto = ref(false)`, que pasa a `<ServiciosEnTurno :abierto>` y a
+  `TenantLayout` (`:viajes-en-turno-abierto`), y se alterna con `@toggle-viajes-en-turno`:
+  - abrir la lista cierra Nueva Entrega;
+  - abrir Nueva Entrega cierra la lista y el detalle;
+  - cerrar la lista (icono o `@cerrar`) limpia `viajeSeleccionado`; con `@cerrar` el foco vuelve al
+    icono (`layoutRef.value?.focusViajesEnTurno()`).
+- Calcula `viajesPendientes` (viajes de `panel.viajesOrdenados` en `PENDIENTE` o `PUBLICADO`) y se lo
+  pasa a `TenantLayout` junto con `panel.conexion`, para el contador y el punto del icono.
 
 ## Fuera de alcance
 
@@ -389,7 +424,15 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
 19. Si la cancelación falla, el detalle permanece abierto con un mensaje de error y un botón para
     reintentar.
 20. No se modificó ningún archivo del backend.
-21. `npm run build` compila sin errores; ESLint/Prettier corren sin errores.
+21. Al entrar al Panel, la lista está cerrada. Su icono del menú lateral la abre deslizándola desde
+    el borde del menú y la vuelve a cerrar; cerrada, no asoma ni se alcanza con `Tab`.
+22. Abrir la lista cierra "Nueva Entrega", y abrir "Nueva Entrega" cierra la lista y el detalle.
+23. Cerrar la lista con un detalle abierto cierra los dos.
+24. `Escape` con el foco dentro de la lista la cierra y devuelve el foco a su icono; con el detalle
+    abierto, `Escape` cierra primero el detalle.
+25. Con la lista cerrada, la lista conserva su orden y sus animaciones al volver a abrirse, y sigue
+    recibiendo los cambios en vivo.
+26. `npm run build` compila sin errores; ESLint/Prettier corren sin errores.
 
 ## Supuestos asumidos (registro completo)
 
@@ -445,5 +488,8 @@ Agregar `'calendar'`, `'businessman'`, `'phone'` y `'todo-list'` a `FLAT_COLOR_I
     conductor, `PedidoCanceladoSinConductor` si no); el frontend no hace nada extra.
 28. El botón "Cancelar viaje" se muestra solo en Pendiente, Publicado y En recogida; en En entrega se
     muestra "Cerrar por incidencia".
-29. Solo un panel deslizante abierto a la vez: el detalle y "Nueva Entrega" se excluyen mutuamente.
-30. La selección del viaje vive en `PanelView.vue`, no dentro de `ServiciosEnTurno.vue`.
+29. "Nueva Entrega" se excluye con la lista y con el detalle; el detalle solo existe con la lista
+    abierta.
+30. La selección del viaje y si la lista está abierta viven en `PanelView.vue`, no dentro de
+    `ServiciosEnTurno.vue`.
+31. La lista arranca cerrada y no recuerda entre cargas si quedó abierta (spec 032).
