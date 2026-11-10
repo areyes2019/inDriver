@@ -238,17 +238,19 @@ La meta de capacidad es de 1,000 conversaciones al día por flotilla (40 por rep
 
 ### Bandeja (etapa 7b)
 
-- **RN-54.** La pantalla "Conversaciones" del Panel la ven el administrador de la flotilla y los despachadores.
-- **RN-55.** La lista se ordena por el último mensaje y se actualiza sola (D22). Las conversaciones donde el cliente pidió una persona aparecen marcadas, y el menú muestra cuántas esperan.
+- **RN-54.** La bandeja la ven el administrador de la flotilla y los despachadores. Está en dos lugares con el mismo contenido: la pantalla "Conversaciones" y, dentro del Panel, el panel de chat que se abre con la pestaña de WhatsApp de la derecha, debajo de la de la flotilla (spec 032, paso 3). Así el despachador tiene el chat a la vista sin dejar el mapa.
+- **RN-55.** La lista se ordena por el último mensaje y se actualiza sola (D22). Las conversaciones donde el cliente pidió una persona aparecen marcadas, y tanto el menú como la pestaña de WhatsApp muestran cuántas esperan.
 - **RN-56.** Al abrir una conversación se ve todo el historial: textos, ubicaciones como enlace al mapa, botones pulsados y avisos, con el folio del pedido si lo tiene. Un texto de más de 90 días aparece como "(texto borrado)".
 - **RN-57.** Desde la bandeja se contesta con texto, solo dentro de las 24 horas. Fuera de la ventana, el campo se bloquea y explica por qué.
 - **RN-58.** Cuando una persona contesta, el bot se pausa 2 horas en esa conversación. "Devolver al bot" lo reactiva antes.
 - **RN-59.** "Quiero hablar con alguien" marca la conversación, pausa el bot y deja el teléfono de la flotilla, por si nadie ve la bandeja.
-- **RN-60.** No hay sonido ni notificaciones push; solo el contador del menú.
+- **RN-60.** No hay sonido ni notificaciones push; solo el contador del menú y de la pestaña de WhatsApp.
 
 **Cómo quedó la etapa 7b** (2026-11-10):
 
 - La bandeja vive en `/{slug}/panel/conversaciones` y la atiende `WhatsappBandejaController`. Muestra las 50 conversaciones con movimiento más reciente y, de cada una, los últimos 200 mensajes.
+- La bandeja es un componente, `BandejaWhatsapp.vue`, que usan la pantalla de Conversaciones (lista y chat lado a lado) y el panel de chat del Panel (`ChatWhatsappPanel.vue`, 26rem a la derecha). En el panel va en una sola columna: la lista y, al tocar una conversación, el chat con "← Volver". El panel monta la bandeja la primera vez que se abre, para no pedir la lista a quien nunca lo abre.
+- El contador de las que esperan vive en un store (`bandejaWhatsapp`), con una sola suscripción para el menú y la pestaña.
 - El aviso en tiempo real va por un canal nuevo, `tenant.{slug}.panel`, que solo autoriza a AdminCliente y Despachador. No usa el de conductores porque ese lo escucha la app de cada repartidor. El aviso solo trae el id de la conversación y el contador; el Panel vuelve a pedir el texto.
 - Con el bot en pausa, "BAJA" y "ALTA" siguen contestándose (RN-51); lo demás queda en la bandeja sin respuesta.
 - "Quiero hablar con alguien" también pausa el bot 2 horas. Contestar desde la bandeja quita la marca; "Devolver al bot" quita la marca y la pausa.

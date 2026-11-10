@@ -4,7 +4,7 @@
 
 Como dueño de tenant en mi papel de Despachador, o como Despachador propiamente, quiero que la
 columna derecha del Panel se vea como una lista de flotilla compacta —avatar, nombre, saldo de
-viajes y vehículo— ocupando menos ancho, y poder esconderla con una flecha para que el mapa quede
+viajes y vehículo— ocupando menos ancho, y poder esconderla con su pestaña para que el mapa quede
 completamente despejado, sin perder de vista quién está en línea ni quién va ocupado.
 
 ## Objetivo / Alcance
@@ -22,8 +22,10 @@ Deja funcionando:
   vehículo, badge).
 - Mapa a pantalla completa: toda la ventana de borde a borde (`h-screen w-screen`), también por
   detrás del menú lateral (spec 032), con los paneles flotando encima en vez de robarle espacio.
-- Flecha en la esquina superior izquierda del panel que lo desliza fuera de la pantalla por la
-  derecha, y pestaña de reapertura pegada al borde derecho cuando está escondido.
+- Pestaña con icono de flotilla (`tabler:car`) pegada al borde izquierdo del panel, que lo desliza
+  fuera de la pantalla por la derecha y, con el panel escondido, queda pegada al borde derecho de la
+  ventana para reabrirlo. Comparte una pila de pestañas con la del chat de WhatsApp, justo debajo
+  (spec 032, paso 3).
 - Badge calculado: `Ocupado` (naranja) si el conductor trae un pedido activo, `Disponible` (verde)
   si no. Ya no se muestra el texto crudo del enum.
 - `saldo_viajes` (viajes prepagados restantes) en `GET /t/{slug}/conductores/activos`.
@@ -173,12 +175,14 @@ corta.
 El toast "X está en línea" se sigue mostrando **solo** desde `conductor.disponibilidad-cambiada` con
 `DISPONIBLE`, como hoy; los eventos nuevos recargan en silencio.
 
-### El colapso vive en `ConductoresActivos.vue`, y no se recuerda entre recargas
+### Si la flotilla está abierta lo decide `PanelView`, y no se recuerda entre recargas
 
-El estado `colapsado` es un `ref` local del propio componente, no de `PanelView`: ningún otro
-componente necesita saberlo ahora que el mapa ya no calcula márgenes en función del ancho del panel
-(esa era la única razón por la que `PanelView` habría tenido que enterarse). `PanelView` solo
-escucha el evento `@colapso-terminado` para llamar a `redimensionar()` del mapa.
+La flotilla comparte el lado derecho con el panel de chat de WhatsApp (spec 032, paso 3), y los dos
+no pueden estar abiertos a la vez: abrir uno cierra el otro. Por eso el estado ya no es un `ref`
+local de `ConductoresActivos`: `PanelView` es dueño de cuál panel derecho está abierto
+(`'flotilla' | 'chat' | null`, empieza en `'flotilla'`) y se lo pasa como prop `abierto`. La pestaña
+también sale del componente, a la pila compartida `PestanasPanelDerecho`. `PanelView` sigue
+escuchando `@colapso-terminado` para llamar a `redimensionar()` del mapa.
 
 Se descarta persistirlo en `localStorage`: un panel que sigue escondido al día siguiente se lee como
 "la flotilla desapareció", no como "yo la escondí". Abierto es el estado normal; esconderlo es una
@@ -244,10 +248,12 @@ dinero— pero queda registrado porque contradice lo que sugiere `tenant/022`.
     `pedido.cancelado`, `pedido.entregado` y `saldo.acreditado`.
 12. El toast "X está en línea" se sigue disparando solo desde `conductor.disponibilidad-cambiada`
     con `disponibilidad = DISPONIBLE`.
-13. La flecha de colapso está en la esquina superior izquierda del panel, apunta a la derecha y al
-    activarla desliza el panel completo fuera de la pantalla por el borde derecho.
-14. Con el panel escondido queda visible una pestaña pegada al borde derecho, con la flecha
-    invertida, que lo devuelve.
+13. La pestaña de flotilla (icono `tabler:car`) está pegada al borde izquierdo del panel, arriba de
+    la pestaña de WhatsApp; al activarla desliza el panel completo fuera de la pantalla por el borde
+    derecho. Con el panel abierto se ve marcada como activa.
+14. Con el panel escondido, la pila de pestañas queda pegada al borde derecho de la ventana, y la de
+    flotilla lo devuelve. Abrir la flotilla cierra el chat de WhatsApp, y abrir el chat cierra la
+    flotilla.
 15. El mapa se remide al terminar cada animación de colapso o expansión.
 16. El estado colapsado no se recuerda: cada carga de `/panel` muestra el panel abierto.
 17. Si el sistema operativo del usuario pide movimiento reducido, el panel cambia de estado sin
@@ -300,28 +306,29 @@ dinero— pero queda registrado porque contradice lo que sugiere `tenant/022`.
   `fitBounds` no conserva) y `BaseProvider` (stub, como el resto de la interfaz).
 - **`frontend/src/components/panel/ConductoresActivos.vue`** (el grueso del cambio):
   - `ConductorActivo` gana `saldo_viajes: number` y `pedido_asignado: { id_pedido: number } | null`.
-  - `colapsado = ref(false)`; emit `colapso-terminado`.
+  - Prop `abierto: boolean` (la decide `PanelView`); emit `colapso-terminado`.
   - `enLinea = computed(() => conductores.value.length)`.
   - Helpers: `inicial(nombre)`, `textoVehiculo(conductor)`, `textoSaldo(n)`, `badge(conductor)`
     (texto + color).
   - `<aside>`: `w-[20%]` (era `w-[30%]`), más `transition-transform duration-[400ms] ease-in-out` y
-    `:class="colapsado ? 'translate-x-full' : 'translate-x-0'"`; conserva
+    `:class="abierto ? 'translate-x-0' : 'translate-x-full'"` e `inert` cerrado; conserva
     `fixed right-0 z-30 bg-white shadow-xl`, con `top: var(--alto-banda)` y
     `height: calc(100vh - var(--alto-banda))` (spec 032).
   - `<header>`: ícono de camioneta (`@iconify/vue`, ya instalado y ya usado en
     `ServiciosEnTurno.vue:4`), "FLOTILLA" en
     `text-xs font-semibold uppercase tracking-wide text-body`, y píldora "N en línea" a la derecha.
-  - Botón de colapso: `absolute left-0 top-0 -translate-x-full`, `aria-expanded`, `aria-label`
-    ("Ocultar panel de flotilla" / "Mostrar panel de flotilla"), anillo de foco visible; el mismo
-    botón, con la flecha invertida, hace de pestaña de reapertura cuando `colapsado`.
+  - Sin botón de colapso propio: la pestaña vive en `PestanasPanelDerecho.vue` (spec 032, paso 3),
+    con `aria-expanded`, `aria-label` ("Ocultar panel de flotilla" / "Mostrar panel de flotilla") y
+    anillo de foco visible.
   - `@transitionend` en el `<aside>` emite `colapso-terminado`.
   - Ítems: `<li class="flex items-start gap-3 border-b border-default py-3 last:border-b-0">` con
     avatar `h-9 w-9 rounded-full bg-accent-soft text-accent`, nombre `text-sm font-semibold`, saldo
     `text-sm font-semibold text-success-text`, vehículo `text-xs text-body/70 truncate`, badge a la
     derecha. Sin `border` alrededor del ítem.
   - `onMounted`/`onUnmounted`: `bind`/`unbind` de los 5 eventos de la tabla de arriba.
-  - Toasts: su contenedor pasa de `right-[calc(30%+1rem)]` a `right-[calc(20%+1rem)]`, y a `right-4`
-    cuando el panel está colapsado. Además sale de dentro del `<aside>` y pasa a ser su hermano en
+  - Toasts: su contenedor se ancla a `right: calc(var(--ancho-panel-derecho) + 1rem)`, la variable
+    que pone `PanelView` con el ancho del panel derecho abierto (20 % la flotilla, 26rem el chat,
+    `0px` ninguno; spec 032). Además sale de dentro del `<aside>` y pasa a ser su hermano en
     el template: un ancestro con `transform` se vuelve el bloque contenedor de sus descendientes
     `position: fixed`, así que dentro del panel los toasts viajarían con él al colapsarlo en vez de
     quedarse anclados a la ventana.
@@ -355,10 +362,10 @@ dinero— pero queda registrado porque contradice lo que sugiere `tenant/022`.
 7. Al entregar un envío, el panel pasa ese conductor a `Disponible` y baja su saldo de viajes sin
    recargar la página.
 8. Al vender viajes a un conductor conectado, su saldo sube en el panel sin recargar la página.
-9. La flecha superior izquierda esconde el panel deslizándolo a la derecha; la pestaña del borde lo
-   devuelve; el mapa se remide en ambos casos y no queda gris.
-10. El botón de colapso es alcanzable con Tab, muestra foco visible y anuncia su estado
-    (`aria-expanded`, `aria-label`).
+9. La pestaña de flotilla esconde el panel deslizándolo a la derecha y lo devuelve; el mapa se
+   remide en ambos casos y no queda gris.
+10. La pestaña es alcanzable con Tab, muestra foco visible y anuncia su estado (`aria-expanded`,
+    `aria-label`).
 11. Con movimiento reducido activado en el sistema operativo, el panel cambia de estado sin
     deslizamiento.
 12. Al recargar `/panel` con el panel previamente escondido, vuelve a aparecer abierto.
@@ -366,8 +373,8 @@ dinero— pero queda registrado porque contradice lo que sugiere `tenant/022`.
     en una sola consulta (sin N+1).
 14. `ENTREGADO` emite `pedido.entregado` en `tenant.{slug}.conductores`.
 15. Un conductor sin vehículo muestra "Sin vehículo"; uno con vehículo sin marca, solo la placa.
-16. Los toasts de "en línea" siguen apareciendo y no quedan tapados por el panel, ni abierto ni
-    colapsado.
+16. Los toasts de "en línea" siguen apareciendo y no quedan tapados por el panel derecho abierto
+    (flotilla o chat), ni con los dos cerrados.
 17. ESLint/Prettier corren sin errores; Pint corre sin errores; `php artisan test` pasa, con
     `ConductoresActivosTest` actualizado (`saldo_viajes` en la respuesta) y prueba nueva de que
     `ENTREGADO` emite `PedidoEntregado`.
@@ -394,7 +401,8 @@ dinero— pero queda registrado porque contradice lo que sugiere `tenant/022`.
 11. El badge dice `Disponible` (verde) u `Ocupado` (naranja), calculado por la presencia de un
     pedido activo asignado, no por la columna `disponibilidad`.
 12. Los ítems siguen siendo de solo lectura.
-13. La flecha de colapso vive en la esquina superior izquierda del panel y lo saca por la derecha.
+13. La pestaña de colapso lleva el icono de flotilla, no una flecha, y vive pegada al borde izquierdo
+    del panel, encima de la del chat de WhatsApp; lo saca por la derecha.
 14. El movimiento es una animación de deslizamiento de 400ms, la misma que ya usan los otros paneles
     deslizantes del proyecto.
 15. Con el panel escondido queda una pestaña de reapertura pegada al borde derecho, para no dejar al
@@ -402,7 +410,8 @@ dinero— pero queda registrado porque contradice lo que sugiere `tenant/022`.
 16. Con el panel escondido, el mapa queda visible en todo ese ancho (ya lo ocupaba: solo deja de
     estar tapado).
 17. El estado colapsado no se persiste entre recargas.
-18. Los toasts de "en línea" se siguen mostrando con el panel colapsado, reacomodados al borde.
+18. Los toasts de "en línea" se siguen mostrando con el panel colapsado, reacomodados según el
+    panel derecho que esté abierto.
 19. El contador y la lista incluyen a los conductores de prueba sin distintivo, porque en esta etapa
     toda la operación es ficticia.
 20. El endpoint necesita mandar `saldo_viajes`, que hoy no manda.
