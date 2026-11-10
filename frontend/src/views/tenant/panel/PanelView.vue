@@ -8,7 +8,13 @@ import ConductoresActivos from '@/components/panel/ConductoresActivos.vue'
 import NuevaEntregaPanel from '@/components/panel/NuevaEntregaPanel.vue'
 import SaldoViajesTenant from '@/components/panel/SaldoViajesTenant.vue'
 import DetalleEnvioPanel from '@/components/panel/DetalleEnvioPanel.vue'
+import ChatWhatsappPanel from '@/components/panel/ChatWhatsappPanel.vue'
+import PestanasPanelDerecho, {
+  type PanelDerecho,
+} from '@/components/panel/PestanasPanelDerecho.vue'
 import { usePanelStore, type ViajeEnTurno } from '@/stores/panel'
+import { useBandejaWhatsappStore } from '@/stores/bandejaWhatsapp'
+import { useTenantAuthStore } from '@/stores/tenantAuth'
 import realtimeService from '@/services/realtime'
 
 const slug = useRoute().params.slug as string
@@ -109,6 +115,28 @@ function onViajeCancelado() {
 function onColapsoTerminado() {
   mapaRef.value?.redimensionar()
 }
+
+// Lado derecho (spec tenant/032, paso 3): Flotilla y chat de WhatsApp comparten el lado y nunca están
+// abiertos a la vez (RN-09). La Flotilla arranca abierta; tocar la pestaña del abierto lo cierra.
+const panelDerecho = ref<PanelDerecho | null>('flotilla')
+
+function alternarPanelDerecho(cual: PanelDerecho) {
+  panelDerecho.value = panelDerecho.value === cual ? null : cual
+}
+
+const ANCHO_PANEL_DERECHO: Record<PanelDerecho, string> = { flotilla: '20%', chat: '26rem' }
+
+// La leen la pila de pestañas y los avisos flotantes de la Flotilla para colocarse.
+const variablesPanelDerecho = computed(() => ({
+  '--ancho-panel-derecho': panelDerecho.value ? ANCHO_PANEL_DERECHO[panelDerecho.value] : '0px',
+}))
+
+const auth = useTenantAuthStore()
+const bandeja = useBandejaWhatsappStore()
+// RN-10: la pestaña de WhatsApp solo para quien puede ver la bandeja (spec 031, RN-54).
+const puedeVerBandeja = computed(
+  () => auth.usuario?.rol === 'AdminCliente' || auth.usuario?.rol === 'Despachador',
+)
 </script>
 
 <template>
@@ -122,32 +150,46 @@ function onColapsoTerminado() {
     @toggle-nueva-entrega="alternarNuevaEntrega"
     @toggle-viajes-en-turno="alternarViajesEnTurno"
   >
-    <!-- Viajes en turno, panel junto al menú lateral (20% de ancho) que se abre y cierra desde su icono: tenant/008-servicios.md, tenant/012-datos-reales-servicios-en-turno.md, tenant/032-menu-lateral.md -->
-    <ServiciosEnTurno
-      :abierto="viajesEnTurnoAbierto"
-      :seleccionado-id="idViajeSeleccionado"
-      @seleccionar="onSeleccionarViaje"
-      @cerrar="cerrarViajesEnTurno"
-    />
-    <!-- Mapa de fondo, a toda la ventana de borde a borde (también por detrás del menú lateral); los paneles flotan encima: tenant/009-mapa.md, tenant/023-rediseno-panel-flotilla.md, tenant/032-menu-lateral.md -->
-    <div class="h-screen w-screen">
-      <MapaConductores ref="mapaRef" />
+    <div :style="variablesPanelDerecho">
+      <!-- Viajes en turno, panel junto al menú lateral (20% de ancho) que se abre y cierra desde su icono: tenant/008-servicios.md, tenant/012-datos-reales-servicios-en-turno.md, tenant/032-menu-lateral.md -->
+      <ServiciosEnTurno
+        :abierto="viajesEnTurnoAbierto"
+        :seleccionado-id="idViajeSeleccionado"
+        @seleccionar="onSeleccionarViaje"
+        @cerrar="cerrarViajesEnTurno"
+      />
+      <!-- Mapa de fondo, a toda la ventana de borde a borde (también por detrás del menú lateral); los paneles flotan encima: tenant/009-mapa.md, tenant/023-rediseno-panel-flotilla.md, tenant/032-menu-lateral.md -->
+      <div class="h-screen w-screen">
+        <MapaConductores ref="mapaRef" />
+      </div>
+      <!-- Saldo de viajes del tenant, píldora fija centrada sobre el mapa: tenant/007-panel-despachador.md (ampliación "vista principal"), tenant/027 §12 -->
+      <SaldoViajesTenant />
+      <!-- Columna derecha (flotilla), fija y colapsable sobre el 20% derecho; excluyente con el chat: tenant/023-rediseno-panel-flotilla.md, tenant/032-menu-lateral.md -->
+      <ConductoresActivos
+        :abierto="panelDerecho === 'flotilla'"
+        @colapso-terminado="onColapsoTerminado"
+      />
+      <!-- Chat de WhatsApp, 26rem a la derecha; excluyente con la flotilla: tenant/031-pedidos-por-whatsapp.md, tenant/032-menu-lateral.md -->
+      <ChatWhatsappPanel v-if="puedeVerBandeja" :abierto="panelDerecho === 'chat'" />
+      <!-- Pestañas de la derecha (Flotilla y WhatsApp), pegadas al panel derecho abierto: tenant/032-menu-lateral.md -->
+      <PestanasPanelDerecho
+        :abierto="panelDerecho"
+        :esperando="bandeja.esperando"
+        :mostrar-chat="puedeVerBandeja"
+        @alternar="alternarPanelDerecho"
+      />
+      <!-- Panel deslizante de agendamiento rápido; abrirlo cierra Viajes en turno: tenant/006-crud-pedidos.md, tenant/032-menu-lateral.md -->
+      <NuevaEntregaPanel
+        :abierto="nuevaEntregaAbierta"
+        @cerrar="cerrarNuevaEntrega"
+        @agendado="onAgendado"
+      />
+      <!-- Panel deslizante con el detalle del viaje seleccionado, sobre la columna izquierda: tenant/008-servicios.md -->
+      <DetalleEnvioPanel
+        :viaje="viajeSeleccionado"
+        @cerrar="idViajeSeleccionado = null"
+        @cancelado="onViajeCancelado"
+      />
     </div>
-    <!-- Saldo de viajes del tenant, píldora fija centrada sobre el mapa: tenant/007-panel-despachador.md (ampliación "vista principal"), tenant/027 §12 -->
-    <SaldoViajesTenant />
-    <!-- Columna derecha (flotilla), fija y colapsable sobre el 20% derecho: tenant/023-rediseno-panel-flotilla.md -->
-    <ConductoresActivos @colapso-terminado="onColapsoTerminado" />
-    <!-- Panel deslizante de agendamiento rápido; abrirlo cierra Viajes en turno: tenant/006-crud-pedidos.md, tenant/032-menu-lateral.md -->
-    <NuevaEntregaPanel
-      :abierto="nuevaEntregaAbierta"
-      @cerrar="cerrarNuevaEntrega"
-      @agendado="onAgendado"
-    />
-    <!-- Panel deslizante con el detalle del viaje seleccionado, sobre la columna izquierda: tenant/008-servicios.md -->
-    <DetalleEnvioPanel
-      :viaje="viajeSeleccionado"
-      @cerrar="idViajeSeleccionado = null"
-      @cancelado="onViajeCancelado"
-    />
   </TenantLayout>
 </template>

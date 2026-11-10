@@ -3,9 +3,9 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import UiAmbienteSwitch from '@/components/ui/UiAmbienteSwitch.vue'
 import UiSidebar, { type AccionSidebar, type ItemSidebar } from '@/components/ui/UiSidebar.vue'
-import http from '@/lib/http'
-import realtimeService, { type EstadoConexion } from '@/services/realtime'
+import { type EstadoConexion } from '@/services/realtime'
 import { useAmbienteStore } from '@/stores/ambiente'
+import { useBandejaWhatsappStore } from '@/stores/bandejaWhatsapp'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
 
 const props = withDefaults(
@@ -74,39 +74,28 @@ const mostrarAccionesPanel = computed(() => enPanel.value && esOperativo.value)
 const sidebarRef = ref<InstanceType<typeof UiSidebar>>()
 
 // spec tenant/031, RN-55 y RN-60: cuántas conversaciones de WhatsApp esperan a una persona. Sin
-// sonido ni push: solo el número en el menú, que se mueve con cada aviso del canal del Panel.
+// sonido ni push: solo el número en el menú y en la pestaña de WhatsApp del Panel, que se mueve con
+// cada aviso del canal del Panel. Vive en un store para que los dos lean el mismo (spec 032).
 const puedeVerBandeja = computed(() => esAdminCliente.value || esDespachador.value)
-const esperando = ref(0)
-
-function onConversacionActualizada(datos: { esperando?: number }) {
-  if (typeof datos.esperando === 'number') esperando.value = datos.esperando
-}
-
-async function cargarEsperando() {
-  try {
-    const { data } = await http.get(`/t/${slug.value}/whatsapp/conversaciones/esperando`)
-    esperando.value = data.esperando ?? 0
-  } catch {
-    // El contador es una ayuda; si falla, el menú sigue funcionando.
-  }
-}
+const bandeja = useBandejaWhatsappStore()
+let usaBandeja = false
 
 watch(
   [slug, puedeVerBandeja],
   ([slugActual, puede]) => {
+    if (usaBandeja) {
+      bandeja.detener()
+      usaBandeja = false
+    }
     if (!slugActual || !puede) return
-    cargarEsperando()
-    realtimeService
-      .subscribePanel(slugActual)
-      ?.bind('whatsapp.conversacion', onConversacionActualizada)
+    bandeja.iniciar(slugActual)
+    usaBandeja = true
   },
   { immediate: true },
 )
 
 onUnmounted(() => {
-  realtimeService
-    .subscribePanel(slug.value)
-    ?.unbind('whatsapp.conversacion', onConversacionActualizada)
+  if (usaBandeja) bandeja.detener()
 })
 
 onMounted(() => {
@@ -165,12 +154,13 @@ const items = computed<ItemSidebar[]>(() => {
     icon: 'tabler:map',
     exacto: true,
   }
-  // Icono provisional: la forma final de Conversaciones en el menú está pendiente (spec 032, §10).
+  // La pantalla a pantalla completa de la bandeja. Dentro del Panel, el chat vive además en el panel
+  // de la pestaña de WhatsApp (spec 032, D-12).
   const conversaciones: ItemSidebar = {
     label: 'Conversaciones',
     to: `/${slug.value}/panel/conversaciones`,
     icon: 'tabler:messages',
-    badge: esperando.value,
+    badge: bandeja.esperando,
   }
 
   if (esDespachador.value) {

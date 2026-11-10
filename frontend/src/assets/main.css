@@ -18,6 +18,9 @@
   --color-sidebar-borde: #2b3d6e;
   --color-sidebar-texto: #c7d0e8;
 
+  /* Pestaña y panel de chat de WhatsApp (spec tenant/032, paso 3). */
+  --color-whatsapp: #25d366;
+
   --color-warning-bg: #fef3c7;
   --color-warning-text: #92400e;
   --color-info-bg: #dbeafe;

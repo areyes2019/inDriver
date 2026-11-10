@@ -20,14 +20,18 @@ interface Toast {
   texto: string
 }
 
+/**
+ * Si está abierta lo decide `PanelView` (spec tenant/023 y tenant/032, paso 3): la flotilla comparte
+ * el lado derecho con el chat de WhatsApp y no pueden estar abiertos a la vez. Su pestaña vive en
+ * `PestanasPanelDerecho`.
+ */
+const props = defineProps<{ abierto: boolean }>()
+
 const emit = defineEmits<{ 'colapso-terminado': [] }>()
 
 const panel = usePanelStore()
 
 const toasts = ref<Toast[]>([])
-// Estado local a propósito (spec tenant/023): ahora que el mapa ocupa la pantalla completa y ya no
-// calcula márgenes según el ancho de este panel, nadie más necesita saber si está colapsado.
-const colapsado = ref(false)
 
 const {
   elementos: conductores,
@@ -89,15 +93,14 @@ function sinAnimacion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
-function alternarColapso() {
-  colapsado.value = !colapsado.value
-
-  // Con movimiento reducido la transición no ocurre y `transitionend` nunca llegaría, así que el
-  // mapa se quedaría sin remedirse: se avisa en cuanto el DOM refleja el cambio.
-  if (sinAnimacion()) {
-    nextTick(() => emit('colapso-terminado'))
-  }
-}
+// Con movimiento reducido la transición no ocurre y `transitionend` nunca llegaría, así que el mapa
+// se quedaría sin remedirse: se avisa en cuanto el DOM refleja el cambio.
+watch(
+  () => props.abierto,
+  () => {
+    if (sinAnimacion()) nextTick(() => emit('colapso-terminado'))
+  },
+)
 
 function onTransitionEnd(event: TransitionEvent) {
   if (event.propertyName === 'transform' && event.target === event.currentTarget) {
@@ -109,36 +112,11 @@ function onTransitionEnd(event: TransitionEvent) {
 <template>
   <aside
     class="panel-deslizante fixed right-0 top-(--alto-banda) z-30 flex h-[calc(100vh-var(--alto-banda))] w-[20%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
-    :class="colapsado ? 'translate-x-full' : 'translate-x-0'"
+    :class="abierto ? 'translate-x-0' : 'translate-x-full'"
+    :inert="!abierto"
+    aria-label="Flotilla"
     @transitionend="onTransitionEnd"
   >
-    <!--
-      Vive fuera del borde izquierdo del panel (`-translate-x-full`), así que cuando el panel se va
-      a la derecha este botón queda pegado al borde de la ventana y hace de pestaña de reapertura:
-      un solo control para las dos direcciones, sin dejar al usuario sin salida.
-    -->
-    <button
-      type="button"
-      :aria-expanded="!colapsado"
-      :aria-label="colapsado ? 'Mostrar panel de flotilla' : 'Ocultar panel de flotilla'"
-      class="absolute left-0 top-3 flex h-9 w-9 -translate-x-full items-center justify-center rounded-l-lg border border-r-0 border-default bg-white text-body shadow-md transition-colors hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-accent"
-      @click="alternarColapso"
-    >
-      <svg
-        class="h-4 w-4 transition-transform duration-[400ms]"
-        :class="colapsado ? 'rotate-180' : ''"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <path d="m9 18 6-6-6-6" />
-      </svg>
-    </button>
-
     <header class="flex items-center justify-between gap-2 border-b border-default px-4 py-3">
       <div class="flex min-w-0 items-center gap-2">
         <Icon icon="flat-color-icons:automotive" width="18" height="18" aria-hidden="true" />
@@ -213,11 +191,11 @@ function onTransitionEnd(event: TransitionEvent) {
   <!--
     Hermano del `<aside>`, no hijo: un ancestro con `transform` pasa a ser el bloque contenedor de
     sus descendientes `position: fixed`, así que dentro del panel los toasts se irían con él al
-    colapsarlo en vez de quedarse anclados a la ventana.
+    colapsarlo en vez de quedarse anclados a la ventana. Se colocan junto al panel derecho que esté
+    abierto, flotilla o chat (`--ancho-panel-derecho`, spec 032).
   -->
   <div
-    class="pointer-events-none fixed bottom-4 z-40 flex flex-col gap-2 transition-[right] duration-[400ms] ease-in-out"
-    :class="colapsado ? 'right-4' : 'right-[calc(20%+1rem)]'"
+    class="pointer-events-none fixed bottom-4 right-[calc(var(--ancho-panel-derecho,0px)+1rem)] z-40 flex flex-col gap-2 transition-[right] duration-[400ms] ease-in-out"
   >
     <TransitionGroup name="lista">
       <div

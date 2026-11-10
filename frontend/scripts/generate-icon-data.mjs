@@ -51,6 +51,8 @@ const TABLER_ICON_NAMES = [
   'settings',
   'plus',
   'truck-delivery',
+  'car',
+  'brand-whatsapp',
   'key',
   'logout',
   'bolt',
