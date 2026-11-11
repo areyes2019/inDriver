@@ -186,6 +186,8 @@ recarga su pool una sola vez.
   mismo conductor conserva su color entre recargas, entre sesiones y entre las dos apps.
 - **RN-18:** El marcador del conductor usa **ese mismo color**, para poder ligar de un vistazo la
   moto con su línea en un mapa con varios conductores.
+  Corrección (spec 033): el marcador ya no es un punto, sino un globo con punta y las iniciales del
+  conductor; el color se conserva.
 - **RN-19:** Con más de diez conductores activos los colores se repiten. Dos conductores del mismo
   color en zonas distintas es aceptable; inventar cincuenta colores distinguibles, no.
 - **RN-20:** La línea sigue calles reales (Directions). Si Directions falla, se traza una recta entre
