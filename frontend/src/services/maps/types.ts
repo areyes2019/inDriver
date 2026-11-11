@@ -13,6 +13,11 @@ export interface MarkerOptions {
   title?: string
   /** Color del conductor (spec tenant/026, RN-18): el marcador va del mismo color que su línea. */
   color?: string
+  /**
+   * Iniciales del conductor (spec tenant/033). Con `color` e `iniciales` el marcador es un globo con
+   * punta; con solo `color`, un punto; sin color, el pin de Google.
+   */
+  iniciales?: string
 }
 
 /** Trazo de la polilínea (spec tenant/026, RN-14/RN-15): guiones camino a la recogida, sólido camino a la entrega. */

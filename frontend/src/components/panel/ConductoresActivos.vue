@@ -5,6 +5,7 @@ import UiBadge from '@/components/ui/UiBadge.vue'
 import UiEstadoConexion from '@/components/ui/UiEstadoConexion.vue'
 import { usePanelStore, type ConductorActivo } from '@/stores/panel'
 import { useOrdenEstable } from '@/composables/useOrdenEstable'
+import { iniciales } from '@/lib/iniciales'
 
 /**
  * Flotilla en línea (specs tenant/014, tenant/023, tenant/027).
@@ -42,8 +43,9 @@ const {
   (conductor) => conductor.id_conductor,
 )
 
+/** Primera letra de la regla única de iniciales (spec tenant/033, D-16). */
 function inicial(nombre: string): string {
-  return nombre.trim().charAt(0).toUpperCase()
+  return Array.from(iniciales(nombre))[0] ?? ''
 }
 
 /**

@@ -1,5 +1,6 @@
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader'
 import BaseProvider from './BaseProvider'
+import { ALTO_GLOBO, ANCHO_GLOBO, urlGlobo } from './globoConductor'
 import {
   iniciarMovimiento,
   planearMovimiento,
@@ -139,9 +140,7 @@ export default class GoogleProvider extends BaseProvider {
       position,
       title: options.title,
       label: options.icon,
-      // Sin color, el pin rojo por defecto de Google. Con color, un punto del color del conductor
-      // (spec tenant/026, RN-18) para poder ligarlo de un vistazo con su polilínea.
-      icon: options.color ? this.puntoDeColor(options.color) : undefined,
+      icon: this.iconoDeMarcador(options),
     })
     instance.markers.set(markerId, marker)
     instance.movimientos.set(markerId, iniciarMovimiento(position))
@@ -350,6 +349,25 @@ export default class GoogleProvider extends BaseProvider {
           repeat: '14px',
         },
       ],
+    }
+  }
+
+  /**
+   * Sin color, el pin rojo por defecto de Google. Con color e iniciales, el globo de la spec
+   * tenant/033, anclado en la punta. Con solo color, un punto del color del conductor (spec
+   * tenant/026, RN-18) para poder ligarlo de un vistazo con su polilínea.
+   */
+  private iconoDeMarcador(
+    options: MarkerOptions,
+  ): google.maps.Icon | google.maps.Symbol | undefined {
+    if (!options.color) return undefined
+    if (options.iniciales === undefined) return this.puntoDeColor(options.color)
+
+    return {
+      url: urlGlobo(options.color, options.iniciales),
+      scaledSize: new google.maps.Size(ANCHO_GLOBO, ALTO_GLOBO),
+      // La punta de la gota está en (13, 31): esa es la posición del conductor.
+      anchor: new google.maps.Point(ANCHO_GLOBO / 2, ALTO_GLOBO - 1),
     }
   }
 

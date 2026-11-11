@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import mapService from '@/services/maps/MapService'
 import type { LatLngLike } from '@/services/maps/types'
+import { iniciales } from '@/lib/iniciales'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
 import { usePanelStore, type ConductorActivo } from '@/stores/panel'
 
@@ -162,7 +163,7 @@ function sincronizarMapa(lista: ConductorActivo[]) {
         CONTAINER_ID,
         String(conductor.id_conductor),
         posicionDe(conductor) as LatLngLike,
-        { title: conductor.nombre, color: conductor.color },
+        { title: conductor.nombre, color: conductor.color, iniciales: iniciales(conductor.nombre) },
       )
       dibujarTramoSiCambio(conductor, true)
     }
