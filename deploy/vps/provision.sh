@@ -23,7 +23,7 @@
 #
 # NO hace (pasos manuales, fuera de este script — ver el plan de migración):
 #   - Subir el código (deploy/deploy-backend.sh, deploy/deploy-frontend.sh)
-#   - Activar el vhost de Nginx (deploy/vps/nginx-delivery.prosello.com.mx.conf)
+#   - Activar el vhost de Nginx (deploy/vps/nginx-motopanda.mx.conf)
 #   - Emitir el certificado real (certbot, requiere DNS ya apuntando aquí)
 
 set -euo pipefail

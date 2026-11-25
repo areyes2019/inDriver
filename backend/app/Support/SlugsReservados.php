@@ -17,7 +17,7 @@ namespace App\Support;
  * - `admin`, `about`, `t`: rutas de Vue Router (`t` sigue existiendo por las redirecciones de
  *   compatibilidad desde las URLs viejas `/t/{slug}/...`).
  * - `api`, `sanctum`, `up`, `gps`, `gps-health`, `app`, `apps`: `location` de nginx que nunca
- *   llegan al SPA (`deploy/vps/nginx-delivery.prosello.com.mx.conf`).
+ *   llegan al SPA (`deploy/vps/nginx-motopanda.mx.conf`).
  * - `assets`: la carpeta del build de Vite.
  * - `privacidad`: página fija del aviso de privacidad (spec 013), servida por nginx antes que el SPA.
  * - `index`, `login`, `panel`: para que `/{slug}` y `/{slug}/panel` nunca sean ambiguos.

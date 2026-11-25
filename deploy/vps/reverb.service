@@ -10,7 +10,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=/var/www/delivery.prosello.com.mx/backend
 # Escucha solo en localhost: al exterior se llega por el location /app/ de nginx
-# (deploy/vps/nginx-delivery.prosello.com.mx.conf), con el certificado del dominio.
+# (deploy/vps/nginx-motopanda.mx.conf), con el certificado del dominio.
 ExecStart=/usr/bin/php artisan reverb:start --host=127.0.0.1 --port=8080
 KillSignal=SIGTERM
 TimeoutStopSec=20

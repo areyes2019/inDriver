@@ -57,9 +57,9 @@ programada (hoy no declara ninguna).
    bash -c '. deploy/config.sh && \
        scp deploy/hostinger/index.php "$SSH_ALIAS:$REMOTE_DOCROOT/index.php" && \
        scp deploy/hostinger/robots.txt "$SSH_ALIAS:$REMOTE_DOCROOT/robots.txt" && \
-       scp deploy/vps/nginx-delivery.prosello.com.mx.conf "$SSH_ALIAS:/etc/nginx/sites-available/$(basename "$SITE_URL")"'
+       scp deploy/vps/nginx-motopanda.mx.conf "$SSH_ALIAS:/etc/nginx/sites-available/$(basename "$SITE_URL")"'
    ```
-   (Para un dominio distinto, copia y adapta `deploy/vps/nginx-delivery.prosello.com.mx.conf` con
+   (Para un dominio distinto, copia y adapta `deploy/vps/nginx-motopanda.mx.conf` con
    el nombre de host correcto antes de subirlo.) Luego, por SSH:
    ```bash
    ln -sf /etc/nginx/sites-available/<dominio> /etc/nginx/sites-enabled/<dominio>
@@ -132,7 +132,7 @@ de tenant se guarda en la base **del tenant**, y el worker —que corre sin tena
 ## Cuando algo no funciona
 
 - **`deploy/verify.sh` dice que una ruta de API responde HTML en vez de JSON**: revisa el server
-  block de Nginx (`deploy/vps/nginx-delivery.prosello.com.mx.conf`) — probablemente el bloque
+  block de Nginx (`deploy/vps/nginx-motopanda.mx.conf`) — probablemente el bloque
   `location ~ ^/(api|sanctum|up)` no está activo o `nginx -t` falló silenciosamente en el último
   reload.
 - **500 con `storage/logs/laravel.log` vacío o inexistente**: casi seguro es el dueño de archivos.
