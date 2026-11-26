@@ -265,6 +265,31 @@ it('opens the approach leg when a test envío is taken, and not for a live one',
     tenancy()->end();
 });
 
+it('starts the approach leg at the pickup when the driver last position is implausibly far (RN-08b)', function (float $latitud, float $longitud, string $origenEsperado) {
+    $tenant = ambienteTenant();
+    $datos = ambienteConductor($tenant);
+
+    tenancy()->initialize($tenant);
+    ConductorEstado::create([
+        'id_conductor' => $datos['conductor']->id_conductor,
+        'ultima_latitud' => $latitud, 'ultima_longitud' => $longitud, 'ultima_actualizacion' => now(),
+    ]);
+
+    $pedido = ambientePedido([
+        'id_conductor' => $datos['conductor']->id_conductor, 'estado' => 'PUBLICADO',
+    ], Pedido::AMBIENTE_TEST);
+    app(PedidoEstadoService::class)->transicionar($pedido, 'TOMADO');
+    $pedido->save();
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'origin='.urlencode($origenEsperado)));
+    tenancy()->end();
+})->with([
+    // El emulador de Android reporta Mountain View por omisión: el incidente de producción.
+    'emulator default location' => [37.42265, -122.08373, '19.4,-99.1'],
+    // A 2 km de la recogida (19.40, -99.10) la posición se cree.
+    'nearby driver' => [19.38, -99.1, '19.38,-99.1'],
+]);
+
 it('writes simulated positions through the same tracking door and broadcasts them', function () {
     Event::fake([UbicacionActualizada::class]);
 

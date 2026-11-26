@@ -194,7 +194,7 @@ class RutaService
      * @param  array{lat: float, lng: float}  $a
      * @param  array{lat: float, lng: float}  $b
      */
-    private function haversineM(array $a, array $b): float
+    public function haversineM(array $a, array $b): float
     {
         $lat1 = deg2rad((float) $a['lat']);
         $lat2 = deg2rad((float) $b['lat']);

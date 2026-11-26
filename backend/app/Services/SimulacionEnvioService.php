@@ -33,6 +33,9 @@ class SimulacionEnvioService
     /** RN-09: cada cuántos segundos simulados se escribe un punto (unos 67 m a 120 km/h). */
     public const PASO_SEGUNDOS_POR_DEFECTO = 2;
 
+    /** RN-08b: más lejos que esto de la recogida, la última posición del conductor no se cree. */
+    public const MAX_ACERCAMIENTO_M = 50_000;
+
     /**
      * Configurable (`SIMULACION_VELOCIDAD_KMH`) solo por comodidad de desarrollo: esperar en tiempo
      * real a que el móvil recorra el trayecto vuelve impracticable probar el flujo varias veces
@@ -288,18 +291,39 @@ class SimulacionEnvioService
      * acercamiento arranca en la recogida misma: dura un instante y `ARRIBADO` cae de inmediato.
      * Es preferible a inventarle un origen arbitrario.
      *
+     * RN-08b: lo mismo si su última posición queda a más de `MAX_ACERCAMIENTO_M` de la recogida.
+     * Una lectura así no es un conductor lejos sino un teléfono que mintió: el emulador de Android
+     * reporta Mountain View por omisión, y con ese origen el Panel dibujaba 3,300 km de ruta de
+     * California a Celaya.
+     *
      * @return array{lat: float, lng: float}
      */
     private function posicionDelConductor(Pedido $pedido): array
     {
+        $recogida = ['lat' => (float) $pedido->latitud_recogida, 'lng' => (float) $pedido->longitud_recogida];
+
         // `estadoActual`, no `estado`: en `Conductor` esa columna es ACTIVO/INACTIVO; la posición
         // vive en la relación con `conductor_estado`.
         $estado = $pedido->conductor?->estadoActual;
 
         if ($estado?->ultima_latitud === null || $estado?->ultima_longitud === null) {
-            return ['lat' => (float) $pedido->latitud_recogida, 'lng' => (float) $pedido->longitud_recogida];
+            return $recogida;
         }
 
-        return ['lat' => (float) $estado->ultima_latitud, 'lng' => (float) $estado->ultima_longitud];
+        $posicion = ['lat' => (float) $estado->ultima_latitud, 'lng' => (float) $estado->ultima_longitud];
+        $distancia = $this->rutas->haversineM($posicion, $recogida);
+
+        if ($distancia > self::MAX_ACERCAMIENTO_M) {
+            Log::warning('Posición del conductor demasiado lejos de la recogida; el acercamiento simulado arranca en la recogida', [
+                'id_pedido' => $pedido->id_pedido,
+                'id_conductor' => $pedido->id_conductor,
+                'posicion' => $posicion,
+                'distancia_m' => round($distancia),
+            ]);
+
+            return $recogida;
+        }
+
+        return $posicion;
     }
 }

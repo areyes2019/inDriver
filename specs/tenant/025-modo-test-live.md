@@ -217,6 +217,11 @@ que en LIVE: son acciones humanas, no llegadas geográficas.
   lectura—, el tramo de acercamiento arranca en el punto de recogida mismo: dura un instante y
   `ARRIBADO` cae de inmediato. Es el último recurso, no el caso normal: antes de RN-01b lo era
   siempre, porque en TEST el GPS real se descarta (RN-11) y la posición no llegaba a existir.
+- **RN-08b**: Si la última posición conocida queda a más de 50 km (en línea recta) de la recogida,
+  no se cree: el tramo de acercamiento arranca en la recogida, como en RN-08, y queda un `warning`
+  en la bitácora. Una lectura así es un teléfono que mintió, no un conductor lejos: el 2026-11-26 un
+  emulador de Android reportó Mountain View (su ubicación por omisión) y el Panel dibujó 3,300 km
+  de ruta de California a Celaya.
 - **RN-09**: La velocidad simulada es 120 km/h constante (33.333 m/s). No hay tráfico, semáforos ni
   paradas. Se escribe un punto cada 2 segundos, unos 67 metros.
 - **RN-10**: Las coordenadas simuladas entran por `TrackingService::registrarPosicion()`, el mismo
@@ -306,6 +311,9 @@ Sin cambios de ningún tipo.
 - Al pasar a `EN_CAMINO`, se abre el tramo de entrega; completado, el envío queda
   `ARRIBADO_A_ENTREGA`.
 - Un envío de 10 km tarda diez veces más en completarse que uno de 1 km.
+- Con la última posición del conductor en Mountain View y la recogida en México, el tramo de
+  acercamiento se pide a Directions desde la recogida; con el conductor a 2 km, desde su posición
+  (RN-08b).
 - Saltarse una corrida entera del comando no rompe nada: la siguiente escribe los puntos atrasados y
   el móvil queda donde le corresponde por reloj.
 - Con un envío TEST activo, `POST /conductor/ubicacion` responde 204 y **no** escribe en
