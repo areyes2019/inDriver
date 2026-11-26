@@ -285,7 +285,10 @@ defineExpose({
           <span v-else aria-hidden="true" :class="claseGlobo">Configuración</span>
         </button>
 
-        <div class="flex h-11 items-center" :class="abierto ? 'px-2' : 'justify-center'">
+        <div
+          class="flex min-h-11 items-center"
+          :class="abierto ? 'gap-2 px-2' : 'flex-col justify-center gap-1 py-1'"
+        >
           <slot name="pie" :abierto="abierto" />
         </div>
 

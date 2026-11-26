@@ -52,6 +52,10 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'cargo_extra',
     'pago_extra',
     'tarifa_regreso',
+    'sin_conductor_desde',
+    'ultima_reoferta_automatica',
+    'estado_cambiado_en',
+    'aviso_atorado_en',
 ])]
 #[ScopedBy([AmbienteScope::class])]
 #[ObservedBy([PedidoObserver::class])]
@@ -109,6 +113,10 @@ class Pedido extends Model
             'cargo_extra' => 'decimal:2',
             'pago_extra' => 'decimal:2',
             'tarifa_regreso' => 'decimal:2',
+            'sin_conductor_desde' => 'datetime',
+            'ultima_reoferta_automatica' => 'datetime',
+            'estado_cambiado_en' => 'datetime',
+            'aviso_atorado_en' => 'datetime',
         ];
     }
 

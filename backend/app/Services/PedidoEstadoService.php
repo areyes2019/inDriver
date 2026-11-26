@@ -139,6 +139,17 @@ class PedidoEstadoService
 
         $pedido->estado = $nuevoEstado;
 
+        // spec tenant/034: RN-15 cuenta desde aquí, y cualquier transición permite volver a anotar
+        // un atoro en la fase nueva (RN-16).
+        $pedido->estado_cambiado_en = now();
+        $pedido->aviso_atorado_en = null;
+
+        // spec tenant/034, RN-06: con conductor, el conteo de 30 minutos se reinicia.
+        if ($nuevoEstado === 'TOMADO') {
+            $pedido->sin_conductor_desde = null;
+            $pedido->ultima_reoferta_automatica = null;
+        }
+
         match ($nuevoEstado) {
             'PUBLICADO' => $pedido->fecha_publicacion = now(),
             'TOMADO' => $pedido->fecha_asignacion = now(),
@@ -224,6 +235,8 @@ class PedidoEstadoService
             $bloqueado->fecha_publicacion = now();
             $bloqueado->notificado_conductor_en = null;
             $bloqueado->veces_ofertado = 0;
+            $bloqueado->estado_cambiado_en = now();
+            $bloqueado->aviso_atorado_en = null;
             $bloqueado->save();
 
             return $bloqueado;

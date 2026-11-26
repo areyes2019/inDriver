@@ -6,9 +6,11 @@ namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenant\Auditoria;
+use App\Models\Tenant\AutomaticoBitacora;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Pedido;
+use App\Services\ModoAutomaticoService;
 use App\Support\ContextoAmbiente;
 use App\Support\SaldoViajesTenant;
 use Illuminate\Http\JsonResponse;
@@ -91,6 +93,55 @@ class ConfiguracionController extends Controller
     }
 
     /**
+     * Interruptor del modo automático (spec tenant/034, §7). `Pausado` no se puede mandar: lo pone
+     * solo el sistema (RN-24). Mandar `Si` desde `Pausado` lo reactiva (RN-25).
+     *
+     * La ruta ya lo restringe a AdminCliente; el Despachador lo ve por `show()` (D2).
+     */
+    public function modoAutomatico(Request $request, ModoAutomaticoService $modo): JsonResponse
+    {
+        $data = $request->validate([
+            'modo_automatico' => ['required', Rule::in([ModoAutomaticoService::SI, ModoAutomaticoService::NO])],
+        ]);
+
+        $modo->cambiar($data['modo_automatico']);
+
+        Auditoria::create([
+            'id_usuario' => $request->user('usuario')->id_usuario,
+            'tabla_afectada' => 'configuraciones_tenant',
+            'accion' => 'EDICION',
+            'descripcion' => $data['modo_automatico'] === ModoAutomaticoService::SI
+                ? 'Se prendió el modo automático'
+                : 'Se apagó el modo automático',
+        ]);
+
+        return response()->json(['modo_automatico' => $modo->estado()]);
+    }
+
+    /**
+     * Las últimas 100 entradas de la bitácora del modo automático (spec tenant/034, RN-26).
+     */
+    public function bitacoraAutomatico(): JsonResponse
+    {
+        $entradas = AutomaticoBitacora::query()
+            ->with(['pedido' => fn ($q) => $q->withoutGlobalScopes()->select('id_pedido', 'numero_pedido')])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id_bitacora')
+            ->limit(100)
+            ->get()
+            ->map(fn (AutomaticoBitacora $entrada) => [
+                'id_bitacora' => $entrada->id_bitacora,
+                'accion' => $entrada->accion,
+                'detalle' => $entrada->detalle,
+                'id_pedido' => $entrada->id_pedido,
+                'numero_pedido' => $entrada->pedido?->numero_pedido,
+                'created_at' => $entrada->created_at?->toIso8601String(),
+            ]);
+
+        return response()->json(['data' => $entradas]);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function estadoActual(): array
@@ -110,6 +161,7 @@ class ConfiguracionController extends Controller
             'usar_despachadores' => ConfiguracionTenant::obtener(ConfiguracionTenant::USAR_DESPACHADORES, 'No'),
             'ambiente' => ConfiguracionTenant::obtener(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_LIVE),
             'saldo_viajes_tenant' => SaldoViajesTenant::actualONull(),
+            'modo_automatico' => ConfiguracionTenant::obtener(ConfiguracionTenant::MODO_AUTOMATICO, ModoAutomaticoService::NO),
         ];
     }
 }

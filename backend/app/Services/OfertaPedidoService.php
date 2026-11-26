@@ -100,6 +100,9 @@ class OfertaPedidoService
         }
 
         if ($pedido->veces_ofertado >= self::MAX_INTENTOS) {
+            // spec tenant/034, RN-05: siempre, con el modo automático prendido o apagado.
+            $pedido->sin_conductor_desde ??= now();
+
             app(PedidoEstadoService::class)->transicionar($pedido, 'PENDIENTE');
             $pedido->save();
 
@@ -212,8 +215,10 @@ class OfertaPedidoService
      * Se persiste el cero ANTES de transicionar porque `ofertar()` —que corre dentro de la
      * transición— incrementa el contador con un UPDATE directo: dejarlo solo en memoria haría que
      * el incremento partiera del valor viejo de la base.
+     *
+     * Público desde la spec tenant/034 (RN-09): el modo automático reofrece con este mismo rescate.
      */
-    private function rescatarDeAsignacionManual(Pedido $pedido): void
+    public function rescatarDeAsignacionManual(Pedido $pedido): void
     {
         $pedido->update(['veces_ofertado' => 0]);
 

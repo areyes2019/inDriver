@@ -31,6 +31,12 @@ class ConfiguracionTenant extends Model
     /** Interruptor TEST/LIVE del tenant (spec tenant/025, RN-01). Sin fijar, se comporta como `live`. */
     public const AMBIENTE = 'ambiente';
 
+    /** Modo automático (spec tenant/034): `No`, `Si` o `Pausado`. Sin fijar, `No`. */
+    public const MODO_AUTOMATICO = 'modo_automatico';
+
+    /** Última vez que el modo automático pasó a `Si` (spec tenant/034, RN-04 y RN-24). */
+    public const MODO_AUTOMATICO_DESDE = 'modo_automatico_desde';
+
     public static function obtener(string $clave, ?string $default = null): ?string
     {
         return static::query()->where('clave', $clave)->value('valor') ?? $default;

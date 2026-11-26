@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Whatsapp;
 
+use App\Models\Tenant\AutomaticoBitacora;
 use App\Models\Tenant\Cliente;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\DireccionCliente;
@@ -14,6 +15,7 @@ use App\Models\Tenant\WhatsappSolicitud;
 use App\Models\Tenant\ZonaServicio;
 use App\Services\CreacionPedidoService;
 use App\Services\GeocodificadorService;
+use App\Services\ModoAutomaticoService;
 use App\Services\PedidoEstadoService;
 use App\Services\RutaService;
 use App\Services\TarifaService;
@@ -52,6 +54,7 @@ class ConversacionWhatsappService
         private readonly TarifaService $tarifas,
         private readonly CreacionPedidoService $creacion,
         private readonly FrasesBot $frases,
+        private readonly ModoAutomaticoService $modoAutomatico,
     ) {}
 
     /**
@@ -157,6 +160,10 @@ class ConversacionWhatsappService
      */
     private function pedirPersona(WhatsappConversacion $conversacion): RespuestaBot
     {
+        if ($this->modoAutomatico->activo()) {
+            return $this->pedirPersonaEnAutomatico($conversacion);
+        }
+
         $conversacion->pide_persona_en ??= now();
         $conversacion->pausarBot();
         $conversacion->save();
@@ -166,6 +173,28 @@ class ConversacionWhatsappService
             : '';
 
         return new RespuestaBot($this->frases->decir('persona').$urgente);
+    }
+
+    /**
+     * spec tenant/034, RN-12: se marca en la bandeja como siempre, pero el bot no se pausa —nadie
+     * va a contestar— y el cliente se lleva el teléfono de la flotilla.
+     */
+    private function pedirPersonaEnAutomatico(WhatsappConversacion $conversacion): RespuestaBot
+    {
+        $conversacion->pide_persona_en ??= now();
+        $conversacion->save();
+
+        $quien = $this->clienteDe($conversacion)?->nombre ?? $conversacion->nombre_perfil ?? 'Un cliente';
+        $telefono = $conversacion->telefono ?? $conversacion->usuario_whatsapp;
+
+        $this->modoAutomatico->anotar(
+            AutomaticoBitacora::PERSONA,
+            "{$quien} pidió hablar con alguien por WhatsApp. Su teléfono es {$telefono}.",
+        );
+
+        return new RespuestaBot($this->telefonoFlotilla !== null && $this->telefonoFlotilla !== ''
+            ? $this->frases->decir('persona_automatico', ['contacto' => $this->frases->contacto($this->telefonoFlotilla)])
+            : $this->frases->decir('persona_automatico_sin_telefono'));
     }
 
     /**

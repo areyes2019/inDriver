@@ -64,4 +64,10 @@ return [
         'credentials_path' => env('FIREBASE_CREDENTIALS_PATH'),
     ],
 
+    // spec tenant/034, RN-28: el vigilante externo que avisa si el servidor deja de latir. Vacío,
+    // no se manda nada.
+    'latido' => [
+        'url' => env('LATIDO_URL'),
+    ],
+
 ];

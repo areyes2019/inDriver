@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\EnviarLatido;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -49,3 +50,12 @@ Schedule::command('queue:work --queue=whatsapp --max-time=55 --sleep=1 --tries=3
 
 // spec tenant/031, RN-30.
 Schedule::command('whatsapp:purgar-mensajes')->daily();
+
+// spec tenant/034, RN-07: reoferta, cancelación sin conductor y pedidos atorados del modo automático.
+Schedule::command('automatico:atender-sin-conductor')->everyMinute()->withoutOverlapping(2);
+
+// spec tenant/034, RN-27.
+Schedule::command('automatico:purgar-bitacora')->daily();
+
+// spec tenant/034, RN-28: sin `LATIDO_URL` el job no hace nada.
+Schedule::job(new EnviarLatido)->everyMinute();

@@ -2,10 +2,12 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import UiAmbienteSwitch from '@/components/ui/UiAmbienteSwitch.vue'
+import ModoAutomaticoControl from '@/components/tenant/ModoAutomaticoControl.vue'
 import UiSidebar, { type AccionSidebar, type ItemSidebar } from '@/components/ui/UiSidebar.vue'
 import { type EstadoConexion } from '@/services/realtime'
 import { useAmbienteStore } from '@/stores/ambiente'
 import { useBandejaWhatsappStore } from '@/stores/bandejaWhatsapp'
+import { useModoAutomaticoStore } from '@/stores/modoAutomatico'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
 
 const props = withDefaults(
@@ -46,6 +48,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useTenantAuthStore()
 const ambientes = useAmbienteStore()
+const modoAutomatico = useModoAutomaticoStore()
 
 const slug = computed(() => route.params.slug as string)
 const enPanel = computed(() => route.name === 'tenant-panel')
@@ -60,6 +63,10 @@ watch(
   ([slugActual, usuario]) => {
     if (slugActual && usuario && !ambientes.cargado) {
       ambientes.cargar(slugActual)
+    }
+    // spec tenant/034: el botón del modo automático vive junto al de ambiente.
+    if (slugActual && usuario && !modoAutomatico.cargado) {
+      modoAutomatico.cargar(slugActual)
     }
   },
   { immediate: true },
@@ -263,6 +270,12 @@ function onClickConfiguracion() {
     >
       <template #pie="{ abierto }">
         <UiAmbienteSwitch :slug="slug" :editable="esAdminCliente" :compacto="!abierto" />
+        <ModoAutomaticoControl
+          v-if="puedeVerBandeja"
+          :slug="slug"
+          :editable="esAdminCliente"
+          :compacto="!abierto"
+        />
       </template>
     </UiSidebar>
     <!--

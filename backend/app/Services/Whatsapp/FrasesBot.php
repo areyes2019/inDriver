@@ -127,6 +127,16 @@ class FrasesBot
         'persona_urgente' => [
             ' Si es urgente, llama al {telefono}.',
         ],
+        // spec tenant/034, RN-12: con el modo automático nadie está viendo el chat.
+        'persona_automatico' => [
+            'Por ahora no hay una persona disponible en este chat. {contacto}',
+            'En este momento no hay nadie de la flotilla atendiendo el chat. {contacto}',
+            'Ahorita no hay una persona conectada por aquí. {contacto}',
+        ],
+        'persona_automatico_sin_telefono' => [
+            'Por ahora no hay una persona disponible en este chat, pero puedes seguir pidiendo tu envío por aquí.',
+            'En este momento no hay nadie de la flotilla atendiendo el chat; si quieres, sigue pidiendo tu envío por aquí.',
+        ],
         'sin_precio' => [
             'Ahorita no puedo calcular el precio de ese envío. {contacto}',
         ],

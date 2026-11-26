@@ -2,6 +2,7 @@
 
 use Anthropic\Client;
 use App\Models\Tenant;
+use App\Models\Tenant\AutomaticoBitacora;
 use App\Models\Tenant\Cliente;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
@@ -453,6 +454,33 @@ it('pedir una persona marca la conversación, calla al bot y deja el teléfono d
     $conversacion = $this->conversacion->fresh();
     expect($conversacion->pide_persona_en)->not->toBeNull()
         ->and($conversacion->botPausado())->toBeTrue();
+});
+
+it('con el modo automático, pedir una persona no calla al bot y lo anota en la bitácora (spec 034, RN-12)', function () {
+    ConfiguracionTenant::establecer(ConfiguracionTenant::MODO_AUTOMATICO, 'Si');
+    iaDevuelve(['intencion' => 'hablar_con_persona']);
+
+    expect(clienteEscribe($this->conversacion, ['texto' => 'quiero hablar con alguien'])->texto)
+        ->toBe('Por ahora no hay una persona disponible en este chat. Puedes hablar con una persona de la flotilla al 4613581090.');
+
+    $conversacion = $this->conversacion->fresh();
+    expect($conversacion->pide_persona_en)->not->toBeNull()
+        ->and($conversacion->botPausado())->toBeFalse();
+
+    $entrada = AutomaticoBitacora::sole();
+    expect($entrada->accion)->toBe('PERSONA')
+        ->and($entrada->detalle)->toContain('5214613581090');
+});
+
+it('con el modo automático pero la flotilla en TEST, pedir una persona calla al bot como siempre', function () {
+    ConfiguracionTenant::establecer(ConfiguracionTenant::MODO_AUTOMATICO, 'Si');
+    ConfiguracionTenant::establecer(ConfiguracionTenant::AMBIENTE, 'test');
+    iaDevuelve(['intencion' => 'hablar_con_persona']);
+
+    clienteEscribe($this->conversacion, ['texto' => 'quiero hablar con alguien']);
+
+    expect($this->conversacion->fresh()->botPausado())->toBeTrue()
+        ->and(AutomaticoBitacora::count())->toBe(0);
 });
 
 it('con el bot pausado no contesta, pero BAJA sí', function () {

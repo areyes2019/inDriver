@@ -152,6 +152,8 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             // spec tenant/025, RN-02: el interruptor TEST/LIVE de la cabecera. Solo AdminCliente;
             // el Despachador lo ve por GET /configuracion y no puede moverlo.
             Route::put('/configuracion/ambiente', [ConfiguracionController::class, 'ambiente']);
+            // spec tenant/034, D2: el modo automático, solo AdminCliente.
+            Route::put('/configuracion/modo-automatico', [ConfiguracionController::class, 'modoAutomatico']);
             Route::get('/zonas-cobertura', [ZonaCoberturaController::class, 'index']);
             Route::post('/zonas-cobertura', [ZonaCoberturaController::class, 'store']);
             Route::get('/zonas-cobertura/{zona}', [ZonaCoberturaController::class, 'show']);
@@ -176,6 +178,7 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::get('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'show']);
 
             Route::get('/configuracion', [ConfiguracionController::class, 'show']);
+            Route::get('/automatico/bitacora', [ConfiguracionController::class, 'bitacoraAutomatico']);
 
             Route::post('/whatsapp/conversaciones/{conversacion}/mensajes', [WhatsappBandejaController::class, 'responder']);
             Route::post('/whatsapp/conversaciones/{conversacion}/devolver-al-bot', [WhatsappBandejaController::class, 'devolverAlBot']);
