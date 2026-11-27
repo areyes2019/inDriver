@@ -9,6 +9,7 @@ use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Usuario;
+use App\Services\ModoAutomaticoService;
 use App\Services\OfertaPedidoService;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
