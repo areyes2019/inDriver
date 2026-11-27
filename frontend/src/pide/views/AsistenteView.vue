@@ -10,7 +10,6 @@ import BuscadorDireccion from '../components/BuscadorDireccion.vue'
 import CampoTexto from '../components/CampoTexto.vue'
 import PasoConfirmacion from '../components/PasoConfirmacion.vue'
 import PasoDetalles from '../components/PasoDetalles.vue'
-import { useInstalacion } from '../composables/useInstalacion'
 import { formatoTelefono, soloDiezDigitos } from '../lib/telefono'
 import { pesos } from '../lib/formato'
 import { useAsistenteStore, type Paso } from '../stores/asistente'
@@ -22,7 +21,6 @@ const router = useRouter()
 const marca = useMarcaStore()
 const ui = useUiStore()
 const asistente = useAsistenteStore()
-const { recordarTrasPedido } = useInstalacion()
 
 const tipo: TipoServicio = route.params.tipo === 'recibir' ? 'RECIBIR' : 'ENVIAR'
 const favoritas = ref<Direccion[]>([])
@@ -112,7 +110,6 @@ async function confirmar(): Promise<void> {
     if (r.ok) {
       asistente.descartarBorrador()
       await router.replace({ name: 'pedido', params: { slug: marca.slug, id: r.pedido.id } })
-      recordarTrasPedido()
       return
     }
     if (r.motivo === 'PRECIO_CAMBIO') {

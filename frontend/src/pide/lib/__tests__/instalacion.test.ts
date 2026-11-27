@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { debeMostrarBienvenida, plataformaDe, slugDeRuta } from '../instalacion.ts'
+import { destinoPorInstalacion, plataformaDe, slugDeRuta } from '../instalacion.ts'
 
 test('lee la flotilla de la ruta de la app', () => {
   assert.equal(slugDeRuta('/pide/moto-celaya/'), 'moto-celaya')
@@ -10,12 +10,21 @@ test('lee la flotilla de la ruta de la app', () => {
   assert.equal(slugDeRuta('/moto-celaya/panel'), null)
 })
 
-test('la bienvenida con Instalar solo aparece antes de instalar y sin sesión', () => {
-  const base = { conSesion: false, instalada: false, eligioNavegador: false }
-  assert.equal(debeMostrarBienvenida(base), true)
-  assert.equal(debeMostrarBienvenida({ ...base, instalada: true }), false)
-  assert.equal(debeMostrarBienvenida({ ...base, conSesion: true }), false)
-  assert.equal(debeMostrarBienvenida({ ...base, eligioNavegador: true }), false)
+test('sin la app instalada, toda pantalla lleva a la bienvenida (D7: instalación obligatoria)', () => {
+  for (const pantalla of ['registro', 'entrar', 'codigo', 'inicio', 'pedir', 'pedidos', 'cuenta']) {
+    assert.equal(destinoPorInstalacion(pantalla, false), 'bienvenida', pantalla)
+  }
+})
+
+test('la bienvenida y "Muy pronto" se ven sin instalar', () => {
+  assert.equal(destinoPorInstalacion('bienvenida', false), null)
+  assert.equal(destinoPorInstalacion('no-disponible', false), null)
+})
+
+test('ya instalada, la bienvenida no vuelve y lo demás abre normal', () => {
+  assert.equal(destinoPorInstalacion('bienvenida', true), 'registro')
+  assert.equal(destinoPorInstalacion('registro', true), null)
+  assert.equal(destinoPorInstalacion('inicio', true), null)
 })
 
 test('reconoce iPhone, iPad y Android', () => {

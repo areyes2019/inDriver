@@ -1,6 +1,5 @@
 import { computed, ref } from 'vue'
 import { plataformaDe, type Plataforma } from '../lib/instalacion'
-import { useMarcaStore } from '../stores/marca'
 import { useUiStore } from '../stores/ui'
 
 interface EventoInstalar extends Event {
@@ -27,37 +26,46 @@ const plataforma: Plataforma =
     ? 'otra'
     : plataformaDe(navigator.userAgent, navigator.maxTouchPoints ?? 0)
 
-/** ¿La app está abierta desde su ícono (instalada) y no desde el navegador? */
+/**
+ * Solo en desarrollo: `?navegador=1` deja revisar las pantallas en la computadora sin instalar. En el
+ * build de producción `import.meta.env.DEV` es falso y este salto no existe.
+ */
+function saltoDeDesarrollo(): boolean {
+  if (!import.meta.env.DEV) return false
+  try {
+    if (new URLSearchParams(window.location.search).has('navegador')) {
+      sessionStorage.setItem('pide:dev:navegador', 'si')
+    }
+    return sessionStorage.getItem('pide:dev:navegador') === 'si'
+  } catch {
+    return false
+  }
+}
+
+/** ¿La app está abierta desde su ícono (instalada)? Sin esto no se entra (D7). */
 export function instalada(): boolean {
+  const modo = (m: string) => window.matchMedia?.(`(display-mode: ${m})`).matches === true
   return (
-    window.matchMedia?.('(display-mode: standalone)').matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true
+    modo('standalone') ||
+    modo('fullscreen') ||
+    modo('minimal-ui') ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+    saltoDeDesarrollo()
   )
 }
 
 /**
- * Instalación (spec tenant/035, D7 corregida en 1.3) y permiso de avisos (RN-50).
+ * Instalación obligatoria (spec tenant/035, D7) y permiso de avisos (RN-50).
  *
- * - Al abrir la liga sin la app instalada, la primera pantalla es la bienvenida con "Instalar".
+ * - En el navegador la app solo muestra la bienvenida con "Instalar".
  * - Android: el botón abre el aviso de instalación del teléfono, si el navegador lo permite.
  * - iPhone: no hay forma de instalar con un botón; se muestra la guía de 3 pasos.
- * - "Continuar en el navegador" salta la bienvenida. A quien la saltó se le recuerda una sola vez,
- *   después de su primer pedido.
  */
 export function useInstalacion() {
-  const marca = useMarcaStore()
   const ui = useUiStore()
 
   const puedeInstalarConBoton = computed(() => eventoInstalar.value !== null)
   const esIphone = plataforma === 'iphone'
-
-  function eligioNavegador(): boolean {
-    return marca.almacen.leer('continuar-navegador') === 'si'
-  }
-
-  function continuarEnNavegador(): void {
-    marca.almacen.guardar('continuar-navegador', 'si')
-  }
 
   /** Abre el aviso de instalación de Android. Sin él, la pantalla muestra la guía. */
   async function instalar(): Promise<'aceptada' | 'rechazada' | 'sin-boton'> {
@@ -69,25 +77,12 @@ export function useInstalacion() {
     return outcome === 'accepted' ? 'aceptada' : 'rechazada'
   }
 
-  /** Recordatorio único tras el primer pedido, solo a quien siguió en el navegador. */
-  function recordarTrasPedido(): void {
-    if (instalada() || !eligioNavegador()) return
-    if (marca.almacen.leer('instalar-ofrecido') === 'recordado') return
-    marca.almacen.guardar('instalar-ofrecido', 'recordado')
-    ui.hojaInstalar = true
-  }
-
-  function cerrarInstalar(): void {
-    ui.hojaInstalar = false
-  }
-
   function puedePedirAvisos(): boolean {
     if (typeof Notification === 'undefined') return false
-    if (Notification.permission !== 'default') return false
-    return !esIphone || instalada()
+    return Notification.permission === 'default'
   }
 
-  /** RN-50: después de registrarse con la app ya instalada. */
+  /** RN-50: después de registrarse. */
   function pedirAvisosSiToca(): void {
     if (puedePedirAvisos()) ui.hojaAvisos = true
   }
@@ -101,14 +96,9 @@ export function useInstalacion() {
   return {
     plataforma,
     esIphone,
-    instalada,
     recienInstalada,
     puedeInstalarConBoton,
-    eligioNavegador,
-    continuarEnNavegador,
     instalar,
-    recordarTrasPedido,
-    cerrarInstalar,
     pedirAvisosSiToca,
     activarAvisos,
   }

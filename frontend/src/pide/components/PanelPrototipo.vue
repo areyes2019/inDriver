@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { controlesPrototipo, reanudarConexionSimulada } from '../api/mock'
 import { useMarcaStore } from '../stores/marca'
 import { useSesionStore } from '../stores/sesion'
-import { useUiStore } from '../stores/ui'
 import HojaInferior from './HojaInferior.vue'
 
 /**
@@ -14,7 +13,6 @@ import HojaInferior from './HojaInferior.vue'
 const abierto = ref(false)
 const marca = useMarcaStore()
 const sesion = useSesionStore()
-const ui = useUiStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -26,11 +24,6 @@ async function recargarMarca(): Promise<void> {
 function alternarConexion(): void {
   if (controlesPrototipo.conexionCortada) reanudarConexionSimulada()
   else controlesPrototipo.conexionCortada = true
-}
-
-function verInvitacion(): void {
-  abierto.value = false
-  ui.hojaInstalar = true
 }
 
 function otraFlotilla(): void {
@@ -110,14 +103,7 @@ const opciones = [
     <div class="mt-3 grid grid-cols-2 gap-2 pb-2 text-sm font-semibold">
       <button
         type="button"
-        class="min-h-12 rounded-xl bg-morado-50 text-morado-700"
-        @click="verInvitacion"
-      >
-        Ver invitación a instalar
-      </button>
-      <button
-        type="button"
-        class="min-h-12 rounded-xl bg-morado-50 text-morado-700"
+        class="col-span-2 min-h-12 rounded-xl bg-morado-50 text-morado-700"
         @click="otraFlotilla"
       >
         Abrir otra flotilla

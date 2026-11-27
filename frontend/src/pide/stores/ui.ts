@@ -3,7 +3,6 @@ import { ref } from 'vue'
 
 /** Hojas y avisos que flotan sobre cualquier pantalla. */
 export const useUiStore = defineStore('pide-ui', () => {
-  const hojaInstalar = ref(false)
   const hojaAvisos = ref(false)
   const mensaje = ref<{ texto: string; tipo: 'info' | 'error' } | null>(null)
   let temporizador: ReturnType<typeof setTimeout> | null = null
@@ -14,5 +13,5 @@ export const useUiStore = defineStore('pide-ui', () => {
     temporizador = setTimeout(() => (mensaje.value = null), 3200)
   }
 
-  return { hojaInstalar, hojaAvisos, mensaje, avisar }
+  return { hojaAvisos, mensaje, avisar }
 })

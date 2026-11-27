@@ -41,7 +41,7 @@
 
 | Tema | Cambio |
 |---|---|
-| Instalación | **Corrección:** en la definición de asunciones se eligió invitar a instalar "desde el primer momento", y la 1.0 lo anotó al revés ("después del registro"). Ahora: la liga abre una bienvenida con un botón grande "Instalar"; el registro viene después, desde la app instalada (D1, D7, 6.0) |
+| Instalación | **Corrección:** en la definición de asunciones se eligió invitar a instalar "desde el primer momento", y la 1.0 lo anotó al revés ("después del registro"). Ahora: **la instalación es obligatoria**. La liga abre una bienvenida con un botón grande "Instalar" y no hay forma de seguir en el navegador; el registro y todo lo demás se usan desde la app instalada (D1, D7, 6.0) |
 | Fases | El manifiesto, el service worker y la instalación pasan de la Fase 8 a la **Fase 3b**. En la Fase 8 quedan el logo y el banner de cada flotilla y los avisos push |
 
 ### Cambios de la versión 1.2
@@ -109,13 +109,13 @@ modo automático, y el conductor lo atiende en `panda_express` sin ningún cambi
 
 | # | Decisión |
 |---|---|
-| D1 | La app es para clientes nuevos. No hay pantalla pública de pedidos: sin sesión, la app abre en la bienvenida con "Instalar" (si no está instalada) y después en "Registrarme", con un enlace chico "Ya tengo cuenta, entrar" |
+| D1 | La app es para clientes nuevos. En el navegador solo muestra la bienvenida con "Instalar" (D7). Instalada y sin sesión, abre en "Registrarme", con un enlace chico "Ya tengo cuenta, entrar" |
 | D2 | Solo PWA. Sin Capacitor, sin APK, sin Android Studio y sin tiendas. Una sola base de código para todas las flotillas |
 | D3 | El cliente de la app es el mismo `Cliente` de hoy: misma tabla `clientes`, mismo módulo del Panel. Solo se agrega la entrada con correo y código |
 | D4 | Cada flotilla tiene su app en `motopanda.mx/pide/{flotilla}`. `/app/` no se usa porque nginx ya lo manda a Reverb. Para el teléfono son apps distintas: manifiesto, service worker, sesión, almacenamiento y avisos separados por flotilla (RN-05 a RN-09) |
 | D5 | Un mismo correo puede ser cliente de dos flotillas, pero solo usando las dos apps. Las cuentas nunca se mezclan |
 | D6 | El código de acceso llega **por correo**, desde un remitente de MotoPanda con el nombre de la flotilla. El código por WhatsApp se agregará después como otra forma de entrar, sin quitar la del correo (decisión del 2026-11-26) |
-| D7 | **Primero instalar, después registrarse** (corregida en 1.3). La liga abre una bienvenida con un botón grande "Instalar": en Android abre el aviso de instalación del teléfono; en iPhone, y en Android cuando el navegador no lo ofrece (por ejemplo, la liga abierta dentro de WhatsApp), muestra la guía de 3 pasos. Un enlace chico "Continuar en el navegador" salta la bienvenida; a quien lo usa se le recuerda instalar una sola vez, tras su primer pedido. En iPhone importa además porque la app instalada no comparte la sesión con Safari |
+| D7 | **La instalación es obligatoria** (corregida en 1.3, decisión del 2026-11-27). En el navegador la app solo muestra la bienvenida con un botón grande "Instalar": en Android abre el aviso de instalación del teléfono; en iPhone, y en Android cuando el navegador no lo ofrece (por ejemplo, la liga abierta dentro de WhatsApp), muestra la guía de 3 pasos. No existe "Continuar en el navegador": registro, entrada y pedidos solo se usan desde la app instalada. En iPhone evita además que el cliente se registre en Safari, que no comparte la sesión con la app instalada |
 | D8 | Quien pide elige quién paga, con las mismas tres modalidades del Panel, en el paso 3 y con tres tarjetas con ícono. Es igual en Enviar y en Recibir |
 | D9 | Solo dos servicios: Enviar y Recibir. Cada flotilla puede apagar uno de los dos |
 | D10 | El precio lo calcula siempre el servidor con `CotizacionPedidoService`. La cotización queda fija 10 minutos con un sello cifrado del servidor |
@@ -146,16 +146,19 @@ modo automático, y el conductor lo atiende en `panda_express` sin ningún cambi
 
 ### 6.0 Bienvenida (instalar)
 
-Primera pantalla al abrir la liga, solo si la app no está instalada, no hay sesión y el cliente no
-eligió "Continuar en el navegador":
+**La única pantalla de la app en el navegador** (D7: instalación obligatoria). Cualquier otra ruta
+abierta sin la app instalada lleva aquí; solo "Muy pronto" (app apagada, RN-01) se ve sin instalar.
 
 - Encabezado con logo y banner de la flotilla.
 - "Instala {flotilla} en tu celular", con una línea que explica que no se descarga de ninguna tienda.
 - Botón grande amarillo **Instalar** (D7). Al aceptar en Android: "¡Listo! Busca {flotilla} en tu
   pantalla de inicio y ábrela desde ahí para crear tu cuenta".
-- Enlace chico **Continuar en el navegador**, que lleva a Registrarme.
+- "Para pedir tus mandados necesitas la app instalada." No hay forma de seguir en el navegador.
 
-Abierta desde el ícono (instalada), la app nunca muestra esta pantalla.
+Abierta desde el ícono (instalada), la app nunca muestra esta pantalla y empieza en Registrarme.
+
+Solo en desarrollo, `?navegador=1` permite revisar las pantallas en la computadora sin instalar. El
+build de producción no incluye ese salto.
 
 ### 6.1 Registro y entrada
 

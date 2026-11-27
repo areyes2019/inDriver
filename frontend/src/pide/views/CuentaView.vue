@@ -6,7 +6,6 @@ import { api } from '../api'
 import BotonPrincipal from '../components/BotonPrincipal.vue'
 import CampoTexto from '../components/CampoTexto.vue'
 import HojaInferior from '../components/HojaInferior.vue'
-import { useInstalacion } from '../composables/useInstalacion'
 import { esTelefonoValido, formatoTelefono, soloDiezDigitos } from '../lib/telefono'
 import { useMarcaStore } from '../stores/marca'
 import { useSesionStore } from '../stores/sesion'
@@ -16,7 +15,6 @@ const marca = useMarcaStore()
 const sesion = useSesionStore()
 const ui = useUiStore()
 const router = useRouter()
-const { instalada } = useInstalacion()
 
 const editando = ref(false)
 const guardando = ref(false)
@@ -122,17 +120,6 @@ async function salir(): Promise<void> {
           <span class="ml-auto text-sm" :class="avisosActivos ? 'text-exito' : 'text-suave'">
             {{ avisosActivos ? 'Activados' : 'Activar' }}
           </span>
-        </button>
-      </li>
-      <li v-if="!instalada()">
-        <button
-          type="button"
-          class="flex min-h-16 w-full items-center gap-3 px-4 text-left active:bg-morado-50"
-          @click="ui.hojaInstalar = true"
-        >
-          <Icon icon="tabler:download" class="size-6 text-morado-700" />
-          <span class="font-medium">Instalar la app</span>
-          <Icon icon="tabler:chevron-right" class="ml-auto size-5 text-suave" />
         </button>
       </li>
     </ul>

@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { instalada } from './composables/useInstalacion'
-import { debeMostrarBienvenida } from './lib/instalacion'
+import { destinoPorInstalacion } from './lib/instalacion'
 import { useMarcaStore } from './stores/marca'
 import { useSesionStore } from './stores/sesion'
 
@@ -124,25 +124,19 @@ router.beforeEach(async (to) => {
     return { name: 'inicio', params: { slug } }
   }
 
+  // D7: la instalación es obligatoria. En el navegador solo existe la bienvenida con "Instalar".
+  const destino = destinoPorInstalacion(String(to.name), instalada())
+  if (destino && destino !== to.name) {
+    return { name: destino, params: { slug } }
+  }
+  if (to.name === 'bienvenida') return true
+
   // RN-02 / D1: sin sesión solo existen registro, entrar y código.
   if (!to.meta.publica && !sesion.activa) {
     return { name: 'registro', params: { slug } }
   }
   if (to.meta.publica && sesion.activa && to.name !== 'no-disponible') {
     return { name: 'inicio', params: { slug } }
-  }
-
-  // D7 (corregida en 1.3): primero instalar, después registrarse.
-  const estado = {
-    conSesion: sesion.activa,
-    instalada: instalada(),
-    eligioNavegador: marca.almacen.leer('continuar-navegador') === 'si',
-  }
-  if ((to.name === 'registro' || to.name === 'entrar') && debeMostrarBienvenida(estado)) {
-    return { name: 'bienvenida', params: { slug } }
-  }
-  if (to.name === 'bienvenida' && !debeMostrarBienvenida(estado)) {
-    return { name: 'registro', params: { slug } }
   }
   return true
 })

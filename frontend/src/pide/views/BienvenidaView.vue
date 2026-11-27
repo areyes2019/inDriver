@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import BannerFlotilla from '../components/BannerFlotilla.vue'
 import BotonPrincipal from '../components/BotonPrincipal.vue'
 import CabeceraMarca from '../components/CabeceraMarca.vue'
@@ -10,14 +9,11 @@ import { useInstalacion } from '../composables/useInstalacion'
 import { useMarcaStore } from '../stores/marca'
 
 /**
- * Primera pantalla al abrir la liga sin la app instalada (spec tenant/035, D7 corregida): el cliente
- * instala y después se registra desde el ícono. En iPhone importa además porque la app instalada no
- * comparte la sesión con Safari: registrarse antes obligaría a pedir otro código.
+ * Lo único que la app muestra en el navegador (spec tenant/035, D7: instalación obligatoria). El
+ * cliente instala y todo lo demás —registro, entrada, pedidos— lo hace desde la app instalada.
  */
 const marca = useMarcaStore()
-const router = useRouter()
-const { esIphone, puedeInstalarConBoton, recienInstalada, instalar, continuarEnNavegador } =
-  useInstalacion()
+const { esIphone, puedeInstalarConBoton, recienInstalada, instalar } = useInstalacion()
 
 const mostrarGuia = ref(false)
 const instalando = ref(false)
@@ -37,11 +33,6 @@ async function tocarInstalar(): Promise<void> {
   } finally {
     instalando.value = false
   }
-}
-
-function seguirEnNavegador(): void {
-  continuarEnNavegador()
-  router.replace({ name: 'registro', params: { slug: marca.slug } })
 }
 </script>
 
@@ -91,15 +82,8 @@ function seguirEnNavegador(): void {
             Te mostraremos cómo hacerlo en tu celular.
           </p>
         </div>
+        <p class="mt-8 text-sm text-suave">Para pedir tus mandados necesitas la app instalada.</p>
       </template>
-
-      <button
-        type="button"
-        class="mt-8 min-h-11 text-sm font-semibold text-suave underline underline-offset-2"
-        @click="seguirEnNavegador"
-      >
-        Continuar en el navegador
-      </button>
     </section>
   </main>
 </template>

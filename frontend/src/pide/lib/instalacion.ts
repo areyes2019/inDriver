@@ -1,6 +1,7 @@
 /**
- * Instalación de la PWA (spec tenant/035, D7 corregida): el cliente abre la liga, instala y después se
- * registra. Lógica pura, para probarla sin navegador.
+ * Instalación de la PWA (spec tenant/035, D7): **la instalación es obligatoria**. En el navegador, la
+ * app solo muestra la bienvenida con "Instalar"; todo lo demás se usa desde la app instalada. Lógica
+ * pura, para probarla sin navegador.
  */
 
 /** La flotilla de una ruta `/pide/{slug}/...`, o `null`. */
@@ -10,15 +11,19 @@ export function slugDeRuta(ruta: string): string | null {
 }
 
 /**
- * La bienvenida con "Instalar" se muestra a quien todavía no tiene sesión, no abrió la app instalada
- * y no eligió "Continuar en el navegador".
+ * Pantallas que existen sin la app instalada: la bienvenida y el aviso de "Muy pronto" (con la app
+ * apagada no hay nada que instalar).
  */
-export function debeMostrarBienvenida(estado: {
-  conSesion: boolean
-  instalada: boolean
-  eligioNavegador: boolean
-}): boolean {
-  return !estado.conSesion && !estado.instalada && !estado.eligioNavegador
+const SIN_INSTALAR = new Set(['bienvenida', 'no-disponible'])
+
+/** ¿A qué pantalla hay que mandar al cliente, según si la app está instalada? `null` = a la que pidió. */
+export function destinoPorInstalacion(
+  pantalla: string,
+  instalada: boolean,
+): 'bienvenida' | 'registro' | null {
+  if (!instalada && !SIN_INSTALAR.has(pantalla)) return 'bienvenida'
+  if (instalada && pantalla === 'bienvenida') return 'registro'
+  return null
 }
 
 export type Plataforma = 'iphone' | 'android' | 'otra'

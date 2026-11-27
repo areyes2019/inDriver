@@ -4,7 +4,6 @@ import { useRoute } from 'vue-router'
 import { esPrototipo } from './api'
 import AvisoVersionNueva from './components/AvisoVersionNueva.vue'
 import BarraInferior from './components/BarraInferior.vue'
-import InvitacionInstalar from './components/InvitacionInstalar.vue'
 import PanelPrototipo from './components/PanelPrototipo.vue'
 import PermisoAvisos from './components/PermisoAvisos.vue'
 import { useUiStore } from './stores/ui'
@@ -23,7 +22,6 @@ const ui = useUiStore()
   </div>
 
   <BarraInferior v-if="route.meta.barra" />
-  <InvitacionInstalar />
   <PermisoAvisos />
   <AvisoVersionNueva />
   <PanelPrototipo v-if="esPrototipo" />
