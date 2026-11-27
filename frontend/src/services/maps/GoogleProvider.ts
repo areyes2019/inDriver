@@ -504,41 +504,40 @@ export default class GoogleProvider extends BaseProvider {
     // Primero las que traen distancia: se quedan si caen en la zona, y de ellas se aprende en qué
     // estado está la zona ("Gto."). Google no manda la distancia de algunas calles; esas solo pasan
     // si son del mismo estado (así se colaba "México 45, Saláices, Chih." en Celaya).
-    const enZona: google.maps.places.PlacePrediction[] = []
-    const sinDistancia: google.maps.places.PlacePrediction[] = []
-    for (const suggestion of suggestions) {
-      const prediction = suggestion.placePrediction
-      if (!prediction) continue
-      const distancia = prediction.distanceMeters
-      if (radioMaximo === null) {
-        enZona.push(prediction)
-      } else if (typeof distancia === 'number') {
-        if (distancia > radioMaximo) continue
-        enZona.push(prediction)
-        const estado = estadoDeSugerencia(prediction.text.text)
+    // `placePrediction` se lee una sola vez por sugerencia: el SDK no garantiza devolver el mismo
+    // objeto en cada lectura, así que nada aquí depende de comparar objetos.
+    const predicciones = suggestions
+      .map((suggestion) => suggestion.placePrediction)
+      .filter((prediction): prediction is google.maps.places.PlacePrediction => !!prediction)
+      .map((prediction) => ({
+        prediction,
+        texto: prediction.text.text,
+        distancia: typeof prediction.distanceMeters === 'number' ? prediction.distanceMeters : null,
+      }))
+
+    if (radioMaximo !== null) {
+      for (const { texto, distancia } of predicciones) {
+        if (distancia === null || distancia > radioMaximo) continue
+        const estado = estadoDeSugerencia(texto)
         if (estado) this.estadosDeZona.estados.add(estado)
-      } else {
-        sinDistancia.push(prediction)
       }
     }
 
     const estados = this.estadosDeZona.estados
-    const aceptadas = new Set([
-      ...enZona,
-      ...sinDistancia.filter((prediction) => {
-        const estado = estadoDeSugerencia(prediction.text.text)
-        return estados.size === 0 || estado === null || estados.has(estado)
-      }),
-    ])
+    const aceptada = ({ texto, distancia }: { texto: string; distancia: number | null }) => {
+      if (radioMaximo === null) return true
+      if (distancia !== null) return distancia <= radioMaximo
+      const estado = estadoDeSugerencia(texto)
+      return estados.size === 0 || estado === null || estados.has(estado)
+    }
 
     this.suggestionCache.clear()
     const results: AddressSuggestion[] = []
     // En el orden en que Google las mandó.
-    for (const suggestion of suggestions) {
-      const prediction = suggestion.placePrediction
-      if (!prediction || !aceptadas.has(prediction)) continue
-      this.suggestionCache.set(prediction.placeId, prediction)
-      results.push({ id: prediction.placeId, label: prediction.text.text })
+    for (const item of predicciones) {
+      if (!aceptada(item)) continue
+      this.suggestionCache.set(item.prediction.placeId, item.prediction)
+      results.push({ id: item.prediction.placeId, label: item.texto })
     }
     return results
   }
