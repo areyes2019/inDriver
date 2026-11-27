@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\CreditoPaqueteController;
 use App\Http\Controllers\Admin\PaqueteViajeController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Cliente\AccesoController as ClienteAccesoController;
+use App\Http\Controllers\Cliente\ManifiestoController as ClienteManifiestoController;
 use App\Http\Controllers\Cliente\MarcaController as ClienteMarcaController;
 use App\Http\Controllers\Cliente\PerfilController as ClientePerfilController;
 use App\Http\Controllers\Tenant\AuthController as TenantAuthController;
@@ -199,6 +200,7 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
     // App de clientes (spec tenant/035). Token propio (`cliente-token`), nunca la sesión del Panel.
     Route::prefix('cliente')->group(function () {
         Route::get('/marca', [ClienteMarcaController::class, 'show'])->middleware('throttle:cliente-publico');
+        Route::get('/manifest.webmanifest', [ClienteManifiestoController::class, 'show'])->middleware('throttle:cliente-publico');
         Route::post('/codigo', [ClienteAccesoController::class, 'codigo'])->middleware('throttle:cliente-publico');
         Route::post('/verificar', [ClienteAccesoController::class, 'verificar'])->middleware('throttle:cliente-publico');
 

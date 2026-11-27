@@ -1,4 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { instalada } from './composables/useInstalacion'
+import { debeMostrarBienvenida } from './lib/instalacion'
 import { useMarcaStore } from './stores/marca'
 import { useSesionStore } from './stores/sesion'
 
@@ -17,6 +19,12 @@ const rutas: RouteRecordRaw[] = [
     path: '/:slug',
     children: [
       { path: '', redirect: (to) => `/${String(to.params.slug)}/inicio` },
+      {
+        path: 'bienvenida',
+        name: 'bienvenida',
+        component: () => import('./views/BienvenidaView.vue'),
+        meta: { publica: true },
+      },
       {
         path: 'registro',
         name: 'registro',
@@ -122,6 +130,19 @@ router.beforeEach(async (to) => {
   }
   if (to.meta.publica && sesion.activa && to.name !== 'no-disponible') {
     return { name: 'inicio', params: { slug } }
+  }
+
+  // D7 (corregida en 1.3): primero instalar, después registrarse.
+  const estado = {
+    conSesion: sesion.activa,
+    instalada: instalada(),
+    eligioNavegador: marca.almacen.leer('continuar-navegador') === 'si',
+  }
+  if ((to.name === 'registro' || to.name === 'entrar') && debeMostrarBienvenida(estado)) {
+    return { name: 'bienvenida', params: { slug } }
+  }
+  if (to.name === 'bienvenida' && !debeMostrarBienvenida(estado)) {
+    return { name: 'registro', params: { slug } }
   }
   return true
 })

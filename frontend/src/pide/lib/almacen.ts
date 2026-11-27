@@ -6,7 +6,8 @@
  * app debe seguir funcionando, solo sin recordar.
  */
 
-export type LlaveAlmacen = 'token' | 'instalar-ofrecido' | 'borrador' | 'avisos-pedidos'
+export type LlaveAlmacen =
+  'token' | 'instalar-ofrecido' | 'continuar-navegador' | 'borrador' | 'avisos-pedidos'
 
 interface AlmacenBasico {
   getItem(llave: string): string | null

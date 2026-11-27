@@ -16,7 +16,7 @@ const marca = useMarcaStore()
 const sesion = useSesionStore()
 const ui = useUiStore()
 const { pedir } = useCodigo()
-const { ofrecerSiToca } = useInstalacion()
+const { pedirAvisosSiToca } = useInstalacion()
 
 const pendiente = verificacionPendiente()
 
@@ -65,7 +65,7 @@ async function verificar(valor = codigo.value): Promise<void> {
     }
     sesion.entrar(r.token, r.cliente)
     await router.replace({ name: 'inicio', params: { slug: marca.slug } })
-    if (r.nuevo) ofrecerSiToca('registro')
+    if (r.nuevo) pedirAvisosSiToca()
   } finally {
     verificando.value = false
   }

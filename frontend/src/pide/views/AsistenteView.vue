@@ -22,7 +22,7 @@ const router = useRouter()
 const marca = useMarcaStore()
 const ui = useUiStore()
 const asistente = useAsistenteStore()
-const { ofrecerSiToca } = useInstalacion()
+const { recordarTrasPedido } = useInstalacion()
 
 const tipo: TipoServicio = route.params.tipo === 'recibir' ? 'RECIBIR' : 'ENVIAR'
 const favoritas = ref<Direccion[]>([])
@@ -112,7 +112,7 @@ async function confirmar(): Promise<void> {
     if (r.ok) {
       asistente.descartarBorrador()
       await router.replace({ name: 'pedido', params: { slug: marca.slug, id: r.pedido.id } })
-      ofrecerSiToca('pedido')
+      recordarTrasPedido()
       return
     }
     if (r.motivo === 'PRECIO_CAMBIO') {

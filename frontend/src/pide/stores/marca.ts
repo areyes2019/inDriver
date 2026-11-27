@@ -21,6 +21,7 @@ export const useMarcaStore = defineStore('pide-marca', () => {
       almacen.value = crearAlmacen(nuevoSlug)
       marca.value = await api.marca(nuevoSlug)
       document.title = `${marca.value.nombre} · Pide tu mandado`
+      ponerNombreEnIphone(marca.value.nombre)
       return marca.value
     } finally {
       cargando.value = false
@@ -29,3 +30,14 @@ export const useMarcaStore = defineStore('pide-marca', () => {
 
   return { slug, marca, almacen, cargando, nombre, cargar }
 })
+
+/** iPhone no lee el nombre del manifiesto al "Agregar a inicio": usa esta etiqueta. */
+function ponerNombreEnIphone(nombre: string): void {
+  let meta = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-title"]')
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.name = 'apple-mobile-web-app-title'
+    document.head.appendChild(meta)
+  }
+  meta.content = nombre
+}

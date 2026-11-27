@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { plataformaDe, type Plataforma } from '../lib/instalacion'
 import { useMarcaStore } from '../stores/marca'
 import { useUiStore } from '../stores/ui'
 
@@ -9,16 +10,25 @@ interface EventoInstalar extends Event {
 
 // Chrome lo lanza una sola vez por carga, así que se escucha desde que arranca la app.
 const eventoInstalar = ref<EventoInstalar | null>(null)
+const recienInstalada = ref(false)
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault()
     eventoInstalar.value = e as EventoInstalar
   })
+  window.addEventListener('appinstalled', () => {
+    eventoInstalar.value = null
+    recienInstalada.value = true
+  })
 }
 
-const esIphone = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent)
+const plataforma: Plataforma =
+  typeof navigator === 'undefined'
+    ? 'otra'
+    : plataformaDe(navigator.userAgent, navigator.maxTouchPoints ?? 0)
 
-function instalada(): boolean {
+/** ¿La app está abierta desde su ícono (instalada) y no desde el navegador? */
+export function instalada(): boolean {
   return (
     window.matchMedia?.('(display-mode: standalone)').matches ||
     (navigator as Navigator & { standalone?: boolean }).standalone === true
@@ -26,46 +36,49 @@ function instalada(): boolean {
 }
 
 /**
- * Invitación a instalar (D7) y permiso de avisos (RN-50).
+ * Instalación (spec tenant/035, D7 corregida en 1.3) y permiso de avisos (RN-50).
  *
- * - Se ofrece después del registro. Si dice "Ahora no", una vez más tras su primer pedido y ya no.
- * - En iPhone no hay botón de instalar: se muestra una guía.
- * - El permiso de avisos se pide después, y en iPhone solo con la app instalada.
+ * - Al abrir la liga sin la app instalada, la primera pantalla es la bienvenida con "Instalar".
+ * - Android: el botón abre el aviso de instalación del teléfono, si el navegador lo permite.
+ * - iPhone: no hay forma de instalar con un botón; se muestra la guía de 3 pasos.
+ * - "Continuar en el navegador" salta la bienvenida. A quien la saltó se le recuerda una sola vez,
+ *   después de su primer pedido.
  */
 export function useInstalacion() {
   const marca = useMarcaStore()
   const ui = useUiStore()
 
   const puedeInstalarConBoton = computed(() => eventoInstalar.value !== null)
+  const esIphone = plataforma === 'iphone'
 
-  function ofrecerSiToca(momento: 'registro' | 'pedido'): void {
-    if (instalada()) {
-      pedirAvisosSiToca()
-      return
-    }
-    const estado = marca.almacen.leer('instalar-ofrecido')
-    if (momento === 'registro' && estado === null) {
-      marca.almacen.guardar('instalar-ofrecido', 'registro')
-      ui.hojaInstalar = true
-    } else if (momento === 'pedido' && estado === 'registro') {
-      marca.almacen.guardar('instalar-ofrecido', 'listo')
-      ui.hojaInstalar = true
-    }
+  function eligioNavegador(): boolean {
+    return marca.almacen.leer('continuar-navegador') === 'si'
   }
 
-  async function instalar(): Promise<void> {
+  function continuarEnNavegador(): void {
+    marca.almacen.guardar('continuar-navegador', 'si')
+  }
+
+  /** Abre el aviso de instalación de Android. Sin él, la pantalla muestra la guía. */
+  async function instalar(): Promise<'aceptada' | 'rechazada' | 'sin-boton'> {
     const evento = eventoInstalar.value
-    if (!evento) return
+    if (!evento) return 'sin-boton'
     await evento.prompt()
     const { outcome } = await evento.userChoice
     eventoInstalar.value = null
-    if (outcome === 'accepted') marca.almacen.guardar('instalar-ofrecido', 'listo')
-    cerrarInstalar()
+    return outcome === 'accepted' ? 'aceptada' : 'rechazada'
+  }
+
+  /** Recordatorio único tras el primer pedido, solo a quien siguió en el navegador. */
+  function recordarTrasPedido(): void {
+    if (instalada() || !eligioNavegador()) return
+    if (marca.almacen.leer('instalar-ofrecido') === 'recordado') return
+    marca.almacen.guardar('instalar-ofrecido', 'recordado')
+    ui.hojaInstalar = true
   }
 
   function cerrarInstalar(): void {
     ui.hojaInstalar = false
-    pedirAvisosSiToca()
   }
 
   function puedePedirAvisos(): boolean {
@@ -74,6 +87,7 @@ export function useInstalacion() {
     return !esIphone || instalada()
   }
 
+  /** RN-50: después de registrarse con la app ya instalada. */
   function pedirAvisosSiToca(): void {
     if (puedePedirAvisos()) ui.hojaAvisos = true
   }
@@ -85,12 +99,17 @@ export function useInstalacion() {
   }
 
   return {
+    plataforma,
     esIphone,
     instalada,
+    recienInstalada,
     puedeInstalarConBoton,
-    ofrecerSiToca,
+    eligioNavegador,
+    continuarEnNavegador,
     instalar,
+    recordarTrasPedido,
     cerrarInstalar,
+    pedirAvisosSiToca,
     activarAvisos,
   }
 }

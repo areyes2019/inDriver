@@ -1,21 +1,32 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useInstalacion } from '../composables/useInstalacion'
 import { useMarcaStore } from '../stores/marca'
 import { useUiStore } from '../stores/ui'
 import BotonPrincipal from './BotonPrincipal.vue'
+import GuiaInstalacion from './GuiaInstalacion.vue'
 import HojaInferior from './HojaInferior.vue'
 import LogoFlotilla from './LogoFlotilla.vue'
 
+/**
+ * Recordatorio único de instalar, para quien eligió "Continuar en el navegador" en la bienvenida
+ * (spec tenant/035, D7). También se abre desde "Mi cuenta → Instalar la app".
+ */
 const ui = useUiStore()
 const marca = useMarcaStore()
 const { esIphone, puedeInstalarConBoton, instalar, cerrarInstalar } = useInstalacion()
+const mostrarGuia = ref(false)
 
 const abierta = computed({
   get: () => ui.hojaInstalar,
   set: (v) => (v ? (ui.hojaInstalar = true) : cerrarInstalar()),
 })
+
+async function tocarInstalar(): Promise<void> {
+  const resultado = await instalar()
+  if (resultado === 'sin-boton') mostrarGuia.value = true
+  else cerrarInstalar()
+}
 </script>
 
 <template>
@@ -26,39 +37,19 @@ const abierta = computed({
       <p class="mt-1 text-suave">Ábrela con un toque, como cualquier app, sin descargar nada.</p>
     </div>
 
-    <ol v-if="esIphone" class="mt-5 space-y-3 rounded-2xl bg-morado-50 p-4 text-sm text-tinta">
-      <li class="flex items-center gap-3">
-        <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-white">
-          <Icon icon="tabler:share-2" class="size-5 text-morado-700" />
-        </span>
-        Toca <strong>Compartir</strong> abajo en Safari
-      </li>
-      <li class="flex items-center gap-3">
-        <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-white">
-          <Icon icon="tabler:square-plus" class="size-5 text-morado-700" />
-        </span>
-        Elige <strong>Agregar a inicio</strong>
-      </li>
-      <li class="flex items-center gap-3">
-        <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-white">
-          <Icon icon="tabler:check" class="size-5 text-morado-700" />
-        </span>
-        Toca <strong>Agregar</strong> arriba a la derecha
-      </li>
-    </ol>
+    <div v-if="esIphone || mostrarGuia || !puedeInstalarConBoton" class="mt-5">
+      <GuiaInstalacion :es-iphone="esIphone" :nombre="marca.nombre" />
+    </div>
 
     <div class="mt-5 space-y-2">
       <BotonPrincipal
-        v-if="!esIphone && puedeInstalarConBoton"
+        v-if="!esIphone && puedeInstalarConBoton && !mostrarGuia"
+        variante="amarillo"
         icono="tabler:download"
-        @click="instalar"
+        @click="tocarInstalar"
       >
         Instalar
       </BotonPrincipal>
-      <p v-else-if="!esIphone" class="rounded-2xl bg-morado-50 p-4 text-center text-sm text-suave">
-        Abre el menú <strong>⋮</strong> de tu navegador y elige <strong>Instalar app</strong> o
-        <strong>Agregar a pantalla de inicio</strong>.
-      </p>
       <BotonPrincipal variante="texto" @click="cerrarInstalar">Ahora no</BotonPrincipal>
     </div>
   </HojaInferior>

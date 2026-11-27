@@ -1,21 +1,25 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
+import { computed } from 'vue'
 import { controlesPrototipo } from '../api/mock'
+import { actualizarAhora, hayVersionNueva } from '../composables/useServiceWorker'
 
 /**
- * RN-07: una versión nueva espera a que el cliente la acepte; no interrumpe lo que está haciendo.
- * En el prototipo lo enciende el panel "Demo"; en la Fase 8 lo enciende el service worker.
+ * RN-07: una versión nueva espera a que el cliente la acepte; no interrumpe lo que está haciendo. La
+ * enciende el service worker; en el prototipo también el panel "Demo".
  */
+const visible = computed(() => hayVersionNueva.value || controlesPrototipo.versionNueva)
+
 function actualizar(): void {
   controlesPrototipo.versionNueva = false
-  window.location.reload()
+  actualizarAhora()
 }
 </script>
 
 <template>
   <Transition name="pantalla">
     <div
-      v-if="controlesPrototipo.versionNueva"
+      v-if="visible"
       class="fixed inset-x-3 top-3 z-40 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-morado-900 p-3 pl-4 text-white shadow-flotante"
       role="status"
     >

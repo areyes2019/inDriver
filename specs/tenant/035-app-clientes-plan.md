@@ -3,7 +3,7 @@
 **Spec:** [`035-app-clientes.md`](035-app-clientes.md) (versión 1.2)
 **Fecha:** 2026-11-26
 **Estado:** Autorizado. Fase 2 (prototipo) entregada; el código de acceso cambió a correo (spec 1.2).
-Fase 3 programada en la rama `app-clientes` (2026-11-26), sin desplegar.
+Fase 3 desplegada el 2026-11-27 (app apagada en las flotillas reales). Fase 3b (instalación, spec 1.3) programada en la rama `app-clientes`.
 
 **Variables nuevas para producción (Fase 3):** `OTP_CANAL=correo`, `OTP_MAIL_FROM` (dirección de
 `motopanda.mx`), `OTP_TOPE_DIARIO=80` (plan Free de Resend), y `MAIL_FROM_ADDRESS` pasa a
@@ -290,7 +290,7 @@ los interruptores apagados en las flotillas reales.
 | 5 | Columnas de pedidos, idempotencia, creación, TEST, horario, ventana, cancelación | Criterios 12 a 17 |
 | 6 | Canal del cliente, `PedidoClienteActualizado`, `SeguimientoCliente`, pantalla de seguimiento, respaldo de conexión, prueba de carga en local | Criterios 18 a 20 |
 | 7 | Mis pedidos, detalle, Repetir, direcciones favoritas | Pantallas conectadas al backend |
-| 8 | Marca por flotilla, manifiesto, service worker, instalación, push y campanita | Criterios 21 a 24, con la prueba manual en teléfonos reales |
+| 8 | Logo y banner por flotilla, push y campanita (la instalación pasó a la Fase 3b) | Criterios 21 a 24, con la prueba manual en teléfonos reales |
 | 9 | Revisión de seguridad, regresión completa (criterio 25) y pruebas de punta a punta con las flotillas de prueba en producción | Lista para pedir tu autorización de prender la app en una flotilla real |
 
 ## 15. Despliegue a producción (cuando lo autorices)

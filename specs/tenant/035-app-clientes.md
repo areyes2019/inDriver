@@ -6,8 +6,8 @@
 |---|---|
 | ID | SPEC-035 |
 | Módulo | Pedidos / Canal App de clientes |
-| Versión | 1.2 |
-| Estado | Borrador del 2026-11-26 (1.1: ajustes de la revisión técnica; 1.2: código de acceso por correo) |
+| Versión | 1.3 |
+| Estado | Borrador del 2026-11-27 (1.1: ajustes de la revisión técnica; 1.2: código de acceso por correo; 1.3: primero instalar, después registrarse) |
 | Depende de | SPEC-005 (multi-tenant), SPEC-006 (pedidos, tarifa y máquina de estados), SPEC-015 (tarifas y saldo, RN-C5), SPEC-016 (geocerca), SPEC-020 (oferta y aceptación), SPEC-021 (live tracking), SPEC-024 (publicación), SPEC-025 (TEST/LIVE), SPEC-026 (cola), SPEC-028 (microservicio GPS), SPEC-031 (pedidos por WhatsApp), SPEC-034 (modo automático) |
 | Plan de implementación | [`035-app-clientes-plan.md`](035-app-clientes-plan.md) |
 
@@ -36,6 +36,13 @@
 | Mapa | Ruta y tiempo estimado en el teléfono, con límites de recálculo y tokens de sesión de Places (RN-43, RN-45, RN-48) |
 | Avisos | Varios dispositivos, aislados por flotilla, se desvinculan al cerrar sesión, se envían después de guardar y sin duplicados (RN-50 a RN-54) |
 | Pedidos | 4 columnas nuevas para contacto de recogida y referencias |
+
+### Cambios de la versión 1.3
+
+| Tema | Cambio |
+|---|---|
+| Instalación | **Corrección:** en la definición de asunciones se eligió invitar a instalar "desde el primer momento", y la 1.0 lo anotó al revés ("después del registro"). Ahora: la liga abre una bienvenida con un botón grande "Instalar"; el registro viene después, desde la app instalada (D1, D7, 6.0) |
+| Fases | El manifiesto, el service worker y la instalación pasan de la Fase 8 a la **Fase 3b**. En la Fase 8 quedan el logo y el banner de cada flotilla y los avisos push |
 
 ### Cambios de la versión 1.2
 
@@ -102,13 +109,13 @@ modo automático, y el conductor lo atiende en `panda_express` sin ningún cambi
 
 | # | Decisión |
 |---|---|
-| D1 | La app es para clientes nuevos. No hay pantalla pública: sin sesión, la app abre en "Registrarme" con un enlace chico "Ya tengo cuenta, entrar" |
+| D1 | La app es para clientes nuevos. No hay pantalla pública de pedidos: sin sesión, la app abre en la bienvenida con "Instalar" (si no está instalada) y después en "Registrarme", con un enlace chico "Ya tengo cuenta, entrar" |
 | D2 | Solo PWA. Sin Capacitor, sin APK, sin Android Studio y sin tiendas. Una sola base de código para todas las flotillas |
 | D3 | El cliente de la app es el mismo `Cliente` de hoy: misma tabla `clientes`, mismo módulo del Panel. Solo se agrega la entrada con correo y código |
 | D4 | Cada flotilla tiene su app en `motopanda.mx/pide/{flotilla}`. `/app/` no se usa porque nginx ya lo manda a Reverb. Para el teléfono son apps distintas: manifiesto, service worker, sesión, almacenamiento y avisos separados por flotilla (RN-05 a RN-09) |
 | D5 | Un mismo correo puede ser cliente de dos flotillas, pero solo usando las dos apps. Las cuentas nunca se mezclan |
 | D6 | El código de acceso llega **por correo**, desde un remitente de MotoPanda con el nombre de la flotilla. El código por WhatsApp se agregará después como otra forma de entrar, sin quitar la del correo (decisión del 2026-11-26) |
-| D7 | La invitación a instalar aparece después del registro. Si dice "Ahora no", se repite tras su primer pedido y ya no más. En iPhone es una guía con dibujos |
+| D7 | **Primero instalar, después registrarse** (corregida en 1.3). La liga abre una bienvenida con un botón grande "Instalar": en Android abre el aviso de instalación del teléfono; en iPhone, y en Android cuando el navegador no lo ofrece (por ejemplo, la liga abierta dentro de WhatsApp), muestra la guía de 3 pasos. Un enlace chico "Continuar en el navegador" salta la bienvenida; a quien lo usa se le recuerda instalar una sola vez, tras su primer pedido. En iPhone importa además porque la app instalada no comparte la sesión con Safari |
 | D8 | Quien pide elige quién paga, con las mismas tres modalidades del Panel, en el paso 3 y con tres tarjetas con ícono. Es igual en Enviar y en Recibir |
 | D9 | Solo dos servicios: Enviar y Recibir. Cada flotilla puede apagar uno de los dos |
 | D10 | El precio lo calcula siempre el servidor con `CotizacionPedidoService`. La cotización queda fija 10 minutos con un sello cifrado del servidor |
@@ -137,14 +144,26 @@ modo automático, y el conductor lo atiende en `panda_express` sin ningún cambi
 
 ## 6. Pantallas
 
+### 6.0 Bienvenida (instalar)
+
+Primera pantalla al abrir la liga, solo si la app no está instalada, no hay sesión y el cliente no
+eligió "Continuar en el navegador":
+
+- Encabezado con logo y banner de la flotilla.
+- "Instala {flotilla} en tu celular", con una línea que explica que no se descarga de ninguna tienda.
+- Botón grande amarillo **Instalar** (D7). Al aceptar en Android: "¡Listo! Busca {flotilla} en tu
+  pantalla de inicio y ábrela desde ahí para crear tu cuenta".
+- Enlace chico **Continuar en el navegador**, que lleva a Registrarme.
+
+Abierta desde el ícono (instalada), la app nunca muestra esta pantalla.
+
 ### 6.1 Registro y entrada
 
 1. **Registrarme**: nombre completo, celular a 10 dígitos y correo. Botón "Enviarme código".
 2. **Ya tengo cuenta, entrar**: solo correo.
 3. **Código**: 6 casillas, reenvío habilitado a los 60 segundos y el aviso "Si no lo ves, revisa tu
    carpeta de spam".
-4. Al verificar entra a Inicio. Si acaba de registrarse, aparece la invitación a instalar (D7) y,
-   después, el permiso de avisos (RN-50).
+4. Al verificar entra a Inicio. Si acaba de registrarse, se le pide el permiso de avisos (RN-50).
 
 ### 6.2 Inicio
 
@@ -601,8 +620,8 @@ Todos bajo `/api/t/{slug}` con el middleware `tenant.slug`, como el resto del si
 
 ### Avisos
 
-- **RN-50.** El permiso de avisos se pide después de la invitación a instalar, nunca al abrir la
-  app por primera vez. En iPhone solo se pide si la app ya está instalada.
+- **RN-50.** El permiso de avisos se pide después de registrarse, nunca al abrir la app por primera
+  vez. En iPhone solo se pide si la app ya está instalada.
 - **RN-51.** Con `app_push = Si`, avisos push y en campanita en: repartidor asignado (`TOMADO`),
   llegó a recoger (`ARRIBADO`), va en camino (`EN_CAMINO`), entregado (`ENTREGADO`) y cancelado
   (`CANCELADO`). Solo para pedidos con `origen = APP`. Con `app_push = No`, solo la campanita.
@@ -781,11 +800,12 @@ conexión durante un seguimiento.
 | 1 | Entregable técnico y plan definitivo ([`035-app-clientes-plan.md`](035-app-clientes-plan.md)) |
 | 2 | Prototipo navegable con datos simulados |
 | 3 | Registro, código por correo y conciliación de teléfonos |
+| 3b | Instalación: bienvenida con "Instalar", manifiesto por flotilla, service worker con aviso de versión nueva e íconos por defecto (adelantado de la Fase 8) |
 | 4 | Pruebas de regresión de WhatsApp, `CotizacionPedidoService`, direcciones y cotización |
 | 5 | Creación del pedido, idempotencia y cancelación |
 | 6 | Seguimiento en vivo |
 | 7 | Mis pedidos, Repetir y direcciones favoritas |
-| 8 | Marca por flotilla, manifiesto, service worker, instalación y avisos push |
+| 8 | Logo y banner por flotilla (también en el ícono instalado) y avisos push |
 | 9 | Pruebas de seguridad y rendimiento, y pruebas controladas en producción con las flotillas de prueba |
 
 Cada fase puede desplegarse a producción **solo con autorización expresa** y con los interruptores
