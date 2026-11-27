@@ -4,6 +4,9 @@ namespace App\Providers;
 
 use Anthropic\Client as AnthropicClient;
 use App\Models\Tenant\Usuario;
+use App\Services\Cliente\CanalCodigo;
+use App\Services\Cliente\CanalCodigoCorreo;
+use App\Services\Cliente\CanalCodigoLog;
 use App\Support\ContextoAmbiente;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -11,6 +14,7 @@ use Illuminate\Contracts\Auth\CanResetPassword;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -30,6 +34,11 @@ class AppServiceProvider extends ServiceProvider
             apiKey: (string) config('services.anthropic.api_key'),
             requestOptions: ['timeout' => 15.0, 'maxRetries' => 1],
         ));
+
+        // spec tenant/035, D6: el código de acceso sale por correo. `log` es solo para desarrollo.
+        $this->app->bind(CanalCodigo::class, fn () => config('pide.codigo.canal') === 'log'
+            ? new CanalCodigoLog
+            : new CanalCodigoCorreo);
     }
 
     /**
@@ -37,6 +46,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // spec tenant/035, RN-13: un código escrito en el log de producción es una puerta abierta.
+        if (config('pide.codigo.canal') === 'log' && ! $this->app->environment(['local', 'testing'])) {
+            throw new RuntimeException('OTP_CANAL=log solo se permite en desarrollo local.');
+        }
+
         RateLimiter::for('admin-login', function (Request $request) {
             return Limit::perMinute(5)->by($request->string('email').'|'.$request->ip());
         });
@@ -62,6 +76,17 @@ class AppServiceProvider extends ServiceProvider
         // resto llega por el canal—, así que 120 es techo de seguridad, no presupuesto de uso.
         RateLimiter::for('tenant-panel-lectura', function (Request $request) {
             return Limit::perMinute(120)->by($request->user('usuario')?->id_usuario ?? $request->ip());
+        });
+
+        // App de clientes (spec tenant/035). Las rutas públicas (marca, código, verificar) van por IP;
+        // los límites finos del código (por correo, flotilla y global) los aplica
+        // `CodigoAccesoService`. Las rutas con sesión, por cliente.
+        RateLimiter::for('cliente-publico', function (Request $request) {
+            return Limit::perMinute(30)->by($request->ip());
+        });
+
+        RateLimiter::for('cliente-app', function (Request $request) {
+            return Limit::perMinute(120)->by('cliente:'.($request->user('cliente-token')?->id_cliente ?? $request->ip()));
         });
 
         ResetPassword::createUrlUsing(function (CanResetPassword $notifiable, string $token) {

@@ -37,6 +37,14 @@ class ConfiguracionTenant extends Model
     /** Última vez que el modo automático pasó a `Si` (spec tenant/034, RN-04 y RN-24). */
     public const MODO_AUTOMATICO_DESDE = 'modo_automatico_desde';
 
+    /** App de clientes (spec tenant/035, D17): `No` o `Si`. Sin fijar, `No`. */
+    public const APP_CLIENTES = 'app_clientes';
+
+    public static function appClientesPrendida(): bool
+    {
+        return static::obtener(self::APP_CLIENTES, 'No') === 'Si';
+    }
+
     public static function obtener(string $clave, ?string $default = null): ?string
     {
         return static::query()->where('clave', $clave)->value('valor') ?? $default;

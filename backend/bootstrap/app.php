@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\AplicarAmbientePanel;
+use App\Http\Middleware\AsegurarClienteApp;
 use App\Http\Middleware\AsegurarRolTenant;
 use App\Http\Middleware\IdentificarTenantPorSlug;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
@@ -24,10 +25,18 @@ return Application::configure(basePath: dirname(__DIR__))
             EnsureFrontendRequestsAreStateful::class,
         ]);
 
+        // App de clientes (spec tenant/035): vive en el mismo dominio que el Panel, así que Sanctum
+        // trata sus peticiones como "del sitio" y exigiría el token CSRF. No aplica: la app se
+        // autentica con un token Bearer, no con la cookie de sesión.
+        $middleware->validateCsrfTokens(except: [
+            'api/v1/t/*/cliente/*',
+        ]);
+
         $middleware->alias([
             'tenant.slug' => IdentificarTenantPorSlug::class,
             'rol.tenant' => AsegurarRolTenant::class,
             'ambiente.panel' => AplicarAmbientePanel::class,
+            'cliente.app' => AsegurarClienteApp::class,
         ]);
 
         // Laravel siempre corre los middleware de tipo "auth" muy temprano (lista de prioridad

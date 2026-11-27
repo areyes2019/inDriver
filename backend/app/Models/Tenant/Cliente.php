@@ -4,13 +4,35 @@ declare(strict_types=1);
 
 namespace App\Models\Tenant;
 
+use Illuminate\Auth\Authenticatable;
+use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Laravel\Sanctum\HasApiTokens;
 
+/**
+ * Cliente final. Desde la spec tenant/035 también entra a la app de clientes con un token de Sanctum
+ * (guard `cliente-token`); por eso es `Authenticatable`, aunque no tiene contraseña.
+ *
+ * `email_acceso`, `telefono_e164` y `origen` quedan fuera del `#[Fillable]` a propósito: solo los
+ * escriben el acceso a la app y la conciliación de teléfonos, nunca un `update()` con datos de una
+ * petición.
+ */
 #[Fillable(['nombre', 'telefono', 'email', 'referencia', 'estado'])]
-class Cliente extends Model
+class Cliente extends Model implements AuthenticatableContract
 {
+    use Authenticatable, HasApiTokens;
+
+    public const ORIGEN_PANEL = 'PANEL';
+
+    public const ORIGEN_WHATSAPP = 'WHATSAPP';
+
+    public const ORIGEN_APP = 'APP';
+
+    /** Habilidad del token de la app (spec tenant/035, RN-14). */
+    public const HABILIDAD_APP = 'cliente';
+
     protected $table = 'clientes';
 
     protected $primaryKey = 'id_cliente';
@@ -23,7 +45,18 @@ class Cliente extends Model
         return [
             'avisos_whatsapp' => 'boolean',
             'avisos_whatsapp_en' => 'datetime',
+            'email_verificado_en' => 'datetime',
+            'telefono_verificado_en' => 'datetime',
         ];
+    }
+
+    /**
+     * Ojo con el filtro por ambiente de `Pedido` (spec tenant/025): fuera del Panel se agrega
+     * `withoutGlobalScopes()` donde haga falta ver TEST y LIVE juntos.
+     */
+    public function pedidos(): HasMany
+    {
+        return $this->hasMany(Pedido::class, 'id_cliente', 'id_cliente');
     }
 
     public function direcciones(): HasMany

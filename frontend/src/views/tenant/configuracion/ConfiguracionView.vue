@@ -9,6 +9,7 @@ import UiCard from '@/components/ui/UiCard.vue'
 import UiAlert from '@/components/ui/UiAlert.vue'
 import UiBadge from '@/components/ui/UiBadge.vue'
 import UiConfirmDialog from '@/components/ui/UiConfirmDialog.vue'
+import AppClientesConfig from '@/components/tenant/AppClientesConfig.vue'
 import CambiarPasswordForm from '@/components/tenant/CambiarPasswordForm.vue'
 import mapService from '@/services/maps/MapService'
 import type { LatLngLike } from '@/services/maps/types'
@@ -33,12 +34,13 @@ function puntosCiudadesTenant() {
   }))
 }
 
-type Pestana = 'tarifas' | 'comision' | 'zonas' | 'cuenta'
+type Pestana = 'tarifas' | 'comision' | 'zonas' | 'app' | 'cuenta'
 const pestanaActiva = ref<Pestana>('tarifas')
 const pestanas: Array<{ id: Pestana; label: string }> = [
   { id: 'tarifas', label: 'Tarifas' },
   { id: 'comision', label: 'Comisión / Prepago' },
   { id: 'zonas', label: 'Zonas de cobertura' },
+  { id: 'app', label: 'App de clientes' },
   { id: 'cuenta', label: 'Mi cuenta' },
 ]
 
@@ -56,6 +58,8 @@ const form = reactive({
 
 // `null` cuando el backend no pudo calcularlo (spec tenant/015): se dice, no se pinta un 0 falso.
 const saldoTenant = ref<number | null>(null)
+// spec tenant/035, D17.
+const appClientes = ref(false)
 const valorOriginalUsarDespachadores = ref<'Sí' | 'No'>('No')
 const mostrarConfirmDesactivarDespachadores = ref(false)
 const fieldErrors = reactive<Record<string, string>>({})
@@ -79,6 +83,7 @@ async function fetchConfiguracion() {
     form.usar_despachadores = data.usar_despachadores ?? 'No'
     valorOriginalUsarDespachadores.value = form.usar_despachadores
     saldoTenant.value = data.saldo_viajes_tenant ?? null
+    appClientes.value = data.app_clientes === 'Si'
   } catch {
     errorConfig.value = 'No se pudo cargar la configuración.'
   } finally {
@@ -721,6 +726,8 @@ onBeforeUnmount(() => {
             </table>
           </div>
         </div>
+
+        <AppClientesConfig v-else-if="pestanaActiva === 'app'" v-model="appClientes" :slug="slug" />
 
         <div v-else>
           <CambiarPasswordForm :slug="slug" />

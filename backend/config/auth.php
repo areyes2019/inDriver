@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\AdminCentral;
+use App\Models\Tenant\Cliente;
 use App\Models\Tenant\Usuario;
 use App\Models\User;
 
@@ -63,6 +64,13 @@ return [
             'driver' => 'sanctum',
             'provider' => 'usuarios',
         ],
+
+        // App de clientes (spec tenant/035, RN-14). Sanctum compara el dueño del token contra el
+        // modelo del provider: un token de conductor (Usuario) no entra aquí ni uno de cliente allá.
+        'cliente-token' => [
+            'driver' => 'sanctum',
+            'provider' => 'clientes',
+        ],
     ],
 
     /*
@@ -101,6 +109,11 @@ return [
         'usuarios' => [
             'driver' => 'eloquent',
             'model' => Usuario::class,
+        ],
+
+        'clientes' => [
+            'driver' => 'eloquent',
+            'model' => Cliente::class,
         ],
     ],
 

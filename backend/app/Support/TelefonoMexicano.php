@@ -20,6 +20,35 @@ final class TelefonoMexicano
         return preg_match('/^(?:521|52)?(\d{10})$/', $digitos, $partes) === 1 ? $partes[1] : null;
     }
 
+    /**
+     * `+52` y 10 dígitos, o `null` (spec tenant/035, RN-10). Es la forma de comparar dos teléfonos
+     * escritos distinto. Además de lo que acepta `diezDigitos`, quita los prefijos viejos `044` y
+     * `045`.
+     */
+    public static function e164(?string $telefono): ?string
+    {
+        if ($telefono === null) {
+            return null;
+        }
+
+        $digitos = preg_replace('/\D+/', '', $telefono) ?? '';
+        if (preg_match('/^04[45](\d{10})$/', $digitos, $partes) === 1) {
+            return '+52'.$partes[1];
+        }
+
+        $diez = self::diezDigitos($telefono);
+
+        return $diez === null ? null : '+52'.$diez;
+    }
+
+    /** Los 10 dígitos de `e164()`, como se guardan en `clientes.telefono`. */
+    public static function nacional(?string $telefono): ?string
+    {
+        $e164 = self::e164($telefono);
+
+        return $e164 === null ? null : substr($e164, 3);
+    }
+
     /** El formato internacional que pide Meta para escribirle a un número, sin `+`. */
     public static function paraWhatsapp(string $diezDigitos): string
     {

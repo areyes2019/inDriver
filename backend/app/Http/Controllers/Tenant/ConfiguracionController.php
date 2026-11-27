@@ -162,6 +162,31 @@ class ConfiguracionController extends Controller
             'ambiente' => ConfiguracionTenant::obtener(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_LIVE),
             'saldo_viajes_tenant' => SaldoViajesTenant::actualONull(),
             'modo_automatico' => ConfiguracionTenant::obtener(ConfiguracionTenant::MODO_AUTOMATICO, ModoAutomaticoService::NO),
+            'app_clientes' => ConfiguracionTenant::obtener(ConfiguracionTenant::APP_CLIENTES, 'No'),
         ];
+    }
+
+    /**
+     * Interruptor de la app de clientes (spec tenant/035, D17). Apagado, la app de esta flotilla no
+     * deja registrarse, entrar ni pedir.
+     */
+    public function appClientes(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'app_clientes' => ['required', Rule::in(['Si', 'No'])],
+        ]);
+
+        ConfiguracionTenant::establecer(ConfiguracionTenant::APP_CLIENTES, $data['app_clientes']);
+
+        Auditoria::create([
+            'id_usuario' => $request->user('usuario')->id_usuario,
+            'tabla_afectada' => 'configuraciones_tenant',
+            'accion' => 'EDICION',
+            'descripcion' => $data['app_clientes'] === 'Si'
+                ? 'Se prendió la app de clientes'
+                : 'Se apagó la app de clientes',
+        ]);
+
+        return response()->json(['app_clientes' => $data['app_clientes']]);
     }
 }

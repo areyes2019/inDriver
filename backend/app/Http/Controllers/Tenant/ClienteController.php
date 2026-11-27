@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Tenant\ClienteResource;
 use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\Cliente;
+use App\Services\Cliente\ConciliacionClientesService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -34,7 +35,7 @@ class ClienteController extends Controller
         return response()->json(new ClienteResource($cliente));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, ConciliacionClientesService $conciliacion): JsonResponse
     {
         $data = $request->validate([
             'nombre' => ['required', 'string', 'max:255'],
@@ -45,7 +46,10 @@ class ClienteController extends Controller
         ]);
 
         $cliente = Cliente::create([...collect($data)->except('avisos_whatsapp')->all(), 'estado' => 'Activo']);
+        $cliente->forceFill(['origen' => Cliente::ORIGEN_PANEL])->save();
         $this->guardarPermisoDeAvisos($request, $cliente, $data);
+        // spec tenant/035, RN-19: un teléfono que ya tiene otro cliente queda por revisar.
+        $conciliacion->asignarTelefono($cliente);
 
         Auditoria::create([
             'id_usuario' => $request->user('usuario')->id_usuario,
@@ -57,7 +61,7 @@ class ClienteController extends Controller
         return response()->json(new ClienteResource($cliente), 201);
     }
 
-    public function update(Request $request, Cliente $cliente): JsonResponse
+    public function update(Request $request, Cliente $cliente, ConciliacionClientesService $conciliacion): JsonResponse
     {
         $data = $request->validate([
             'nombre' => ['required', 'string', 'max:255'],
@@ -69,6 +73,7 @@ class ClienteController extends Controller
 
         $cliente->update(collect($data)->except('avisos_whatsapp')->all());
         $this->guardarPermisoDeAvisos($request, $cliente, $data);
+        $conciliacion->asignarTelefono($cliente);
 
         Auditoria::create([
             'id_usuario' => $request->user('usuario')->id_usuario,
@@ -80,10 +85,12 @@ class ClienteController extends Controller
         return response()->json(new ClienteResource($cliente));
     }
 
-    public function cambiarEstado(Request $request, Cliente $cliente): JsonResponse
+    public function cambiarEstado(Request $request, Cliente $cliente, ConciliacionClientesService $conciliacion): JsonResponse
     {
         $cliente->estado = $cliente->estado === 'Activo' ? 'Inactivo' : 'Activo';
         $cliente->save();
+        // Un cliente inactivo no cuenta para los teléfonos repetidos (spec tenant/035, RN-16).
+        $conciliacion->asignarTelefono($cliente);
 
         Auditoria::create([
             'id_usuario' => $request->user('usuario')->id_usuario,

@@ -5,9 +5,13 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\CreditoPaqueteController;
 use App\Http\Controllers\Admin\PaqueteViajeController;
 use App\Http\Controllers\Admin\TenantController;
+use App\Http\Controllers\Cliente\AccesoController as ClienteAccesoController;
+use App\Http\Controllers\Cliente\MarcaController as ClienteMarcaController;
+use App\Http\Controllers\Cliente\PerfilController as ClientePerfilController;
 use App\Http\Controllers\Tenant\AuthController as TenantAuthController;
 use App\Http\Controllers\Tenant\ClienteController;
 use App\Http\Controllers\Tenant\ComisionController;
+use App\Http\Controllers\Tenant\ConciliacionClienteController;
 use App\Http\Controllers\Tenant\Conductor\AuthController as ConductorAuthController;
 use App\Http\Controllers\Tenant\Conductor\DispositivoController as ConductorDispositivoController;
 use App\Http\Controllers\Tenant\Conductor\EstadoController as ConductorEstadoController;
@@ -144,6 +148,11 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::put('/clientes/{cliente}', [ClienteController::class, 'update']);
             Route::patch('/clientes/{cliente}/estado', [ClienteController::class, 'cambiarEstado']);
 
+            // spec tenant/035, 6.8: teléfonos repetidos. Se registra antes que GET /clientes/{cliente}
+            // (grupo de abajo) para que "por-revisar" no se tome por un id.
+            Route::get('/clientes/por-revisar', [ConciliacionClienteController::class, 'index']);
+            Route::post('/clientes/unificar', [ConciliacionClienteController::class, 'unificar']);
+
             Route::post('/clientes/{cliente}/direcciones', [DireccionClienteController::class, 'store']);
             Route::put('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'update']);
             Route::delete('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'destroy']);
@@ -154,6 +163,8 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::put('/configuracion/ambiente', [ConfiguracionController::class, 'ambiente']);
             // spec tenant/034, D2: el modo automático, solo AdminCliente.
             Route::put('/configuracion/modo-automatico', [ConfiguracionController::class, 'modoAutomatico']);
+            // spec tenant/035, D17: la app de clientes, solo AdminCliente.
+            Route::put('/configuracion/app-clientes', [ConfiguracionController::class, 'appClientes']);
             Route::get('/zonas-cobertura', [ZonaCoberturaController::class, 'index']);
             Route::post('/zonas-cobertura', [ZonaCoberturaController::class, 'store']);
             Route::get('/zonas-cobertura/{zona}', [ZonaCoberturaController::class, 'show']);
@@ -182,6 +193,19 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
 
             Route::post('/whatsapp/conversaciones/{conversacion}/mensajes', [WhatsappBandejaController::class, 'responder']);
             Route::post('/whatsapp/conversaciones/{conversacion}/devolver-al-bot', [WhatsappBandejaController::class, 'devolverAlBot']);
+        });
+    });
+
+    // App de clientes (spec tenant/035). Token propio (`cliente-token`), nunca la sesión del Panel.
+    Route::prefix('cliente')->group(function () {
+        Route::get('/marca', [ClienteMarcaController::class, 'show'])->middleware('throttle:cliente-publico');
+        Route::post('/codigo', [ClienteAccesoController::class, 'codigo'])->middleware('throttle:cliente-publico');
+        Route::post('/verificar', [ClienteAccesoController::class, 'verificar'])->middleware('throttle:cliente-publico');
+
+        Route::middleware(['auth:cliente-token', 'cliente.app', 'throttle:cliente-app'])->group(function () {
+            Route::post('/salir', [ClienteAccesoController::class, 'salir']);
+            Route::get('/perfil', [ClientePerfilController::class, 'show']);
+            Route::put('/perfil', [ClientePerfilController::class, 'update']);
         });
     });
 

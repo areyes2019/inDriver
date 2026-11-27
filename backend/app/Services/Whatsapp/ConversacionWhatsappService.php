@@ -13,6 +13,7 @@ use App\Models\Tenant\WhatsappConversacion;
 use App\Models\Tenant\WhatsappMensaje;
 use App\Models\Tenant\WhatsappSolicitud;
 use App\Models\Tenant\ZonaServicio;
+use App\Services\Cliente\ConciliacionClientesService;
 use App\Services\CreacionPedidoService;
 use App\Services\GeocodificadorService;
 use App\Services\ModoAutomaticoService;
@@ -55,6 +56,7 @@ class ConversacionWhatsappService
         private readonly CreacionPedidoService $creacion,
         private readonly FrasesBot $frases,
         private readonly ModoAutomaticoService $modoAutomatico,
+        private readonly ConciliacionClientesService $conciliacion,
     ) {}
 
     /**
@@ -740,6 +742,9 @@ class ConversacionWhatsappService
             'estado' => 'Activo',
             'referencia' => 'Registrado por WhatsApp',
         ]);
+        $cliente->forceFill(['origen' => Cliente::ORIGEN_WHATSAPP])->save();
+        // spec tenant/035, RN-19: si el teléfono ya lo tiene otro cliente, queda por revisar.
+        $this->conciliacion->asignarTelefono($cliente);
 
         $conversacion->update(['id_cliente' => $cliente->id_cliente]);
         $conversacion->setRelation('cliente', $cliente);

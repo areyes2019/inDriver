@@ -6,6 +6,8 @@ import TenantLayout from '@/layouts/TenantLayout.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiBadge from '@/components/ui/UiBadge.vue'
 import UiConfirmDialog from '@/components/ui/UiConfirmDialog.vue'
+import ClientesPorRevisar from '@/components/tenant/ClientesPorRevisar.vue'
+import { useTenantAuthStore } from '@/stores/tenantAuth'
 
 interface Cliente {
   id_cliente: number
@@ -19,6 +21,11 @@ interface Cliente {
 
 const route = useRoute()
 const slug = computed(() => route.params.slug as string)
+const tenantAuth = useTenantAuthStore()
+
+// spec tenant/035, 6.8: la pestaña "Por revisar" es solo del AdminCliente.
+const puedeRevisar = computed(() => tenantAuth.usuario?.rol === 'AdminCliente')
+const pestana = ref<'todos' | 'revisar'>('todos')
 
 const clientes = ref<Cliente[]>([])
 const search = ref('')
@@ -99,109 +106,138 @@ onMounted(fetchClientes)
 <template>
   <TenantLayout>
     <UiCard title="Clientes">
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <input
-          v-model="search"
-          type="search"
-          placeholder="Buscar por nombre, teléfono o email..."
-          class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-        />
-        <RouterLink
-          :to="{ name: 'tenant-clientes-crear', params: { slug } }"
-          class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
-        >
-          Nuevo cliente
-        </RouterLink>
-      </div>
-
-      <p v-if="error" role="alert" class="mb-4 text-sm text-red-600">{{ error }}</p>
-
-      <div class="overflow-x-auto">
-        <table class="w-full min-w-[640px] text-left text-sm">
-          <thead>
-            <tr
-              class="border-b border-gray-200 text-xs font-semibold tracking-wide text-black/50 uppercase"
-            >
-              <th class="py-2 pr-4">Nombre</th>
-              <th class="py-2 pr-4">Teléfono</th>
-              <th class="py-2 pr-4">Email</th>
-              <th class="py-2 pr-4">Estado</th>
-              <th class="py-2 pr-4">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="5" class="py-6 text-center text-black/50">Cargando...</td>
-            </tr>
-            <tr v-else-if="clientes.length === 0">
-              <td colspan="5" class="py-6 text-center text-black/50">No hay clientes.</td>
-            </tr>
-            <tr
-              v-for="cliente in clientes"
-              v-else
-              :key="cliente.id_cliente"
-              class="border-b border-gray-100 text-heading"
-            >
-              <td class="py-2 pr-4 font-medium">{{ cliente.nombre }}</td>
-              <td class="py-2 pr-4">{{ cliente.telefono ?? '—' }}</td>
-              <td class="py-2 pr-4">{{ cliente.email ?? '—' }}</td>
-              <td class="py-2 pr-4">
-                <UiBadge :text="cliente.estado" :color="estadoColor[cliente.estado] ?? 'blue'" />
-              </td>
-              <td class="py-2 pr-4">
-                <div class="flex flex-wrap gap-2">
-                  <RouterLink
-                    :to="{
-                      name: 'tenant-clientes-editar',
-                      params: { slug, id: cliente.id_cliente },
-                    }"
-                    class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
-                  >
-                    Editar
-                  </RouterLink>
-                  <RouterLink
-                    :to="{
-                      name: 'tenant-direcciones-lista',
-                      params: { slug, id: cliente.id_cliente },
-                    }"
-                    class="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white"
-                  >
-                    Direcciones
-                  </RouterLink>
-                  <button
-                    type="button"
-                    :disabled="togglingId === cliente.id_cliente"
-                    class="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:opacity-50"
-                    @click="requestToggleEstado(cliente)"
-                  >
-                    {{ cliente.estado === 'Activo' ? 'Desactivar' : 'Activar' }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div v-if="lastPage > 1" class="mt-4 flex items-center gap-3">
+      <div v-if="puedeRevisar" class="mb-5 flex gap-2 border-b border-gray-200">
         <button
+          v-for="p in [
+            { id: 'todos', label: 'Todos' },
+            { id: 'revisar', label: 'Por revisar' },
+          ] as const"
+          :key="p.id"
           type="button"
-          :disabled="page <= 1"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
-          @click="page -= 1"
+          class="border-b-2 px-3 py-2 text-sm font-semibold transition-colors"
+          :class="
+            pestana === p.id
+              ? 'border-accent text-accent'
+              : 'border-transparent text-body hover:text-heading'
+          "
+          @click="
+            () => {
+              pestana = p.id
+              if (p.id === 'todos') fetchClientes()
+            }
+          "
         >
-          Anterior
-        </button>
-        <span class="text-sm text-black/60">Página {{ page }} de {{ lastPage }}</span>
-        <button
-          type="button"
-          :disabled="page >= lastPage"
-          class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
-          @click="page += 1"
-        >
-          Siguiente
+          {{ p.label }}
         </button>
       </div>
+
+      <ClientesPorRevisar v-if="pestana === 'revisar'" :slug="slug" />
+
+      <template v-else>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <input
+            v-model="search"
+            type="search"
+            placeholder="Buscar por nombre, teléfono o email..."
+            class="w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-heading placeholder:text-gray-400 focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          />
+          <RouterLink
+            :to="{ name: 'tenant-clientes-crear', params: { slug } }"
+            class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
+          >
+            Nuevo cliente
+          </RouterLink>
+        </div>
+
+        <p v-if="error" role="alert" class="mb-4 text-sm text-red-600">{{ error }}</p>
+
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[640px] text-left text-sm">
+            <thead>
+              <tr
+                class="border-b border-gray-200 text-xs font-semibold tracking-wide text-black/50 uppercase"
+              >
+                <th class="py-2 pr-4">Nombre</th>
+                <th class="py-2 pr-4">Teléfono</th>
+                <th class="py-2 pr-4">Email</th>
+                <th class="py-2 pr-4">Estado</th>
+                <th class="py-2 pr-4">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="loading">
+                <td colspan="5" class="py-6 text-center text-black/50">Cargando...</td>
+              </tr>
+              <tr v-else-if="clientes.length === 0">
+                <td colspan="5" class="py-6 text-center text-black/50">No hay clientes.</td>
+              </tr>
+              <tr
+                v-for="cliente in clientes"
+                v-else
+                :key="cliente.id_cliente"
+                class="border-b border-gray-100 text-heading"
+              >
+                <td class="py-2 pr-4 font-medium">{{ cliente.nombre }}</td>
+                <td class="py-2 pr-4">{{ cliente.telefono ?? '—' }}</td>
+                <td class="py-2 pr-4">{{ cliente.email ?? '—' }}</td>
+                <td class="py-2 pr-4">
+                  <UiBadge :text="cliente.estado" :color="estadoColor[cliente.estado] ?? 'blue'" />
+                </td>
+                <td class="py-2 pr-4">
+                  <div class="flex flex-wrap gap-2">
+                    <RouterLink
+                      :to="{
+                        name: 'tenant-clientes-editar',
+                        params: { slug, id: cliente.id_cliente },
+                      }"
+                      class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-heading"
+                    >
+                      Editar
+                    </RouterLink>
+                    <RouterLink
+                      :to="{
+                        name: 'tenant-direcciones-lista',
+                        params: { slug, id: cliente.id_cliente },
+                      }"
+                      class="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white"
+                    >
+                      Direcciones
+                    </RouterLink>
+                    <button
+                      type="button"
+                      :disabled="togglingId === cliente.id_cliente"
+                      class="rounded-lg border border-accent px-3 py-1.5 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent disabled:hover:text-gray-400 disabled:opacity-50"
+                      @click="requestToggleEstado(cliente)"
+                    >
+                      {{ cliente.estado === 'Activo' ? 'Desactivar' : 'Activar' }}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div v-if="lastPage > 1" class="mt-4 flex items-center gap-3">
+          <button
+            type="button"
+            :disabled="page <= 1"
+            class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
+            @click="page -= 1"
+          >
+            Anterior
+          </button>
+          <span class="text-sm text-black/60">Página {{ page }} de {{ lastPage }}</span>
+          <button
+            type="button"
+            :disabled="page >= lastPage"
+            class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading disabled:cursor-not-allowed disabled:opacity-50"
+            @click="page += 1"
+          >
+            Siguiente
+          </button>
+        </div>
+      </template>
     </UiCard>
 
     <UiConfirmDialog

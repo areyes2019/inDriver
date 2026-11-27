@@ -57,5 +57,8 @@ Schedule::command('automatico:atender-sin-conductor')->everyMinute()->withoutOve
 // spec tenant/034, RN-27.
 Schedule::command('automatico:purgar-bitacora')->daily();
 
+// spec tenant/035, sección 7: los códigos de acceso de la app de clientes no se guardan más de un día.
+Schedule::command('clientes:purgar-codigos')->daily();
+
 // spec tenant/034, RN-28: sin `LATIDO_URL` el job no hace nada.
 Schedule::job(new EnviarLatido)->everyMinute();
