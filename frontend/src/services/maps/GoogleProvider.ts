@@ -51,6 +51,24 @@ declare global {
 // configurable por tenant.
 const DEFAULT_CENTER: LatLngLike = { lat: 19.4326, lng: -99.1332 }
 
+/** Holgura sobre el radio de la zona: una dirección en la orilla no debe quedar fuera. */
+const HOLGURA_BUSQUEDA_M = 3_000
+
+/**
+ * Del centro del rectángulo a su esquina más lejana, más la holgura: ninguna sugerencia dentro de
+ * la zona puede estar más lejos que esto.
+ */
+function radioDelRectangulo(bounds: LatLngBoundsLike, centro: LatLngLike): number {
+  const aRad = (grados: number) => (grados * Math.PI) / 180
+  const dLat = aRad(bounds.north - centro.lat)
+  const dLng = aRad(bounds.east - centro.lng)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(aRad(centro.lat)) * Math.cos(aRad(bounds.north)) * Math.sin(dLng / 2) ** 2
+
+  return 2 * 6_371_000 * Math.asin(Math.sqrt(a)) + HOLGURA_BUSQUEDA_M
+}
+
 let loaderPromise: Promise<void> | null = null
 
 /** Carga el SDK de Google Maps una sola vez, sin importar cuántos mapas se inicialicen. */
@@ -450,14 +468,23 @@ export default class GoogleProvider extends BaseProvider {
       this.sesionBusqueda = new google.maps.places.AutocompleteSessionToken()
     }
 
+    // Con `origin`, Google devuelve la distancia de cada sugerencia sin costo extra. Sirve de segundo
+    // filtro: `locationRestriction` a veces deja pasar calles de otro estado con el mismo nombre
+    // (pasó con "López Mateos" en Celaya, que sugería Tecomán, Colima).
+    const origen = bounds
+      ? { lat: (bounds.north + bounds.south) / 2, lng: (bounds.east + bounds.west) / 2 }
+      : null
+    const radioMaximo = bounds && origen ? radioDelRectangulo(bounds, origen) : null
+
     const { suggestions } =
       await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
         input: query,
         ...(opciones.sesion && this.sesionBusqueda
           ? { sessionToken: this.sesionBusqueda, includedRegionCodes: ['mx'] }
           : {}),
-        ...(bounds
+        ...(bounds && origen
           ? {
+              origin: origen,
               locationRestriction: {
                 north: bounds.north,
                 south: bounds.south,
@@ -473,6 +500,8 @@ export default class GoogleProvider extends BaseProvider {
     for (const suggestion of suggestions) {
       const prediction = suggestion.placePrediction
       if (!prediction) continue
+      const distancia = prediction.distanceMeters
+      if (radioMaximo !== null && typeof distancia === 'number' && distancia > radioMaximo) continue
       this.suggestionCache.set(prediction.placeId, prediction)
       results.push({ id: prediction.placeId, label: prediction.text.text })
     }
