@@ -35,7 +35,11 @@ class SoloLecturaEspectador
             return $next($request);
         }
 
-        if (! Auth::guard('admin')->check() || ($espectador['id_tenant'] ?? null) !== tenant()?->id_tenant) {
+        // `admins_centrales` vive en la base central, y aquí la tenencia ya está inicializada: sin
+        // `central()` el guard buscaría al admin en la base del tenant y la petición reventaría.
+        $adminConSesion = (bool) tenancy()->central(fn () => Auth::guard('admin')->check());
+
+        if (! $adminConSesion || ($espectador['id_tenant'] ?? null) !== tenant()?->id_tenant) {
             Auth::guard('usuario')->logout();
             $request->session()->forget(self::SESION);
 

@@ -122,6 +122,22 @@ it('lets the spectator read the panel but blocks every write', function () {
         ->assertForbidden();
 });
 
+it('recognizes the central admin from the session, looking it up in the central database', function () {
+    // Como en producción: el admin no está precargado (sin `actingAs`), solo su id en la sesión.
+    // El guard lo busca en la base central aunque la petición ya tenga la tenencia inicializada.
+    $admin = espectadorAdmin();
+    $tenant = espectadorTenant();
+
+    $this->actingAs(adminClienteDe($tenant), 'usuario')
+        ->withSession([
+            Auth::guard('admin')->getName() => $admin->id_admin,
+            ...sesionEspectador($tenant, $admin),
+        ])
+        ->getJson('/api/v1/t/cafe-luna/me')
+        ->assertOk()
+        ->assertJsonPath('espectador', true);
+});
+
 it('ends the spectator session when the central admin is no longer logged in', function () {
     $admin = espectadorAdmin();
     $tenant = espectadorTenant();
