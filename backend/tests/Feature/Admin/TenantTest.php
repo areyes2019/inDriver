@@ -3,6 +3,7 @@
 use App\Models\AdminCentral;
 use App\Models\LogCentral;
 use App\Models\Tenant;
+use App\Models\Tenant\CompraPaquete;
 use App\Models\Tenant\Usuario;
 use App\Notifications\CredencialesAdminCliente;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -230,12 +231,26 @@ it('lists tenants ordered by newest first and filters by nombre_comercial', func
 
 it('shows a tenant detail and 404s for a missing one', function () {
     $admin = makeTenantAdmin();
-    $tenant = Tenant::create(['nombre_comercial' => 'Café Luna', 'razon_social' => 'Café Luna SA de CV']);
+    $tenant = Tenant::create([
+        'nombre_comercial' => 'Café Luna', 'razon_social' => 'Café Luna SA de CV', 'slug' => 'cafe-luna',
+    ]);
+    config(['app.frontend_url' => 'https://motopanda.test/']);
+
+    tenancy()->initialize($tenant);
+    CompraPaquete::create([
+        'codigo_paquete' => 'P50', 'cantidad_paquetes' => 1, 'cantidad_viajes' => 50,
+        'precio_unitario' => 500, 'importe_total' => 500, 'estado' => 'Activo', 'fecha_compra' => now(),
+    ]);
+    tenancy()->end();
 
     $this->actingAs($admin, 'admin')
         ->getJson("/api/v1/admin/tenants/{$tenant->id_tenant}")
         ->assertOk()
-        ->assertJsonPath('nombre_comercial', 'Café Luna');
+        ->assertJsonPath('nombre_comercial', 'Café Luna')
+        ->assertJsonPath('saldo_viajes', 50)
+        ->assertJsonPath('url_panel', 'https://motopanda.test/cafe-luna')
+        ->assertJsonPath('url_app_clientes', 'https://motopanda.test/pide/cafe-luna/')
+        ->assertJsonPath('app_clientes_prendida', false);
 
     $this->actingAs($admin, 'admin')
         ->getJson('/api/v1/admin/tenants/999999')

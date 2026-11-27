@@ -9,7 +9,11 @@ use App\Http\Resources\Admin\TenantResource;
 use App\Jobs\CrearAdminClienteInicial;
 use App\Models\LogCentral;
 use App\Models\Tenant;
+use App\Models\Tenant\ConfiguracionTenant;
+use App\Support\SaldoViajesTenant;
 use App\Support\SlugsReservados;
+use App\Support\UrlAppClientesTenant;
+use App\Support\UrlPanelTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -34,7 +38,31 @@ class TenantController extends Controller
 
     public function show(Tenant $tenant): JsonResponse
     {
-        return response()->json(new TenantResource($tenant));
+        $appClientesPrendida = null;
+
+        tenancy()->initialize($tenant);
+
+        try {
+            $saldoViajes = SaldoViajesTenant::actualONull();
+
+            try {
+                $appClientesPrendida = ConfiguracionTenant::appClientesPrendida();
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo leer si el tenant tiene prendida la app de clientes.', [
+                    'id_tenant' => $tenant->id_tenant,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        } finally {
+            tenancy()->end();
+        }
+
+        return response()->json((new TenantResource($tenant))->resolve() + [
+            'saldo_viajes' => $saldoViajes,
+            'url_panel' => UrlPanelTenant::login($tenant->slug),
+            'url_app_clientes' => UrlAppClientesTenant::inicio($tenant->slug),
+            'app_clientes_prendida' => $appClientesPrendida,
+        ]);
     }
 
     public function store(Request $request): JsonResponse

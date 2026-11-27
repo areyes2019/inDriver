@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Cliente;
 
 use App\Http\Controllers\Controller;
+use App\Support\UrlAppClientesTenant;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -24,7 +25,7 @@ class ManifiestoController extends Controller
     {
         $tenant = tenant();
         $base = rtrim((string) config('app.frontend_url'), '/');
-        $inicio = "{$base}/pide/{$tenant->slug}/";
+        $inicio = UrlAppClientesTenant::inicio($tenant->slug);
         $iconos = "{$base}/pide/iconos";
 
         return response()

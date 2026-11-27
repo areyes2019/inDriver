@@ -19,6 +19,10 @@ interface Tenant {
   estado: string
   modo_estado: string
   created_at: string
+  saldo_viajes: number | null
+  url_panel: string
+  url_app_clientes: string
+  app_clientes_prendida: boolean | null
 }
 
 interface PaqueteViaje {
@@ -65,7 +69,7 @@ const estadoColor: Record<string, 'green' | 'orange' | 'blue'> = {
   Inactivo: 'blue',
 }
 
-onMounted(async () => {
+async function fetchTenant() {
   try {
     const { data } = await http.get(`/admin/tenants/${route.params.id}`)
     tenant.value = data.data ?? data
@@ -74,6 +78,24 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+}
+
+const copiado = ref('')
+
+async function copiar(url: string) {
+  try {
+    await navigator.clipboard.writeText(url)
+    copiado.value = url
+    setTimeout(() => {
+      if (copiado.value === url) copiado.value = ''
+    }, 2000)
+  } catch {
+    copiado.value = ''
+  }
+}
+
+onMounted(async () => {
+  await fetchTenant()
 
   fetchPaquetesActivos()
   fetchAdminsCliente()
@@ -173,6 +195,7 @@ async function onAcreditarPaquete() {
     successCredito.value = `Se acreditaron ${data.cantidad_viajes_acreditados} viaje(s) al tenant.`
     formCredito.id_paquete = ''
     formCredito.cantidad_paquetes = '1'
+    fetchTenant()
   } catch (err) {
     if (axios.isAxiosError(err) && err.response?.data?.message) {
       errorCredito.value = err.response.data.message
@@ -230,6 +253,53 @@ async function onAcreditarPaquete() {
           <dt class="text-xs font-semibold tracking-wide text-black/50 uppercase">Alta</dt>
           <dd class="text-sm text-heading">
             {{ new Date(tenant.created_at).toLocaleDateString() }}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold tracking-wide text-black/50 uppercase">
+            Saldo de créditos
+          </dt>
+          <dd
+            class="text-sm font-semibold"
+            :class="(tenant.saldo_viajes ?? 0) < 0 ? 'text-red-600' : 'text-heading'"
+          >
+            {{ tenant.saldo_viajes === null ? '—' : `${tenant.saldo_viajes} viaje(s)` }}
+          </dd>
+        </div>
+      </dl>
+
+      <dl v-if="tenant" class="mt-6 grid grid-cols-1 gap-4">
+        <div
+          v-for="link in [
+            { etiqueta: 'Link del panel', url: tenant.url_panel, nota: '' },
+            {
+              etiqueta: 'Link de la app (PWA)',
+              url: tenant.url_app_clientes,
+              nota: tenant.app_clientes_prendida === false ? 'App de clientes apagada' : '',
+            },
+          ]"
+          :key="link.etiqueta"
+        >
+          <dt class="text-xs font-semibold tracking-wide text-black/50 uppercase">
+            {{ link.etiqueta }}
+          </dt>
+          <dd class="mt-0.5 flex flex-wrap items-center gap-2 text-sm">
+            <a
+              :href="link.url"
+              target="_blank"
+              rel="noopener"
+              class="break-all text-accent hover:underline"
+            >
+              {{ link.url }}
+            </a>
+            <button
+              type="button"
+              class="rounded-md border border-gray-300 px-2 py-0.5 text-xs text-heading hover:border-accent"
+              @click="copiar(link.url)"
+            >
+              {{ copiado === link.url ? 'Copiado' : 'Copiar' }}
+            </button>
+            <UiBadge v-if="link.nota" :text="link.nota" color="orange" />
           </dd>
         </div>
       </dl>
