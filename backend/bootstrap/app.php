@@ -4,6 +4,7 @@ use App\Http\Middleware\AplicarAmbientePanel;
 use App\Http\Middleware\AsegurarClienteApp;
 use App\Http\Middleware\AsegurarRolTenant;
 use App\Http\Middleware\IdentificarTenantPorSlug;
+use App\Http\Middleware\SoloLecturaEspectador;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -37,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'rol.tenant' => AsegurarRolTenant::class,
             'ambiente.panel' => AplicarAmbientePanel::class,
             'cliente.app' => AsegurarClienteApp::class,
+            'espectador' => SoloLecturaEspectador::class,
         ]);
 
         // Laravel siempre corre los middleware de tipo "auth" muy temprano (lista de prioridad

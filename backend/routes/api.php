@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\Admin\AdminClienteCiudadController;
 use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\ConductorTenantController;
 use App\Http\Controllers\Admin\CreditoPaqueteController;
+use App\Http\Controllers\Admin\EspectadorController;
 use App\Http\Controllers\Admin\PaqueteViajeController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Cliente\AccesoController as ClienteAccesoController;
@@ -71,6 +73,13 @@ Route::prefix('admin')->group(function () {
 
             Route::get('/tenants/{tenant}/admins-cliente', [AdminClienteCiudadController::class, 'index']);
             Route::put('/tenants/{tenant}/admins-cliente/{idUsuario}/ciudades', [AdminClienteCiudadController::class, 'update']);
+
+            Route::get('/tenants/{tenant}/conductores', [ConductorTenantController::class, 'index']);
+            Route::post('/tenants/{tenant}/conductores', [ConductorTenantController::class, 'store']);
+            Route::post('/tenants/{tenant}/conductores/{idConductor}/vender-viajes', [ConductorTenantController::class, 'venderViajes'])
+                ->whereNumber('idConductor');
+
+            Route::post('/tenants/{tenant}/espectador', [EspectadorController::class, 'store']);
         });
     });
 });
@@ -89,7 +98,7 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
     // el Panel. La app del conductor (grupo `auth:conductor-token`, más abajo), el comando
     // `simulacion:avanzar` y los jobs diferidos no pasan por este middleware y por eso siguen
     // viendo todos los envíos, sin excepciones escritas en ningún lado.
-    Route::middleware(['auth:usuario', 'ambiente.panel'])->group(function () {
+    Route::middleware(['auth:usuario', 'espectador', 'ambiente.panel'])->group(function () {
         Route::post('/logout', [TenantAuthController::class, 'logout']);
         Route::get('/me', [TenantAuthController::class, 'me']);
         Route::middleware('throttle:tenant-usuarios')->post('/cambiar-password', [TenantAuthController::class, 'changePassword']);

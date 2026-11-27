@@ -15,6 +15,19 @@ const http = axios.create({
   withXSRFToken: true,
 })
 
+/** Código con el que el backend rechaza una escritura hecha en modo espectador. */
+export const CODIGO_ESPECTADOR = 'ESPECTADOR_SOLO_LECTURA'
+export const EVENTO_ESPECTADOR_BLOQUEADO = 'espectador-bloqueado'
+
+// Modo espectador de ADMIN_CENTRAL: cualquier acción que el Panel intente se rechaza en el backend.
+// Además del error que maneje cada pantalla, se avisa una vez al layout para que lo diga claro.
+http.interceptors.response.use(undefined, (error) => {
+  if (error?.response?.status === 403 && error.response.data?.code === CODIGO_ESPECTADOR) {
+    window.dispatchEvent(new CustomEvent(EVENTO_ESPECTADOR_BLOQUEADO))
+  }
+  return Promise.reject(error)
+})
+
 export function ensureCsrfCookie() {
   return axios.get(`${APP_URL}/sanctum/csrf-cookie`, { withCredentials: true })
 }

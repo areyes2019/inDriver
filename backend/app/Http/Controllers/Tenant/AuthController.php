@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\SoloLecturaEspectador;
 use App\Http\Resources\Tenant\CiudadResource;
 use App\Http\Resources\Tenant\UsuarioResource;
 use App\Models\Tenant\Ciudad;
@@ -37,6 +38,8 @@ class AuthController extends Controller
         }
 
         Auth::guard('usuario')->login($usuario);
+        // Un login real termina cualquier sesión de espectador de ADMIN_CENTRAL en este navegador.
+        $request->session()->forget(SoloLecturaEspectador::SESION);
         $request->session()->regenerate();
 
         $usuario->forceFill(['ultimo_acceso' => now()])->save();
@@ -47,6 +50,13 @@ class AuthController extends Controller
     public function logout(Request $request): JsonResponse
     {
         Auth::guard('usuario')->logout();
+
+        // El espectador comparte la sesión con su login de ADMIN_CENTRAL: invalidarla lo sacaría
+        // también del admin. Solo se cierra el lado del Panel.
+        if ($request->session()->pull(SoloLecturaEspectador::SESION)) {
+            return response()->json(status: 204);
+        }
+
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
@@ -55,7 +65,10 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json($this->respuestaUsuario($request->user('usuario')));
+        return response()->json([
+            ...$this->respuestaUsuario($request->user('usuario')),
+            'espectador' => $request->session()->has(SoloLecturaEspectador::SESION),
+        ]);
     }
 
     public function forgotPassword(Request $request): JsonResponse

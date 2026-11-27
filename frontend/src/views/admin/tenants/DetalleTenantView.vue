@@ -7,6 +7,7 @@ import AdminLayout from '@/layouts/AdminLayout.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiBadge from '@/components/ui/UiBadge.vue'
 import UiCiudadAutocomplete from '@/components/ui/UiCiudadAutocomplete.vue'
+import ConductoresTenant from '@/components/admin/ConductoresTenant.vue'
 import type { ResolvedCity } from '@/services/maps/types'
 
 interface Tenant {
@@ -91,6 +92,33 @@ async function copiar(url: string) {
     }, 2000)
   } catch {
     copiado.value = ''
+  }
+}
+
+// --- Modo espectador ---
+// La pestaña se abre antes del `await` para que el navegador no la trate como ventana emergente;
+// cuando el backend abre la sesión de espectador, se manda al Panel del tenant.
+const abriendoEspectador = ref(false)
+const errorEspectador = ref('')
+
+async function onVerComoEspectador() {
+  errorEspectador.value = ''
+  abriendoEspectador.value = true
+  const pestana = window.open('', '_blank')
+
+  try {
+    const { data } = await http.post(`/admin/tenants/${route.params.id}/espectador`)
+    const destino = `/${data.slug}/panel`
+    if (pestana) pestana.location.href = destino
+    else window.location.href = destino
+  } catch (err) {
+    pestana?.close()
+    errorEspectador.value =
+      axios.isAxiosError(err) && err.response?.data?.message
+        ? err.response.data.message
+        : 'No se pudo abrir el Panel del tenant.'
+  } finally {
+    abriendoEspectador.value = false
   }
 }
 
@@ -304,15 +332,31 @@ async function onAcreditarPaquete() {
         </div>
       </dl>
 
-      <div v-if="tenant" class="mt-8 border-t border-gray-100 pt-4">
+      <div
+        v-if="tenant"
+        class="mt-8 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4"
+      >
         <RouterLink
           :to="{ name: 'admin-tenants-editar', params: { id: tenant.id_tenant } }"
           class="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-heading"
         >
           Editar
         </RouterLink>
+        <button
+          type="button"
+          :disabled="abriendoEspectador"
+          class="rounded-xl border border-accent px-4 py-2 text-sm font-semibold text-accent hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
+          @click="onVerComoEspectador"
+        >
+          Ver su Panel (solo lectura)
+        </button>
+        <p v-if="errorEspectador" role="alert" class="text-sm text-red-600">
+          {{ errorEspectador }}
+        </p>
       </div>
     </UiCard>
+
+    <ConductoresTenant v-if="tenant" :id-tenant="tenant.id_tenant" class="mt-6" />
 
     <UiCard v-if="tenant" title="Acreditar paquete" class="mt-6">
       <form class="flex flex-wrap items-end gap-3" @submit.prevent="onAcreditarPaquete">

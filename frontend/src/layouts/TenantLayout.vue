@@ -9,6 +9,7 @@ import { useAmbienteStore } from '@/stores/ambiente'
 import { useBandejaWhatsappStore } from '@/stores/bandejaWhatsapp'
 import { useModoAutomaticoStore } from '@/stores/modoAutomatico'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
+import { EVENTO_ESPECTADOR_BLOQUEADO } from '@/lib/http'
 
 const props = withDefaults(
   defineProps<{
@@ -54,6 +55,24 @@ const slug = computed(() => route.params.slug as string)
 const enPanel = computed(() => route.name === 'tenant-panel')
 const esDespachador = computed(() => auth.usuario?.rol === 'Despachador')
 const esAdminCliente = computed(() => auth.usuario?.rol === 'AdminCliente')
+// Modo espectador de ADMIN_CENTRAL: ve todo, no cambia nada. Los interruptores quedan de solo
+// lectura y Nueva Entrega no aparece; el backend rechaza cualquier otra escritura.
+const esEspectador = computed(() => auth.esEspectador)
+const puedeEditar = computed(() => esAdminCliente.value && !esEspectador.value)
+const avisoBloqueado = ref(false)
+let temporizadorAviso: ReturnType<typeof setTimeout> | undefined
+
+function onEspectadorBloqueado() {
+  avisoBloqueado.value = true
+  clearTimeout(temporizadorAviso)
+  temporizadorAviso = setTimeout(() => (avisoBloqueado.value = false), 3000)
+}
+
+onMounted(() => window.addEventListener(EVENTO_ESPECTADOR_BLOQUEADO, onEspectadorBloqueado))
+onUnmounted(() => {
+  window.removeEventListener(EVENTO_ESPECTADOR_BLOQUEADO, onEspectadorBloqueado)
+  clearTimeout(temporizadorAviso)
+})
 const usaDespachadores = computed(() => auth.usuario?.usar_despachadores === 'Sí')
 
 // spec tenant/025: el indicador de ambiente acompaña a toda pantalla del tenant, así que se carga
@@ -128,6 +147,17 @@ function onAccionTeclado(id: string, event: KeyboardEvent) {
 const accionesPanel = computed<AccionSidebar[]>(() => {
   if (!mostrarAccionesPanel.value) return []
 
+  const viajesEnTurno: AccionSidebar = {
+    id: ACCION_VIAJES_EN_TURNO,
+    label: 'Viajes en turno',
+    icon: 'tabler:truck-delivery',
+    expandida: props.viajesEnTurnoAbierto,
+    badge: props.viajesPendientes,
+    conexion: props.conexionPanel,
+  }
+
+  if (esEspectador.value) return [viajesEnTurno]
+
   return [
     {
       id: ACCION_NUEVA_ENTREGA,
@@ -136,14 +166,7 @@ const accionesPanel = computed<AccionSidebar[]>(() => {
       expandida: props.nuevaEntregaAbierta,
       destacada: true,
     },
-    {
-      id: ACCION_VIAJES_EN_TURNO,
-      label: 'Viajes en turno',
-      icon: 'tabler:truck-delivery',
-      expandida: props.viajesEnTurnoAbierto,
-      badge: props.viajesPendientes,
-      conexion: props.conexionPanel,
-    },
+    viajesEnTurno,
   ]
 })
 
@@ -230,8 +253,23 @@ function onCambiarPassword() {
 }
 
 async function onLogout() {
+  if (esEspectador.value) {
+    await onSalirEspectador()
+    return
+  }
   await auth.logout()
   router.push({ name: 'tenant-login', params: { slug: slug.value } })
+}
+
+// El espectador llega en una pestaña que abrió el detalle del tenant: al salir se cierra el lado del
+// Panel (la sesión del admin sigue viva) y se intenta cerrar la pestaña.
+async function onSalirEspectador() {
+  try {
+    await auth.logout()
+  } finally {
+    window.close()
+    router.push({ name: 'admin-tenants-lista' })
+  }
 }
 
 function onClickConfiguracion() {
@@ -255,6 +293,29 @@ function onClickConfiguracion() {
     >
       Modo prueba — los envíos que crees aquí son simulados
     </div>
+    <!--
+      Modo espectador de ADMIN_CENTRAL: aviso fijo abajo al centro, sin mover el layout del Panel.
+    -->
+    <div
+      v-if="esEspectador"
+      class="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full bg-heading px-4 py-2 text-xs font-semibold text-white shadow-lg"
+      role="status"
+    >
+      <span>
+        {{
+          avisoBloqueado
+            ? 'Modo espectador: esa acción está bloqueada'
+            : 'Modo espectador — solo lectura'
+        }}
+      </span>
+      <button
+        type="button"
+        class="rounded-full bg-white/15 px-3 py-1 hover:bg-white/25"
+        @click="onSalirEspectador"
+      >
+        Salir
+      </button>
+    </div>
     <!-- Menú lateral en lugar de la barra superior: tenant/032-menu-lateral.md -->
     <UiSidebar
       ref="sidebarRef"
@@ -269,11 +330,11 @@ function onClickConfiguracion() {
       @cerrar-sesion="onLogout"
     >
       <template #pie="{ abierto }">
-        <UiAmbienteSwitch :slug="slug" :editable="esAdminCliente" :compacto="!abierto" />
+        <UiAmbienteSwitch :slug="slug" :editable="puedeEditar" :compacto="!abierto" />
         <ModoAutomaticoControl
           v-if="puedeVerBandeja"
           :slug="slug"
-          :editable="esAdminCliente"
+          :editable="puedeEditar"
           :compacto="!abierto"
         />
       </template>

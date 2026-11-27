@@ -26,6 +26,8 @@ export interface UsuarioTenant {
   ciudades_tenant: CiudadAsignada[]
   cobertura_bounds: { north: number; south: number; east: number; west: number } | null
   usar_despachadores: 'Sí' | 'No'
+  /** ADMIN_CENTRAL mirando el Panel: el backend rechaza toda escritura. */
+  espectador?: boolean
 }
 
 interface ResetPasswordPayload {
@@ -52,6 +54,7 @@ export const useTenantAuthStore = defineStore('tenantAuth', () => {
   const tenantExiste = ref(true)
 
   const isAuthenticated = computed(() => usuario.value !== null)
+  const esEspectador = computed(() => usuario.value?.espectador === true)
 
   // El "operativo" del tenant —quien crea envíos y ve el Panel— depende de la configuración, no
   // solo del rol: Despachador cuando el tenant usa despachadores, AdminCliente cuando no (spec
@@ -61,6 +64,10 @@ export const useTenantAuthStore = defineStore('tenantAuth', () => {
   const esOperativo = computed(() => {
     const rol = usuario.value?.rol
     const usaDespachadores = usuario.value?.usar_despachadores === 'Sí'
+
+    // El espectador de ADMIN_CENTRAL entra como AdminCliente y tiene que poder ver el mapa aunque
+    // el tenant opere con despachadores.
+    if (esEspectador.value) return true
 
     return (
       (rol === 'Despachador' && usaDespachadores) || (rol === 'AdminCliente' && !usaDespachadores)
@@ -124,6 +131,7 @@ export const useTenantAuthStore = defineStore('tenantAuth', () => {
     slug,
     tenantExiste,
     isAuthenticated,
+    esEspectador,
     esOperativo,
     fetchMe,
     login,

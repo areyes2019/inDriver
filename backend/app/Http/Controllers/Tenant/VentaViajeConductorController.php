@@ -4,59 +4,28 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Tenant;
 
-use App\Events\Tenant\SaldoAcreditado;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\Conductor;
-use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\VentaViajeConductor;
+use App\Services\VentaViajesConductorService;
 use App\Support\SaldoViajes;
 use App\Support\SaldoViajesTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 
 class VentaViajeConductorController extends Controller
 {
+    public function __construct(private readonly VentaViajesConductorService $ventas) {}
+
     public function store(Request $request, Conductor $conductor): JsonResponse
     {
         $data = $request->validate([
             'monto_pagado' => ['required', 'numeric', 'min:0.01'],
         ]);
 
-        $costoViajePrepago = (float) (ConfiguracionTenant::obtener(ConfiguracionTenant::COSTO_VIAJE_PREPAGO) ?? 0);
-
-        if ($costoViajePrepago <= 0) {
-            throw ValidationException::withMessages([
-                'monto_pagado' => 'El tenant debe configurar el costo del viaje prepagado antes de poder acreditar viajes por monto.',
-            ]);
-        }
-
-        $cantidadViajes = (int) floor($data['monto_pagado'] / $costoViajePrepago);
-
-        if ($cantidadViajes < 1) {
-            throw ValidationException::withMessages([
-                'monto_pagado' => "El monto pagado no alcanza para acreditar al menos 1 viaje (costo del viaje: {$costoViajePrepago}).",
-            ]);
-        }
-
-        // Tope contra el saldo del tenant (spec tenant/015, RN-C4). La venta ya no descuenta de ese
-        // saldo —lo consumen los envíos entregados—, pero se decidió conservar el límite.
+        $venta = $this->ventas->vender($conductor, (float) $data['monto_pagado'], $request->user('usuario')->id_usuario);
         $saldoTenant = SaldoViajesTenant::actual();
-
-        if ($cantidadViajes > $saldoTenant) {
-            throw ValidationException::withMessages([
-                'monto_pagado' => "Ese monto equivale a {$cantidadViajes} viaje(s), pero el tenant solo tiene {$saldoTenant} viaje(s) disponible(s) para vender.",
-            ]);
-        }
-
-        $venta = VentaViajeConductor::create([
-            'id_conductor' => $conductor->id_conductor,
-            'cantidad_viajes' => $cantidadViajes,
-            'monto_pagado' => $data['monto_pagado'],
-            'id_usuario' => $request->user('usuario')->id_usuario,
-            'fecha_venta' => now(),
-        ]);
 
         Auditoria::create([
             'id_usuario' => $request->user('usuario')->id_usuario,
@@ -64,12 +33,6 @@ class VentaViajeConductorController extends Controller
             'accion' => 'ALTA',
             'descripcion' => "Pago de {$venta->monto_pagado} acreditado como {$venta->cantidad_viajes} viaje(s) prepagado(s) al conductor {$conductor->id_conductor}",
         ]);
-
-        // Tiempo real (spec tenant/018): avisa al conductor al instante, con respaldo de push si
-        // su socket está caído (evento "crítico", RN-04).
-        if ($slug = tenant()?->slug) {
-            SaldoAcreditado::dispatch($conductor->id_conductor, $venta->cantidad_viajes, $slug);
-        }
 
         return response()->json([
             'id_venta' => $venta->id_venta,
