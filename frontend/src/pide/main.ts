@@ -8,6 +8,7 @@ import PideApp from './PideApp.vue'
 import router from './router'
 import { registrarServiceWorker } from './composables/useServiceWorker'
 import { slugDeRuta } from './lib/instalacion'
+import { useMarcaStore } from './stores/marca'
 
 const API_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1'
 
@@ -28,3 +29,10 @@ if (slug) prepararInstalacion(slug)
 createApp(PideApp).use(createPinia()).use(router).mount('#pide')
 
 if (slug) void registrarServiceWorker(slug)
+
+// Al volver a primer plano, la marca vencida se renueva (zonas o app apagada desde el Panel).
+document.addEventListener('visibilitychange', () => {
+  const marca = useMarcaStore()
+  if (document.visibilityState === 'visible' && marca.slug)
+    void marca.cargar(marca.slug).catch(() => {})
+})
