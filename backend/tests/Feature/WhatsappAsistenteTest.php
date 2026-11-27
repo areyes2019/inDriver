@@ -265,6 +265,46 @@ it('sin ruta real por calles no da precio ni resumen', function () {
         ->and($respuesta->botones)->toBe([]);
 });
 
+/*
+| Regresión de la cotización (spec tenant/035, RN-21): fijan cómo cotiza hoy el bot antes de mover la
+| cuenta a `CotizacionPedidoService`. Después del cambio deben pasar sin modificarse.
+*/
+
+it('cotiza kilómetros con decimales y redondea el precio a múltiplos de 5, como siempre', function () {
+    // 6.3 km: 10 + (6.3 - 5) × 5 = 16.50, que sube a 20 (pasa $1.50 del múltiplo inferior).
+    googleResponde(lugaresDeCelaya(), metros: 6300);
+    Cliente::create(['nombre' => 'Abdias', 'telefono' => '461 358 1090', 'estado' => 'Activo']);
+    iaDevuelve(pedidoCompleto());
+
+    $resumen = clienteEscribe($this->conversacion, ['texto' => 'Todo el pedido']);
+
+    expect((float) solicitud()->km)->toBe(6.3)
+        ->and((float) solicitud()->importe_envio)->toBe(20.0)
+        ->and($resumen->texto)->toContain('Envío: $20.00');
+});
+
+it('cobra el banderazo completo aunque la ruta sea menor a los kilómetros incluidos', function () {
+    googleResponde(lugaresDeCelaya(), metros: 1200);
+    Cliente::create(['nombre' => 'Abdias', 'telefono' => '461 358 1090', 'estado' => 'Activo']);
+    iaDevuelve(pedidoCompleto());
+
+    clienteEscribe($this->conversacion, ['texto' => 'Todo el pedido']);
+
+    expect((float) solicitud()->importe_envio)->toBe(10.0);
+});
+
+it('sin las tres tarifas configuradas no da precio ni resumen', function () {
+    ConfiguracionTenant::where('clave', ConfiguracionTenant::KM_ADICIONAL)->delete();
+    Cliente::create(['nombre' => 'Abdias', 'telefono' => '461 358 1090', 'estado' => 'Activo']);
+    iaDevuelve(pedidoCompleto());
+
+    $respuesta = clienteEscribe($this->conversacion, ['texto' => 'Todo el pedido']);
+
+    expect($respuesta->texto)->toContain('no puedo calcular el precio')
+        ->and($respuesta->botones)->toBe([])
+        ->and(solicitud()->importe_envio)->toBeNull();
+});
+
 it('reconoce al cliente por su teléfono y le ofrece su última dirección de recogida', function () {
     $cliente = Cliente::create(['nombre' => 'Abdias', 'telefono' => '461-358-1090', 'estado' => 'Activo']);
     $cliente->direcciones()->create(['calle' => 'Real del Seminario 122', 'latitud' => 20.54, 'longitud' => -100.83]);

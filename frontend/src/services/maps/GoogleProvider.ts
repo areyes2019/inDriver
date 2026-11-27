@@ -431,17 +431,31 @@ export default class GoogleProvider extends BaseProvider {
     }
   }
 
+  /**
+   * Token de sesión de Places (spec tenant/035, RN-48): las teclas de una búsqueda y la dirección
+   * elegida se cobran como una sola sesión. Se crea en la primera búsqueda y se suelta al elegir.
+   */
+  private sesionBusqueda: google.maps.places.AutocompleteSessionToken | null = null
+
   async searchAddress(
     query: string,
     bounds?: LatLngBoundsLike | null,
+    opciones: { sesion?: boolean } = {},
   ): Promise<AddressSuggestion[]> {
     if (!this.apiKey || !query.trim()) return []
 
     await loadSdk(this.apiKey)
 
+    if (opciones.sesion && !this.sesionBusqueda) {
+      this.sesionBusqueda = new google.maps.places.AutocompleteSessionToken()
+    }
+
     const { suggestions } =
       await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
         input: query,
+        ...(opciones.sesion && this.sesionBusqueda
+          ? { sessionToken: this.sesionBusqueda, includedRegionCodes: ['mx'] }
+          : {}),
         ...(bounds
           ? {
               locationRestriction: {
@@ -471,6 +485,8 @@ export default class GoogleProvider extends BaseProvider {
 
     const place = prediction.toPlace()
     await place.fetchFields({ fields: ['formattedAddress', 'location'] })
+    // La sesión termina al elegir: la siguiente búsqueda abre otra (RN-48).
+    this.sesionBusqueda = null
     if (!place.location) return null
 
     return {

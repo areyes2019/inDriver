@@ -6,6 +6,8 @@ use App\Http\Controllers\Admin\CreditoPaqueteController;
 use App\Http\Controllers\Admin\PaqueteViajeController;
 use App\Http\Controllers\Admin\TenantController;
 use App\Http\Controllers\Cliente\AccesoController as ClienteAccesoController;
+use App\Http\Controllers\Cliente\CotizacionController as ClienteCotizacionController;
+use App\Http\Controllers\Cliente\DireccionController as ClienteDireccionController;
 use App\Http\Controllers\Cliente\ManifiestoController as ClienteManifiestoController;
 use App\Http\Controllers\Cliente\MarcaController as ClienteMarcaController;
 use App\Http\Controllers\Cliente\PerfilController as ClientePerfilController;
@@ -208,6 +210,16 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::post('/salir', [ClienteAccesoController::class, 'salir']);
             Route::get('/perfil', [ClientePerfilController::class, 'show']);
             Route::put('/perfil', [ClientePerfilController::class, 'update']);
+
+            // Fase 4: zona, dirección de un punto, cotización y direcciones favoritas.
+            Route::post('/zona', [ClienteCotizacionController::class, 'zona']);
+            // Cada una cuesta una consulta a Google: límite propio, más bajo (RN-48).
+            Route::post('/direccion', [ClienteCotizacionController::class, 'direccion'])->middleware('throttle:cliente-google');
+            Route::post('/cotizar', [ClienteCotizacionController::class, 'cotizar'])->middleware('throttle:cliente-google');
+            Route::get('/direcciones', [ClienteDireccionController::class, 'index']);
+            Route::post('/direcciones', [ClienteDireccionController::class, 'store']);
+            Route::put('/direcciones/{direccion}', [ClienteDireccionController::class, 'update'])->whereNumber('direccion');
+            Route::delete('/direcciones/{direccion}', [ClienteDireccionController::class, 'destroy'])->whereNumber('direccion');
         });
     });
 

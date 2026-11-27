@@ -81,8 +81,13 @@ class MapService {
     this.provider.resize(containerId)
   }
 
-  searchAddress(query: string, bounds?: LatLngBoundsLike | null): Promise<AddressSuggestion[]> {
-    return this.provider.searchAddress(query, bounds)
+  /** `sesion: true` agrupa la búsqueda en una sesión de Places (app de clientes, spec 035 RN-48). */
+  searchAddress(
+    query: string,
+    bounds?: LatLngBoundsLike | null,
+    opciones: { sesion?: boolean } = {},
+  ): Promise<AddressSuggestion[]> {
+    return this.provider.searchAddress(query, bounds, opciones)
   }
 
   resolveAddress(suggestionId: string): Promise<ResolvedAddress | null> {

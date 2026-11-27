@@ -44,6 +44,19 @@ class RutaService
      */
     public function distanciaPorCalleKm(array $origen, array $destino): ?float
     {
+        return $this->medirPorCalle($origen, $destino)['km'] ?? null;
+    }
+
+    /**
+     * Kilómetros y minutos por calle según Google (spec tenant/035), o `null` si no hay una ruta real.
+     * Los minutos pueden faltar aunque haya distancia; los kilómetros nunca.
+     *
+     * @param  array{lat: float, lng: float}  $origen
+     * @param  array{lat: float, lng: float}  $destino
+     * @return array{km: float, minutos: int|null}|null
+     */
+    public function medirPorCalle(array $origen, array $destino): ?array
+    {
         $llave = config('services.google_maps.key');
 
         if (! is_string($llave) || $llave === '') {
@@ -77,7 +90,12 @@ class RutaService
             return null;
         }
 
-        return (float) $metros / 1000;
+        $segundos = $respuesta->json('routes.0.legs.0.duration.value');
+
+        return [
+            'km' => (float) $metros / 1000,
+            'minutos' => is_numeric($segundos) ? (int) ceil((float) $segundos / 60) : null,
+        ];
     }
 
     /**

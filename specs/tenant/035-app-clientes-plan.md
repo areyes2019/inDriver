@@ -3,7 +3,7 @@
 **Spec:** [`035-app-clientes.md`](035-app-clientes.md) (versión 1.2)
 **Fecha:** 2026-11-26
 **Estado:** Autorizado. Fase 2 (prototipo) entregada; el código de acceso cambió a correo (spec 1.2).
-Fase 3 desplegada el 2026-11-27 (app apagada en las flotillas reales). Fase 3b (instalación, spec 1.3) programada en la rama `app-clientes`.
+Fases 3 y 3b desplegadas el 2026-11-27. Fase 4 (cotización y direcciones reales) programada en la rama `app-clientes`.
 
 **Variables nuevas para producción (Fase 3):** `OTP_CANAL=correo`, `OTP_MAIL_FROM` (dirección de
 `motopanda.mx`), `OTP_TOPE_DIARIO=80` (plan Free de Resend), y `MAIL_FROM_ADDRESS` pasa a

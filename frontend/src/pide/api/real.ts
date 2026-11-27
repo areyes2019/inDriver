@@ -1,11 +1,20 @@
 import type { ApiCliente } from './cliente'
 import { apiSimulada } from './mock'
-import type { Cliente, Marca, ResultadoCodigo, ResultadoVerificar } from './tipos'
+import type {
+  Cliente,
+  Direccion,
+  Marca,
+  ResultadoCodigo,
+  ResultadoCotizar,
+  ResultadoVerificar,
+} from './tipos'
 import { useMarcaStore } from '../stores/marca'
 
 /**
- * API real de la app de clientes (spec tenant/035, sección 8). Va entrando por fases: desde la
- * Fase 3, marca, código, verificación, salir y perfil. Lo demás sigue en la simulada hasta su fase.
+ * API real de la app de clientes (spec tenant/035, sección 8). Va entrando por fases:
+ * - Fase 3: marca, código, verificación, salir y perfil.
+ * - Fase 4: zona de servicio, dirección de un punto, cotización y direcciones favoritas.
+ * Lo demás sigue en la simulada hasta su fase.
  *
  * Usa `fetch` y no el `http` (axios) del Panel: la app autentica con token Bearer, no con la cookie
  * de sesión, y así no descarga el código del Panel.
@@ -159,4 +168,129 @@ export const apiReal: ApiCliente = {
     if (estado !== 200) throw new Error('No se pudieron guardar tus datos')
     return aCliente(datos)
   },
+
+  async validarPunto(punto) {
+    const { estado, datos } = await llamar<{ cubre: boolean }>(slugActual(), '/zona', {
+      metodo: 'POST',
+      cuerpo: { lat: punto.lat, lng: punto.lng },
+      conToken: true,
+    })
+    return estado === 200 && datos.cubre
+  },
+
+  async direccionDe(punto) {
+    const { estado, datos } = await llamar<{ direccion: string }>(slugActual(), '/direccion', {
+      metodo: 'POST',
+      cuerpo: { lat: punto.lat, lng: punto.lng },
+      conToken: true,
+    })
+    return estado === 200 ? datos.direccion : 'Punto elegido en el mapa'
+  },
+
+  async cotizar(s): Promise<ResultadoCotizar> {
+    const { estado, datos } = await llamar<CotizacionApi & { motivo?: string; punto?: string }>(
+      slugActual(),
+      '/cotizar',
+      {
+        metodo: 'POST',
+        conToken: true,
+        cuerpo: {
+          tipo: s.tipo,
+          recogida: { lat: s.recogida.lat, lng: s.recogida.lng },
+          entrega: { lat: s.entrega.lat, lng: s.entrega.lng },
+          modalidad: s.modalidad,
+          importe_producto: s.importeProducto || null,
+          lo_antes_posible: s.loAntesPosible,
+          ...(s.loAntesPosible ? {} : { fecha: s.fecha, hora: s.hora }),
+        },
+      },
+    )
+    if (estado === 200) {
+      return {
+        ok: true,
+        cotizacion: {
+          km: datos.km,
+          // Sin minutos de Google, un estimado de ciudad: 22 km/h y 4 minutos para salir.
+          minutos: datos.minutos ?? Math.max(6, Math.round((datos.km / 22) * 60) + 4),
+          importeEnvio: datos.importe_envio,
+          importeProducto: datos.importe_producto,
+          total: datos.total,
+          sello: datos.sello,
+          venceEn: datos.vence_en,
+        },
+      }
+    }
+    if (datos?.motivo === 'FUERA_DE_ZONA') {
+      return {
+        ok: false,
+        motivo: 'FUERA_DE_ZONA',
+        punto: datos.punto === 'recogida' ? 'recogida' : 'entrega',
+      }
+    }
+    if (datos?.motivo === 'SIN_TARIFAS') return { ok: false, motivo: 'SIN_TARIFAS' }
+    return { ok: false, motivo: 'SIN_RUTA' }
+  },
+
+  async direcciones() {
+    const { estado, datos } = await llamar<{ data: DireccionApi[] }>(slugActual(), '/direcciones', {
+      conToken: true,
+    })
+    if (estado !== 200) throw new Error('No se pudieron cargar tus direcciones')
+    return datos.data.map(aDireccion)
+  },
+
+  async guardarDireccion(d) {
+    const ruta = d.id ? `/direcciones/${d.id}` : '/direcciones'
+    const { estado, datos } = await llamar<DireccionApi>(slugActual(), ruta, {
+      metodo: d.id ? 'PUT' : 'POST',
+      conToken: true,
+      cuerpo: {
+        alias: d.alias,
+        direccion: d.direccion,
+        lat: d.lat,
+        lng: d.lng,
+        referencias: d.referencias || null,
+      },
+    })
+    if (estado !== 200 && estado !== 201) throw new Error('No se pudo guardar la dirección')
+    return aDireccion(datos)
+  },
+
+  async borrarDireccion(id) {
+    const { estado } = await llamar(slugActual(), `/direcciones/${id}`, {
+      metodo: 'DELETE',
+      conToken: true,
+    })
+    if (estado !== 204) throw new Error('No se pudo borrar la dirección')
+  },
+}
+
+interface CotizacionApi {
+  km: number
+  minutos: number | null
+  importe_envio: number
+  importe_producto: number
+  total: number
+  sello: string
+  vence_en: string
+}
+
+interface DireccionApi {
+  id: number
+  alias: string
+  direccion: string
+  lat: number
+  lng: number
+  referencias: string
+}
+
+function aDireccion(d: DireccionApi): Direccion {
+  return {
+    id: d.id,
+    alias: d.alias,
+    direccion: d.direccion,
+    lat: d.lat,
+    lng: d.lng,
+    referencias: d.referencias,
+  }
 }

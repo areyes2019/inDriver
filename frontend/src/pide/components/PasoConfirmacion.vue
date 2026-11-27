@@ -5,11 +5,13 @@ import MapService from '@/services/maps/MapService'
 import { api } from '../api'
 import { fechaCorta, km, pesos, tituloModalidad } from '../lib/formato'
 import { useAsistenteStore } from '../stores/asistente'
+import { useMarcaStore } from '../stores/marca'
 import MapaCliente from './MapaCliente.vue'
 
 /** Paso 4 (6.3): resumen visual con el precio que calcula el servidor (RN-21, RN-22). */
 const emit = defineEmits<{ volverA: [paso: 1 | 2] }>()
 const asistente = useAsistenteStore()
+const marca = useMarcaStore()
 const ID = 'mapa-confirmacion'
 
 const cotizando = ref(false)
@@ -30,8 +32,11 @@ async function cotizar(): Promise<void> {
     } else if (r.motivo === 'FUERA_DE_ZONA') {
       error.value = 'Por ahora no llegamos a esta dirección'
       emit('volverA', r.punto === 'recogida' ? 1 : 2)
+    } else if (r.motivo === 'SIN_TARIFAS') {
+      // RN-26: la flotilla todavía no configura sus tarifas.
+      error.value = `${marca.nombre} todavía no tiene precios en la app. Llámanos para pedir tu envío.`
     } else {
-      error.value = 'No pudimos calcular el costo. Intenta de nuevo en un momento.'
+      error.value = 'No pudimos calcular la ruta. Revisa las direcciones o intenta en un momento.'
     }
   } finally {
     cotizando.value = false

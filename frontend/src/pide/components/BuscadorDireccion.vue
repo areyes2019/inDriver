@@ -55,7 +55,9 @@ watch(texto, (valor) => {
   espera = setTimeout(async () => {
     buscando.value = true
     try {
-      sugerencias.value = (await MapService.searchAddress(valor, limites.value)).slice(0, 5)
+      sugerencias.value = (
+        await MapService.searchAddress(valor, limites.value, { sesion: true })
+      ).slice(0, 5)
     } catch {
       sugerencias.value = []
     } finally {

@@ -12,14 +12,12 @@ use App\Models\Tenant\Pedido;
 use App\Models\Tenant\WhatsappConversacion;
 use App\Models\Tenant\WhatsappMensaje;
 use App\Models\Tenant\WhatsappSolicitud;
-use App\Models\Tenant\ZonaServicio;
 use App\Services\Cliente\ConciliacionClientesService;
+use App\Services\CotizacionPedidoService;
 use App\Services\CreacionPedidoService;
 use App\Services\GeocodificadorService;
 use App\Services\ModoAutomaticoService;
 use App\Services\PedidoEstadoService;
-use App\Services\RutaService;
-use App\Services\TarifaService;
 use App\Support\HoraOperacion;
 use App\Support\TelefonoMexicano;
 use Illuminate\Support\Collection;
@@ -51,8 +49,7 @@ class ConversacionWhatsappService
     public function __construct(
         private readonly ExtractorPedidoIA $extractor,
         private readonly GeocodificadorService $geocodificador,
-        private readonly RutaService $rutas,
-        private readonly TarifaService $tarifas,
+        private readonly CotizacionPedidoService $cotizacion,
         private readonly CreacionPedidoService $creacion,
         private readonly FrasesBot $frases,
         private readonly ModoAutomaticoService $modoAutomatico,
@@ -469,7 +466,7 @@ class ConversacionWhatsappService
      */
     private function anotarPunto(WhatsappSolicitud $solicitud, string $punto, float $lat, float $lng, string $direccion, array &$avisos): bool
     {
-        if (! ZonaServicio::cubrePunto($lat, $lng)) {
+        if (! $this->cotizacion->cubre($lat, $lng)) {
             $avisos[$punto] = $this->frases->decir('fuera_de_cobertura', ['direccion' => $direccion]);
 
             return false;
@@ -500,25 +497,24 @@ class ConversacionWhatsappService
      */
     private function cotizar(WhatsappSolicitud $solicitud): bool
     {
-        $tarifas = $this->tarifas->vigentes();
-
-        if ($tarifas === null) {
-            Log::warning('WhatsApp: la flotilla no tiene tarifas configuradas.');
-
-            return false;
-        }
-
-        $km = $this->rutas->distanciaPorCalleKm(
+        // spec tenant/035, RN-21: el mismo motor que la app de clientes. Los puntos ya pasaron por la
+        // cobertura en `anotarPunto()`, así que aquí no se vuelve a validar.
+        $cotizacion = $this->cotizacion->cotizar(
             ['lat' => (float) $solicitud->recogida_lat, 'lng' => (float) $solicitud->recogida_lng],
             ['lat' => (float) $solicitud->entrega_lat, 'lng' => (float) $solicitud->entrega_lng],
+            validarZona: false,
         );
 
-        if ($km === null) {
+        if ($cotizacion->motivo === CotizacionPedidoService::SIN_TARIFAS) {
+            Log::warning('WhatsApp: la flotilla no tiene tarifas configuradas.');
+        }
+
+        if (! $cotizacion->ok()) {
             return false;
         }
 
-        $solicitud->km = round($km, 1);
-        $solicitud->importe_envio = $this->tarifas->importe($km, $tarifas);
+        $solicitud->km = round((float) $cotizacion->km, 1);
+        $solicitud->importe_envio = $cotizacion->importeEnvio;
 
         return true;
     }
