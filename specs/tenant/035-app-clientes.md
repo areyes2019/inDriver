@@ -6,8 +6,8 @@
 |---|---|
 | ID | SPEC-035 |
 | Módulo | Pedidos / Canal App de clientes |
-| Versión | 1.3 |
-| Estado | Borrador del 2026-11-27 (1.1: ajustes de la revisión técnica; 1.2: código de acceso por correo; 1.3: primero instalar, después registrarse) |
+| Versión | 1.4 |
+| Estado | Borrador del 2026-11-27 (1.1: ajustes de la revisión técnica; 1.2: código de acceso por correo; 1.3: primero instalar, después registrarse; 1.4: el autocompletado se limita a la zona, 2026-11-28) |
 | Depende de | SPEC-005 (multi-tenant), SPEC-006 (pedidos, tarifa y máquina de estados), SPEC-015 (tarifas y saldo, RN-C5), SPEC-016 (geocerca), SPEC-020 (oferta y aceptación), SPEC-021 (live tracking), SPEC-024 (publicación), SPEC-025 (TEST/LIVE), SPEC-026 (cola), SPEC-028 (microservicio GPS), SPEC-031 (pedidos por WhatsApp), SPEC-034 (modo automático) |
 | Plan de implementación | [`035-app-clientes-plan.md`](035-app-clientes-plan.md) |
 
@@ -36,6 +36,12 @@
 | Mapa | Ruta y tiempo estimado en el teléfono, con límites de recálculo y tokens de sesión de Places (RN-43, RN-45, RN-48) |
 | Avisos | Varios dispositivos, aislados por flotilla, se desvinculan al cerrar sesión, se envían después de guardar y sin duplicados (RN-50 a RN-54) |
 | Pedidos | 4 columnas nuevas para contacto de recogida y referencias |
+
+### Cambios de la versión 1.4
+
+| Tema | Cambio |
+|---|---|
+| Autocompletado | **Corrección:** RN-48 decía que los resultados se *orientan* a la zona de servicio, y con eso Google sugería calles de otros estados con el mismo nombre ("López Mateos" en Celaya sugería Tecomán, Colima). Ahora se **limitan** a la zona con tres filtros: rectángulo de las zonas activas, distancia al centro y, para las sugerencias sin distancia, el estado de la zona (RN-48) |
 
 ### Cambios de la versión 1.3
 
@@ -615,10 +621,29 @@ Todos bajo `/api/t/{slug}` con el middleware `tenant.slug`, como el resto del si
   consulta `seguimiento` cada 15 segundos y muestra "Reconectando...". Al reconectar deja de
   consultar. Con la app en segundo plano no consulta.
 - **RN-48.** Autocompletado de direcciones:
-  - Espera 300 ms después de la última tecla y al menos 3 caracteres.
+  - Espera 300 ms después de la última tecla y al menos 3 caracteres, y muestra hasta 5
+    sugerencias.
   - Usa un token de sesión de Places por búsqueda (desde que empieza a escribir hasta que elige),
     para que Google cobre una sesión y no cada tecla.
-  - Limita los resultados a México y los orienta a la zona de servicio de la flotilla.
+  - Limita los resultados a México y **a la zona de servicio** de la flotilla. La zona es el
+    rectángulo que envuelve todas sus zonas `Activo` con polígono (`limites` en
+    `GET /cliente/marca`). Si la flotilla no ha dibujado ninguna, se usa un cuadro de unos 25 km
+    alrededor de su centro (Celaya si tampoco tiene centro).
+  - Google no siempre respeta ese límite, así que la app aplica dos filtros más sobre lo que
+    regresa:
+    1. **Distancia:** a la búsqueda se le pasa el centro de la zona como origen, y Google devuelve
+       la distancia de cada sugerencia sin costo extra. Se descartan las que quedan más lejos que
+       la esquina más lejana del rectángulo más 3 km de holgura.
+    2. **Estado:** Google no manda la distancia de algunas calles. De las sugerencias que sí la
+       traen y caen en la zona, la app toma el estado del texto ("…, Celaya, Gto., México" →
+       "Gto."). Las sugerencias sin distancia solo se muestran si son de un estado ya visto. Lo
+       aprendido dura mientras la zona no cambie. Si todavía no se conoce ningún estado, pasan
+       todas.
+  - Estos filtros solo limpian la lista. Una sugerencia del mismo estado pero de otra ciudad
+    puede colarse si llega sin distancia; elegirla no sirve, porque RN-20 la rechaza con "Por
+    ahora no llegamos a esta dirección".
+  - El buscador de direcciones del Panel usa el mismo código: cuando recibe la zona, aplica los
+    mismos filtros.
   - La llave pública de Google Maps de la app solo funciona en `motopanda.mx/pide/*`.
 
 ### Avisos
