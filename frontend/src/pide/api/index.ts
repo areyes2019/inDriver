@@ -11,5 +11,5 @@ import { apiReal } from './real'
  */
 export const api: ApiCliente = import.meta.env.VITE_PIDE_API === 'real' ? apiReal : apiSimulada
 
-/** El panel "Demo" existe mientras alguna parte siga simulada. */
-export const esPrototipo = true
+/** El panel "Demo" solo con la API simulada: con el servidor real no hay nada que simular. */
+export const esPrototipo = api === apiSimulada

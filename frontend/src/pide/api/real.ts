@@ -95,6 +95,7 @@ interface MarcaApi {
   servicios: { enviar: boolean; recibir: boolean }
   disponible: boolean
   centro: { lat: number; lng: number }
+  limites: Marca['limites']
   horario: string
   abierto_ahora: boolean
 }
@@ -114,6 +115,7 @@ export const apiReal: ApiCliente = {
       servicios: datos.servicios,
       disponible: datos.disponible,
       centro: datos.centro,
+      limites: datos.limites,
       horario: datos.horario,
       abiertoAhora: datos.abierto_ahora,
     }

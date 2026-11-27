@@ -251,6 +251,7 @@ export const apiSimulada: ApiCliente = {
       servicios: { enviar: true, recibir: true },
       disponible: !controlesPrototipo.appApagada,
       centro: CENTRO_CELAYA,
+      limites: null,
       horario: 'Todos los días de 8:00 a 22:00',
       abiertoAhora: !controlesPrototipo.fueraDeHorario,
     }

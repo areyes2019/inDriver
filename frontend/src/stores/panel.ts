@@ -135,6 +135,11 @@ export const usePanelStore = defineStore('panel', () => {
    * (RN-40). `null` solo antes de la primera carga.
    */
   const saldoViajesTenant = ref<number | null>(null)
+  /**
+   * Último viaje que se canceló en vivo (por el cliente desde su app o por el modo automático),
+   * para que el Panel cierre su ficha si la tenía abierta.
+   */
+  const ultimaCancelacion = ref<{ id_pedido: number } | null>(null)
   /** Último conductor que se puso en línea, para que la flotilla saque su aviso (spec tenant/019). */
   const ultimaConexionDeConductor = ref<{
     id_conductor: number
@@ -666,6 +671,8 @@ export const usePanelStore = defineStore('panel', () => {
 
       quitarViaje(payload.id_pedido, 'CANCELADO')
       liberarConductor(payload.id_conductor, payload.saldo_viajes)
+      // Objeto nuevo cada vez: dos cancelaciones del mismo id también disparan el `watch`.
+      ultimaCancelacion.value = { id_pedido: payload.id_pedido }
     },
 
     /** El Panel cerró por una emergencia un viaje En entrega (spec tenant/022, RN-17). */
@@ -796,6 +803,7 @@ export const usePanelStore = defineStore('panel', () => {
     conductoresOrdenados,
     enLinea,
     saldoViajesTenant,
+    ultimaCancelacion,
     ultimaConexionDeConductor,
     estaSaliendo,
     estaResaltado,

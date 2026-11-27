@@ -29,6 +29,13 @@ export interface Coordenada {
   lng: number
 }
 
+export interface Limites {
+  north: number
+  south: number
+  east: number
+  west: number
+}
+
 export interface Punto extends Coordenada {
   direccion: string
 }
@@ -49,6 +56,8 @@ export interface Marca {
   disponible: boolean
   /** Centro de la zona de servicio, para abrir el mapa. */
   centro: Coordenada
+  /** Rectángulo de las zonas activas; `null` si la flotilla no tiene zona dibujada. */
+  limites: Limites | null
   /** Texto corto del horario, para el aviso de "fuera de horario" (RN-29). */
   horario: string
   /** Si en este momento se puede pedir "lo antes posible" (RN-29). */

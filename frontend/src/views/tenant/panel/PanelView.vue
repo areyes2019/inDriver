@@ -66,6 +66,17 @@ watch(viajeSeleccionado, (viaje) => {
   if (viaje) ultimoViajeVisto.value = viaje
 })
 
+// Excepción a RN-26: un viaje que cancela alguien más (el cliente desde su app o el modo
+// automático) ya no tiene nada que atender, así que su ficha se cierra sola.
+watch(
+  () => panel.ultimaCancelacion,
+  (cancelacion) => {
+    if (cancelacion && cancelacion.id_pedido === idViajeSeleccionado.value) {
+      idViajeSeleccionado.value = null
+    }
+  },
+)
+
 // Nueva Entrega y Viajes en turno nunca están abiertos a la vez, y el detalle solo existe con la
 // lista abierta (spec 032, RN-08).
 function alternarNuevaEntrega() {

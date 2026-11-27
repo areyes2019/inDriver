@@ -1,5 +1,6 @@
 <?php
 
+use App\Events\Tenant\PedidoCanceladoSinConductor;
 use App\Events\Tenant\PedidoCreado;
 use App\Models\Tenant;
 use App\Models\Tenant\Cliente;
@@ -328,4 +329,20 @@ it('purges request keys older than 48 hours without touching their orders', func
     tenancy()->initialize($this->tenant);
     expect(ClienteSolicitudPedido::count())->toBe(0)
         ->and(Pedido::withoutGlobalScopes()->count())->toBe(1);
+});
+
+it('tells the Panel the order was cancelled so its card disappears', function () {
+    $id = pedirApp($this, selladaApp($this, solicitudApp()))->assertCreated()->json('id');
+
+    Event::fake([PedidoCanceladoSinConductor::class]);
+
+    $this->withToken($this->token)
+        ->postJson("/api/v1/t/moto-celaya/cliente/pedidos/{$id}/cancelar")
+        ->assertOk();
+
+    Event::assertDispatched(PedidoCanceladoSinConductor::class, function (PedidoCanceladoSinConductor $evento) use ($id) {
+        $carga = $evento->broadcastWith();
+
+        return $carga['id_pedido'] === $id && $carga['estado'] === 'CANCELADO' && $carga['ambiente'] === 'live';
+    });
 });

@@ -198,3 +198,14 @@ it('gives the readable address of a point picked on the map', function () {
 it('requires a client session to quote', function () {
     $this->postJson('/api/v1/t/moto-celaya/cliente/cotizar', cotizacionValida())->assertUnauthorized();
 });
+
+it('sends the active zones rectangle so the address search stays inside it', function () {
+    $this->getJson('/api/v1/t/moto-celaya/cliente/marca')->assertJsonPath('limites', null);
+
+    tenancy()->initialize($this->tenant);
+    zonaCelaya();
+    tenancy()->end();
+
+    $this->getJson('/api/v1/t/moto-celaya/cliente/marca')
+        ->assertJsonPath('limites', ['north' => 20.6, 'south' => 20.45, 'east' => -100.7, 'west' => -100.9]);
+});

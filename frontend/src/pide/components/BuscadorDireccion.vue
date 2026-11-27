@@ -38,8 +38,12 @@ const centro = computed<Coordenada>(
   () => punto.value ?? marca.marca?.centro ?? { lat: 20.5235, lng: -100.8157 },
 )
 
-/** Restringe las sugerencias a ~25 km de la zona de la flotilla. */
+/**
+ * Restringe las sugerencias al rectángulo de las zonas activas. Sin zona dibujada, ~25 km
+ * alrededor del centro.
+ */
 const limites = computed(() => {
+  if (marca.marca?.limites) return marca.marca.limites
   const c = marca.marca?.centro
   if (!c) return null
   return { north: c.lat + 0.25, south: c.lat - 0.25, east: c.lng + 0.25, west: c.lng - 0.25 }

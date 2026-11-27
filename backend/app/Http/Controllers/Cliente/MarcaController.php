@@ -26,6 +26,7 @@ class MarcaController extends Controller
     {
         $tenant = tenant();
         $horario = HorarioAtencion::deLaFlotilla();
+        $limites = ZonaServicio::boundsDeZonasActivas();
 
         return response()->json([
             'slug' => $tenant->slug,
@@ -35,26 +36,27 @@ class MarcaController extends Controller
             'telefono_contacto' => $tenant->telefono,
             'servicios' => ['enviar' => true, 'recibir' => true],
             'disponible' => ConfiguracionTenant::appClientesPrendida(),
-            'centro' => $this->centro(),
+            'centro' => $this->centro($limites),
+            // El rectángulo de las zonas activas: el buscador de direcciones no sugiere nada fuera.
+            'limites' => $limites,
             'horario' => $horario->texto(),
             'abierto_ahora' => $horario->abiertoAhora(),
         ]);
     }
 
     /**
+     * @param  array{north: float, south: float, east: float, west: float}|null  $limites
      * @return array{lat: float, lng: float}
      */
-    private function centro(): array
+    private function centro(?array $limites): array
     {
-        $bounds = ZonaServicio::boundsDeZonasActivas();
-
-        if ($bounds === null) {
+        if ($limites === null) {
             return self::CENTRO_POR_DEFECTO;
         }
 
         return [
-            'lat' => ($bounds['north'] + $bounds['south']) / 2,
-            'lng' => ($bounds['east'] + $bounds['west']) / 2,
+            'lat' => ($limites['north'] + $limites['south']) / 2,
+            'lng' => ($limites['east'] + $limites['west']) / 2,
         ];
     }
 }
