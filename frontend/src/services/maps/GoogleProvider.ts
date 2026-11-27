@@ -1,6 +1,7 @@
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader'
 import BaseProvider from './BaseProvider'
 import { ALTO_GLOBO, ANCHO_GLOBO, urlGlobo } from './globoConductor'
+import { estadoDeSugerencia } from './sugerencias'
 import {
   iniciarMovimiento,
   planearMovimiento,
@@ -495,18 +496,55 @@ export default class GoogleProvider extends BaseProvider {
           : {}),
       })
 
-    this.suggestionCache.clear()
-    const results: AddressSuggestion[] = []
+    const clave = bounds ? `${bounds.north},${bounds.south},${bounds.east},${bounds.west}` : ''
+    if (clave !== this.estadosDeZona.clave) {
+      this.estadosDeZona = { clave, estados: new Set() }
+    }
+
+    // Primero las que traen distancia: se quedan si caen en la zona, y de ellas se aprende en qué
+    // estado está la zona ("Gto."). Google no manda la distancia de algunas calles; esas solo pasan
+    // si son del mismo estado (así se colaba "México 45, Saláices, Chih." en Celaya).
+    const enZona: google.maps.places.PlacePrediction[] = []
+    const sinDistancia: google.maps.places.PlacePrediction[] = []
     for (const suggestion of suggestions) {
       const prediction = suggestion.placePrediction
       if (!prediction) continue
       const distancia = prediction.distanceMeters
-      if (radioMaximo !== null && typeof distancia === 'number' && distancia > radioMaximo) continue
+      if (radioMaximo === null) {
+        enZona.push(prediction)
+      } else if (typeof distancia === 'number') {
+        if (distancia > radioMaximo) continue
+        enZona.push(prediction)
+        const estado = estadoDeSugerencia(prediction.text.text)
+        if (estado) this.estadosDeZona.estados.add(estado)
+      } else {
+        sinDistancia.push(prediction)
+      }
+    }
+
+    const estados = this.estadosDeZona.estados
+    const aceptadas = new Set([
+      ...enZona,
+      ...sinDistancia.filter((prediction) => {
+        const estado = estadoDeSugerencia(prediction.text.text)
+        return estados.size === 0 || estado === null || estados.has(estado)
+      }),
+    ])
+
+    this.suggestionCache.clear()
+    const results: AddressSuggestion[] = []
+    // En el orden en que Google las mandó.
+    for (const suggestion of suggestions) {
+      const prediction = suggestion.placePrediction
+      if (!prediction || !aceptadas.has(prediction)) continue
       this.suggestionCache.set(prediction.placeId, prediction)
       results.push({ id: prediction.placeId, label: prediction.text.text })
     }
     return results
   }
+
+  /** Estados en los que cae la zona de búsqueda actual, aprendidos de las sugerencias con distancia. */
+  private estadosDeZona: { clave: string; estados: Set<string> } = { clave: '', estados: new Set() }
 
   async resolveAddress(suggestionId: string): Promise<ResolvedAddress | null> {
     const prediction = this.suggestionCache.get(suggestionId)
