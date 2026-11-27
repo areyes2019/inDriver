@@ -60,6 +60,9 @@ const form = reactive({
 const saldoTenant = ref<number | null>(null)
 // spec tenant/035, D17.
 const appClientes = ref(false)
+// spec tenant/035, RN-60 y RN-61: `null` si la flotilla usa los de MotoPanda.
+const appLogoUrl = ref<string | null>(null)
+const appBannerUrl = ref<string | null>(null)
 const valorOriginalUsarDespachadores = ref<'Sí' | 'No'>('No')
 const mostrarConfirmDesactivarDespachadores = ref(false)
 const fieldErrors = reactive<Record<string, string>>({})
@@ -84,6 +87,8 @@ async function fetchConfiguracion() {
     valorOriginalUsarDespachadores.value = form.usar_despachadores
     saldoTenant.value = data.saldo_viajes_tenant ?? null
     appClientes.value = data.app_clientes === 'Si'
+    appLogoUrl.value = data.app_logo_url ?? null
+    appBannerUrl.value = data.app_banner_url ?? null
   } catch {
     errorConfig.value = 'No se pudo cargar la configuración.'
   } finally {
@@ -727,7 +732,13 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <AppClientesConfig v-else-if="pestanaActiva === 'app'" v-model="appClientes" :slug="slug" />
+        <AppClientesConfig
+          v-else-if="pestanaActiva === 'app'"
+          v-model="appClientes"
+          v-model:logo-url="appLogoUrl"
+          v-model:banner-url="appBannerUrl"
+          :slug="slug"
+        />
 
         <div v-else>
           <CambiarPasswordForm :slug="slug" />

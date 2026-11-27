@@ -8,14 +8,16 @@ use App\Http\Controllers\Controller;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\ZonaServicio;
 use App\Support\HorarioAtencion;
+use App\Support\MarcaFlotilla;
 use Illuminate\Http\JsonResponse;
 
 /**
  * Lo que la app necesita antes de entrar (spec tenant/035, sección 8): nombre, contacto y si la app
  * está prendida. Es pública.
  *
- * Logo, banner y servicios por flotilla llegan en la Fase 8; mientras tanto van los valores por
- * defecto de la spec (sin logo ni banner, los dos servicios). El horario sale de `HorarioAtencion`.
+ * Logo y banner los sube la flotilla desde la Configuración (`MarcaFlotilla`); sin ellos van en
+ * nulo y la app usa los de MotoPanda (D16). Los servicios por flotilla siguen con el valor por
+ * defecto de la spec (los dos). El horario sale de `HorarioAtencion`.
  */
 class MarcaController extends Controller
 {
@@ -31,8 +33,8 @@ class MarcaController extends Controller
         return response()->json([
             'slug' => $tenant->slug,
             'nombre' => $tenant->nombre_comercial,
-            'logo_url' => null,
-            'banner_url' => null,
+            'logo_url' => MarcaFlotilla::logoUrl(),
+            'banner_url' => MarcaFlotilla::bannerUrl(),
             'telefono_contacto' => $tenant->telefono,
             'servicios' => ['enviar' => true, 'recibir' => true],
             'disponible' => ConfiguracionTenant::appClientesPrendida(),

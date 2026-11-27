@@ -11,6 +11,7 @@ use App\Http\Controllers\Cliente\AccesoController as ClienteAccesoController;
 use App\Http\Controllers\Cliente\CotizacionController as ClienteCotizacionController;
 use App\Http\Controllers\Cliente\DireccionController as ClienteDireccionController;
 use App\Http\Controllers\Cliente\ManifiestoController as ClienteManifiestoController;
+use App\Http\Controllers\Cliente\MarcaArchivoController as ClienteMarcaArchivoController;
 use App\Http\Controllers\Cliente\MarcaController as ClienteMarcaController;
 use App\Http\Controllers\Cliente\PedidoController as ClientePedidoController;
 use App\Http\Controllers\Cliente\PerfilController as ClientePerfilController;
@@ -30,6 +31,7 @@ use App\Http\Controllers\Tenant\ConductorController;
 use App\Http\Controllers\Tenant\ConfiguracionController;
 use App\Http\Controllers\Tenant\DespachadorController;
 use App\Http\Controllers\Tenant\DireccionClienteController;
+use App\Http\Controllers\Tenant\MarcaAppController;
 use App\Http\Controllers\Tenant\PedidoController;
 use App\Http\Controllers\Tenant\SaldoConductorController;
 use App\Http\Controllers\Tenant\UsuarioController;
@@ -171,6 +173,11 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::put('/configuracion/modo-automatico', [ConfiguracionController::class, 'modoAutomatico']);
             // spec tenant/035, D17: la app de clientes, solo AdminCliente.
             Route::put('/configuracion/app-clientes', [ConfiguracionController::class, 'appClientes']);
+            // spec tenant/035, RN-60 y RN-61: logo y banner de la app de clientes.
+            Route::post('/configuracion/app-clientes/logo', [MarcaAppController::class, 'subirLogo']);
+            Route::delete('/configuracion/app-clientes/logo', [MarcaAppController::class, 'quitarLogo']);
+            Route::post('/configuracion/app-clientes/banner', [MarcaAppController::class, 'subirBanner']);
+            Route::delete('/configuracion/app-clientes/banner', [MarcaAppController::class, 'quitarBanner']);
             Route::get('/zonas-cobertura', [ZonaCoberturaController::class, 'index']);
             Route::post('/zonas-cobertura', [ZonaCoberturaController::class, 'store']);
             Route::get('/zonas-cobertura/{zona}', [ZonaCoberturaController::class, 'show']);
@@ -205,6 +212,9 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
     // App de clientes (spec tenant/035). Token propio (`cliente-token`), nunca la sesión del Panel.
     Route::prefix('cliente')->group(function () {
         Route::get('/marca', [ClienteMarcaController::class, 'show'])->middleware('throttle:cliente-publico');
+        Route::get('/marca/archivos/{archivo}', [ClienteMarcaArchivoController::class, 'show'])
+            ->middleware('throttle:cliente-marca')
+            ->name('cliente.marca.archivo');
         Route::get('/manifest.webmanifest', [ClienteManifiestoController::class, 'show'])->middleware('throttle:cliente-publico');
         Route::post('/codigo', [ClienteAccesoController::class, 'codigo'])->middleware('throttle:cliente-publico');
         Route::post('/verificar', [ClienteAccesoController::class, 'verificar'])->middleware('throttle:cliente-publico');

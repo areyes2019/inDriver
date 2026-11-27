@@ -47,6 +47,14 @@ class ConfiguracionTenant extends Model
     /** Minutos de la ventana de un pedido programado desde la app (RN-28): 15 a 240, 60 por defecto. */
     public const VENTANA_PROGRAMADO_MIN = 'ventana_programado_min';
 
+    /**
+     * Logo y banner de la app de clientes (spec tenant/035, RN-60 y RN-61): la marca de versión de
+     * los archivos guardados por `App\Support\MarcaFlotilla`. Sin fijar, la app usa los de MotoPanda.
+     */
+    public const APP_LOGO = 'app_logo';
+
+    public const APP_BANNER = 'app_banner';
+
     public static function appClientesPrendida(): bool
     {
         return static::obtener(self::APP_CLIENTES, 'No') === 'Si';

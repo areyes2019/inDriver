@@ -10,6 +10,7 @@ use App\Models\Tenant\AutomaticoBitacora;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
 use App\Services\ModoAutomaticoService;
+use App\Support\MarcaFlotilla;
 use App\Support\SaldoViajesTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -131,6 +132,8 @@ class ConfiguracionController extends Controller
             'saldo_viajes_tenant' => SaldoViajesTenant::actualONull(),
             'modo_automatico' => ConfiguracionTenant::obtener(ConfiguracionTenant::MODO_AUTOMATICO, ModoAutomaticoService::NO),
             'app_clientes' => ConfiguracionTenant::obtener(ConfiguracionTenant::APP_CLIENTES, 'No'),
+            'app_logo_url' => MarcaFlotilla::logoUrl(),
+            'app_banner_url' => MarcaFlotilla::bannerUrl(),
         ];
     }
 

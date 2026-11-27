@@ -79,6 +79,12 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(30)->by($request->ip());
         });
 
+        // Logo, banner e íconos de la app de clientes: se piden en cada apertura de la app y varios
+        // clientes pueden compartir IP (datos móviles). El navegador los cachea un año.
+        RateLimiter::for('cliente-marca', function (Request $request) {
+            return Limit::perMinute(300)->by($request->ip());
+        });
+
         // Dirección de un punto y cotización: cada una es una consulta pagada a Google (RN-48).
         RateLimiter::for('cliente-google', function (Request $request) {
             return Limit::perMinute(20)->by('cliente-google:'.($request->user('cliente-token')?->id_cliente ?? $request->ip()));
