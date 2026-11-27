@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import UiToggle from '@/components/ui/UiToggle.vue'
-import { useAmbienteStore } from '@/stores/ambiente'
 import { useModoAutomaticoStore, type EntradaBitacora } from '@/stores/modoAutomatico'
 
 /**
- * Botón "Automático" del pie del menú lateral (spec tenant/034), junto al interruptor de ambiente.
+ * Botón "Automático" del pie del menú lateral (spec tenant/034).
  * Abre un diálogo con el interruptor y la bitácora de lo que hizo el sistema.
  *
  * Solo el AdminCliente mueve el interruptor (D2); el Despachador ve el estado y la bitácora.
@@ -20,7 +19,6 @@ const props = withDefaults(
 )
 
 const modo = useModoAutomaticoStore()
-const ambientes = useAmbienteStore()
 
 const abierto = ref(false)
 const error = ref('')
@@ -127,13 +125,6 @@ function hora(iso: string | null): string {
         >
           Se pausó solo porque se cancelaron 5 envíos en una hora por falta de repartidor.
           <template v-if="editable">Revisa qué pasó y vuelve a prenderlo.</template>
-        </p>
-        <p
-          v-if="ambientes.esTest && (modo.prendido || modo.pausado)"
-          class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900"
-          role="status"
-        >
-          En modo prueba no hace nada. Solo actúa con la flotilla en producción.
         </p>
         <p v-if="error" role="alert" class="mt-3 text-sm text-red-600">{{ error }}</p>
 

@@ -2,7 +2,6 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import http from '@/lib/http'
 import realtimeService, { type EstadoConexion } from '@/services/realtime'
-import { useAmbienteStore } from '@/stores/ambiente'
 import type { EstiloRuta, LatLngLike } from '@/services/maps/types'
 
 /**
@@ -56,7 +55,6 @@ export interface ViajeEnTurno {
   tarifa_regreso?: string | number | null
   id_conductor: number | null
   conductor_nombre: string | null
-  ambiente?: string | null
 }
 
 /** Qué línea toca dibujar, ya decidido por el servidor (spec tenant/026, RN-13). */
@@ -97,7 +95,6 @@ export interface ConductorActivo {
 
 interface EventoBase {
   event_id?: string
-  ambiente?: string | null
 }
 
 /** RN-12: los disparos de reconciliación se agrupan en esta ventana. */
@@ -116,8 +113,6 @@ const EVENTOS_RECORDADOS = 200
 const REINTENTOS_MS = [2_000, 4_000, 8_000, 16_000, 30_000]
 
 export const usePanelStore = defineStore('panel', () => {
-  const ambientes = useAmbienteStore()
-
   const viajes = ref(new Map<number, ViajeEnTurno>())
   const conductores = ref(new Map<number, ConductorActivo>())
   const conexion = ref<EstadoConexion>('conectando')
@@ -302,7 +297,7 @@ export const usePanelStore = defineStore('panel', () => {
    * —un evento sobre una fila que debería existir— pero en el evento de mayor frecuencia del
    * sistema, así que no puede pedir una reconciliación cada vez: una posición que llega cada 15 s
    * dispararía una petición cada 15 s, para siempre, cuando el conductor legítimamente no es de
-   * este Panel (otro ambiente, o ya salió de turno). Se pregunta **una vez** por conductor; si la
+   * este Panel (ya salió de turno). Se pregunta **una vez** por conductor; si la
    * reconciliación no lo trae, es que no es nuestro y se deja de preguntar.
    */
   function preguntarPorConductorDesconocido(idConductor: number) {
@@ -439,16 +434,8 @@ export const usePanelStore = defineStore('panel', () => {
     return false
   }
 
-  /**
-   * RN-28: un envío TEST no se cuela en un Panel LIVE ni al revés. El canal es por tenant, no por
-   * ambiente, así que el filtro que en las peticiones hace `AmbienteScope` aquí lo hace esto.
-   */
-  function esDeOtroAmbiente(evento: EventoBase): boolean {
-    return typeof evento.ambiente === 'string' && evento.ambiente !== ambientes.ambiente
-  }
-
   function ignorar(evento: EventoBase): boolean {
-    return yaProcesado(evento) || esDeOtroAmbiente(evento)
+    return yaProcesado(evento)
   }
 
   function resaltar(clave: string) {
@@ -755,9 +742,8 @@ export const usePanelStore = defineStore('panel', () => {
     },
 
     /**
-     * spec tenant/027 §12: un envío LIVE entregado consumió un viaje del tenant, o ADMIN_CENTRAL
-     * acreditó un paquete. No trae `ambiente` a propósito —el saldo es del tenant, no del
-     * ambiente— así que `ignorar()` solo lo descarta por `event_id` (RN-41).
+     * spec tenant/027 §12: un envío entregado consumió un viaje del tenant, o ADMIN_CENTRAL
+     * acreditó un paquete. `ignorar()` lo descarta por `event_id` (RN-41).
      */
     'saldo-tenant.cambiado': (payload: EventoBase & { saldo_viajes_tenant?: number | null }) => {
       if (ignorar(payload)) return

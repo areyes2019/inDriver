@@ -50,11 +50,9 @@ class PedidoDisponible implements ShouldBroadcastNow
      * La forma que consume panda_express, más los campos que el Panel necesita para insertar la
      * fila sin recargar (spec tenant/027, RN-05 y RN-28).
      *
-     * `PedidoResource` de la app no trae agenda ni ambiente, y el Panel usa los tres: sin
-     * `lo_antes_posible` y `hora_desde` la fila se pinta sin fecha y se ordena mal (RN-03), y sin
-     * `ambiente` un envío TEST se cuela en un Panel LIVE, porque el canal es por tenant y el filtro
-     * de ambiente lo hace el navegador con este campo. La app ignora lo que no conoce (spec
-     * tenant/018, RN-09).
+     * `PedidoResource` de la app no trae agenda, y el Panel la usa: sin `lo_antes_posible` y
+     * `hora_desde` la fila se pinta sin fecha y se ordena mal (RN-03). La app ignora lo que no
+     * conoce (spec tenant/018, RN-09).
      *
      * @return array<string, mixed>
      */
@@ -69,7 +67,6 @@ class PedidoDisponible implements ShouldBroadcastNow
                 'lo_antes_posible',
                 'id_conductor',
                 'conductor_nombre',
-                'ambiente',
             ]),
             'event_id' => $this->eventId,
         ];

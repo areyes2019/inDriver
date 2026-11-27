@@ -217,22 +217,6 @@ it('does not generate a comision under Prepago even with a percentage configured
         ->and($pedido->fresh()->prepago_descontado)->toBeTrue();
 });
 
-it('generates the comision for TEST pedidos as well', function () {
-    $tenant = comisionTenant();
-    comisionAdmin($tenant);
-    $conductor = comisionConductor();
-
-    $pedido = comisionPedido(['id_conductor' => $conductor->id_conductor]);
-    $pedido->ambiente = Pedido::AMBIENTE_TEST;
-    $pedido->save();
-
-    comisionEntregar($pedido);
-
-    expect(ComisionConductor::where('id_pedido', $pedido->id_pedido)->count())->toBe(1)
-        // El consumo del tenant sí respeta su excepción de TEST (spec tenant/025): no se toca.
-        ->and(ConsumoViajeTenant::count())->toBe(0);
-});
-
 it('does not generate a comision when the pedido is cancelled or closed by incident', function (string $estado, string $cierre) {
     $tenant = comisionTenant();
     comisionAdmin($tenant);

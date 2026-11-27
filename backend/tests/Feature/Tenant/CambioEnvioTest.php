@@ -21,7 +21,6 @@ use App\Models\Tenant\Pedido;
 use App\Models\Tenant\PedidoCambio;
 use App\Models\Tenant\PedidoCotizacion;
 use App\Models\Tenant\PedidoOferta;
-use App\Models\Tenant\SimulacionEnvio;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\VentaViajeConductor;
 use App\Models\Tenant\ZonaServicio;
@@ -364,29 +363,6 @@ it('does not offer a returned pedido again to the conductor who cancelled it', f
     app(OfertaPedidoService::class)->ofertar(Pedido::find($pedido->id_pedido));
 
     expect(PedidoOferta::where('id_conductor', $idConductor)->value('estado'))->toBe('PENDIENTE');
-    tenancy()->end();
-});
-
-it('clears the simulated leg of a returned pedido so that the next conductor gets a new one', function () {
-    Event::fake([PedidoDevuelto::class, PedidoDisponible::class]);
-    Bus::fake([ExpirarOfertaPedido::class]);
-
-    $tenant = cambioTenant();
-    $datos = cambioConductor($tenant);
-    tenancy()->initialize($tenant);
-    $pedido = cambioPedido(['estado' => 'TOMADO', 'id_conductor' => $datos['conductor']->id_conductor, 'ambiente' => 'TEST']);
-    SimulacionEnvio::create([
-        'id_pedido' => $pedido->id_pedido, 'tramo' => SimulacionEnvio::TRAMO_ACERCAMIENTO, 'ruta' => [],
-        'distancia_m' => 100, 'iniciada_en' => now(), 'avanzada_hasta_m' => 0,
-    ]);
-    tenancy()->end();
-
-    $this->withToken(cambioToken())
-        ->postJson("/api/v1/t/cafe-luna/conductor/pedidos/{$pedido->id_pedido}/cancelar")
-        ->assertOk();
-
-    tenancy()->initialize($tenant);
-    expect(SimulacionEnvio::where('id_pedido', $pedido->id_pedido)->exists())->toBeFalse();
     tenancy()->end();
 });
 

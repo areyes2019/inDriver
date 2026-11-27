@@ -23,8 +23,7 @@ use Illuminate\Support\Str;
  * en `Pedido::$avisosDiferidos`. Aquí sale desde la misma clausura que inserta la fila. Y la
  * acreditación central no tiene ningún evento de pedido al que subirse.
  *
- * No lleva `ambiente`: el saldo es del tenant, no del ambiente (spec tenant/025, enmienda), y sin
- * el campo el Panel no lo descarta por RN-28. No es crítico (spec tenant/018, RN-04): sin push.
+ * No es crítico (spec tenant/018, RN-04): sin push.
  */
 class SaldoTenantCambiado implements ShouldBroadcastNow
 {

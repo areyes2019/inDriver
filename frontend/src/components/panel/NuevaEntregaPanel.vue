@@ -262,7 +262,7 @@ async function onSubmit() {
 
 <template>
   <aside
-    class="fixed left-(--riel-ocupado) top-(--alto-banda) z-[35] flex h-[calc(100vh-var(--alto-banda))] w-[45%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
+    class="fixed left-(--riel-ocupado) top-0 z-[35] flex h-screen w-[45%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
     :class="abierto ? 'translate-x-0' : '-translate-x-[calc(100%+var(--riel-ocupado))]'"
     :inert="!abierto"
     @keydown="onKeydown"

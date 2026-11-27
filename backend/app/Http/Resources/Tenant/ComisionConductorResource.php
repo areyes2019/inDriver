@@ -11,9 +11,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * Un viaje con su comisión, tal como lo lista el detalle por conductor (spec tenant/030).
  *
- * `pedido` viene cargado con `withoutGlobalScopes()` por el controlador: las comisiones no
- * distinguen ambiente, y desde el Panel `AmbienteScope` dejaría sin número de pedido a los viajes
- * del otro ambiente.
+ * `pedido` viene cargado con `withoutGlobalScopes()` por el controlador: sin eso,
+ * `OcultarEnviosDePrueba` dejaría sin número de pedido a las comisiones de los envíos de prueba
+ * antiguos.
  *
  * @mixin ComisionConductor
  */

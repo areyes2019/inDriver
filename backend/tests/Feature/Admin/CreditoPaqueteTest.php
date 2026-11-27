@@ -58,12 +58,10 @@ it('credits the tenant and tells its panel the resulting balance', function () {
         ->and(SaldoViajesTenant::actual())->toBe(100);
     tenancy()->end();
 
-    // El saldo resultante, no el delta (RN-39), y sin `ambiente`: el Panel nunca lo descarta por
-    // RN-28 aunque esté parado en TEST.
+    // El saldo resultante, no el delta (RN-39).
     expect($cargas)->toHaveCount(1)
         ->and($cargas[0]['saldo_viajes_tenant'])->toBe(100)
         ->and($cargas[0]['motivo'])->toBe('acreditacion')
         ->and($cargas[0]['id_pedido'])->toBeNull()
-        ->and($cargas[0]['slug'])->toBe('cafe-luna')
-        ->and($cargas[0])->not->toHaveKey('ambiente');
+        ->and($cargas[0]['slug'])->toBe('cafe-luna');
 });

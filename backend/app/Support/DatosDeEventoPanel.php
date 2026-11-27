@@ -16,28 +16,22 @@ use App\Models\Tenant\Pedido;
  * completa —tres componentes a la vez, contra un limitador de 20 peticiones por minuto—. Ahora la
  * carga trae la fila ya resuelta y el Panel la aplica en memoria; este es el único lugar que la
  * arma, para que el evento y el endpoint no puedan discrepar.
- *
- * Todas las consultas van `withoutGlobalScopes()` a propósito: un evento nace lo mismo en una
- * petición del Panel —donde `AmbienteScope` está encendido— que en una de la app del conductor,
- * donde no lo está (spec tenant/025). Sin quitarlo, el mismo evento tendría carga completa o vacía
- * según quién lo disparó. El filtrado por ambiente lo hace el Panel con el campo `ambiente` que
- * viaja en la propia carga (027, RN-28).
  */
 class DatosDeEventoPanel
 {
     /**
-     * El pedido, sin el filtro de ambiente. `null` si ya no existe.
+     * El pedido. `null` si ya no existe (o es un envío de prueba antiguo, que nadie ve).
      */
     public static function pedido(int $idPedido): ?Pedido
     {
-        return Pedido::withoutGlobalScopes()
+        return Pedido::query()
             ->with('conductor.usuario')
             ->find($idPedido);
     }
 
     /**
      * Lo que una fila de "Viajes en turno" necesita para actualizarse: estado, a quién quedó
-     * asignada, su línea en el mapa y el ambiente al que pertenece.
+     * asignada y su línea en el mapa.
      *
      * @return array<string, mixed>
      */
@@ -52,7 +46,6 @@ class DatosDeEventoPanel
         return [
             'estado' => $pedido->estado,
             'tarifa_regreso' => $pedido->tarifa_regreso,
-            'ambiente' => $pedido->ambiente,
             'id_conductor' => $pedido->id_conductor,
             'conductor_nombre' => $pedido->conductor?->usuario !== null
                 ? trim("{$pedido->conductor->usuario->nombre} {$pedido->conductor->usuario->apellido_paterno}")

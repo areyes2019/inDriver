@@ -24,7 +24,7 @@ const clasePestana =
 
 <template>
   <div
-    class="fixed right-(--ancho-panel-derecho) top-[calc(var(--alto-banda)+0.75rem)] z-30 flex flex-col gap-2 transition-[right] duration-[400ms] ease-in-out"
+    class="fixed right-(--ancho-panel-derecho) top-3 z-30 flex flex-col gap-2 transition-[right] duration-[400ms] ease-in-out"
   >
     <button
       type="button"

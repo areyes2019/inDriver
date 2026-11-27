@@ -17,9 +17,8 @@ use Illuminate\Support\Facades\Log;
  * Configuración, la validación de venta, el `meta` del Panel y el evento `saldo-tenant.cambiado`
  * (spec tenant/027 §12), para que ninguna pantalla pueda decir un número distinto.
  *
- * Puede ser negativo: nada se bloquea por saldo (RN-C5). Y no depende del ambiente: los envíos
- * TEST nunca escriben en `consumos_viajes_tenant` (spec tenant/025, enmienda), así que la cuenta
- * sale igual desde un Panel en TEST, en LIVE o desde el contexto de ADMIN_CENTRAL.
+ * Puede ser negativo: nada se bloquea por saldo (RN-C5). Los envíos de prueba antiguos nunca
+ * escribieron en `consumos_viajes_tenant`, así que no cuentan.
  */
 class SaldoViajesTenant
 {

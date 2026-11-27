@@ -37,23 +37,9 @@ class UbicacionController extends Controller
         // En línea pero sin envío: RN-01 se respeta —no se guarda historia ni se difunde al
         // Panel—, pero sí se recuerda dónde quedó. Antes esto respondía 422 DELIVERY_NOT_ACTIVE y
         // la posición se tiraba, con lo que un conductor que nunca había hecho un envío no tenía
-        // ninguna: en TEST eso dejaba el tramo de acercamiento en cero metros (spec tenant/025,
-        // RN-08) y el conductor se veía estático en el mapa del Panel todo el viaje.
+        // ninguna.
         if ($activo === null) {
             $this->tracking->registrarPosicionSinEnvio($conductor, (float) $data['latitud'], (float) $data['longitud']);
-
-            return response()->json(status: 204);
-        }
-
-        // spec tenant/025, RN-11: en un envío TEST manda el simulador. El teléfono sigue mandando
-        // su GPS aunque el conductor esté sentado en su casa, y dos fuentes escribiendo la misma
-        // posición se pisan. Esta es la única diferencia entre TEST y LIVE en todo el tracking: el
-        // simulador escribe por el mismo `registrarPosicion()` de siempre.
-        if ($activo->esTest()) {
-            // Se descarta la posición, no al conductor: sin este latido el teléfono dejaría de dar
-            // señales de vida y `conductor:apagar-inactivos` lo apagaría a los 10 minutos, en mitad
-            // del envío simulado.
-            $this->tracking->registrarLatido($conductor);
 
             return response()->json(status: 204);
         }
@@ -74,15 +60,6 @@ class UbicacionController extends Controller
 
         if ($pedido->id_conductor !== $conductor->id_conductor) {
             abort(403, 'Este pedido no te pertenece.');
-        }
-
-        // La otra puerta del GPS real (spec tenant/025, RN-11): el respaldo acumulado sin conexión
-        // se descarta igual que el flujo normal, o al reconectar sobreescribiría el recorrido
-        // simulado con las calles por donde anduvo el teléfono de verdad.
-        if ($pedido->esTest()) {
-            $this->tracking->registrarLatido($conductor);
-
-            return response()->json(status: 204);
         }
 
         $data = $request->validate([

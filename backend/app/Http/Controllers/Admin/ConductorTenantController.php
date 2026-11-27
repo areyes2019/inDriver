@@ -43,7 +43,7 @@ class ConductorTenantController extends Controller
             $conductores = Conductor::query()
                 ->with(['usuario', 'vehiculo'])
                 ->withSum('ventasViajes as viajes_vendidos', 'cantidad_viajes')
-                ->withCount(['pedidos as viajes_consumidos' => fn ($q) => $q->where('prepago_descontado', true)])
+                ->withCount(['pedidosParaSaldo as viajes_consumidos' => fn ($q) => $q->where('prepago_descontado', true)])
                 ->orderBy('id_conductor')
                 ->get();
 

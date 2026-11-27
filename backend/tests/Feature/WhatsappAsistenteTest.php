@@ -388,16 +388,6 @@ it('cancelar descarta la hoja y el siguiente mensaje empieza de cero', function 
         ->and(Pedido::withoutGlobalScopes()->count())->toBe(0);
 });
 
-it('con la flotilla en TEST no crea el pedido y lo avisa', function () {
-    ConfiguracionTenant::establecer(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_TEST);
-    Cliente::create(['nombre' => 'Abdias', 'telefono' => '4613581090', 'estado' => 'Activo']);
-    iaDevuelve(pedidoCompleto());
-    clienteEscribe($this->conversacion, ['texto' => 'Todo el pedido']);
-
-    expect(pulsa($this->conversacion, 'confirmar')->texto)->toContain('no estamos tomando envíos')
-        ->and(Pedido::withoutGlobalScopes()->count())->toBe(0);
-});
-
 it('un cliente inactivo no puede pedir', function () {
     Cliente::create(['nombre' => 'Abdias', 'telefono' => '4613581090', 'estado' => 'Inactivo']);
 
@@ -510,17 +500,6 @@ it('con el modo automático, pedir una persona no calla al bot y lo anota en la 
     $entrada = AutomaticoBitacora::sole();
     expect($entrada->accion)->toBe('PERSONA')
         ->and($entrada->detalle)->toContain('5214613581090');
-});
-
-it('con el modo automático pero la flotilla en TEST, pedir una persona calla al bot como siempre', function () {
-    ConfiguracionTenant::establecer(ConfiguracionTenant::MODO_AUTOMATICO, 'Si');
-    ConfiguracionTenant::establecer(ConfiguracionTenant::AMBIENTE, 'test');
-    iaDevuelve(['intencion' => 'hablar_con_persona']);
-
-    clienteEscribe($this->conversacion, ['texto' => 'quiero hablar con alguien']);
-
-    expect($this->conversacion->fresh()->botPausado())->toBeTrue()
-        ->and(AutomaticoBitacora::count())->toBe(0);
 });
 
 it('con el bot pausado no contesta, pero BAJA sí', function () {

@@ -27,7 +27,7 @@ class SaldoViajes
     public static function para(Conductor $conductor): int
     {
         $vendidos = VentaViajeConductor::where('id_conductor', $conductor->id_conductor)->sum('cantidad_viajes');
-        $consumidos = $conductor->pedidos()->where('prepago_descontado', true)->count();
+        $consumidos = $conductor->pedidosParaSaldo()->where('prepago_descontado', true)->count();
 
         return (int) $vendidos - $consumidos;
     }

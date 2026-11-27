@@ -187,19 +187,6 @@ it('never finds another client key', function () {
         ->assertJsonPath('motivo', 'SELLO_INVALIDO');
 });
 
-it('does not create orders while the fleet is in TEST (D19, criterio 13)', function () {
-    $cuerpo = selladaApp($this, solicitudApp());
-
-    tenancy()->initialize($this->tenant);
-    ConfiguracionTenant::establecer(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_TEST);
-    tenancy()->end();
-
-    pedirApp($this, $cuerpo)->assertUnprocessable()->assertJsonPath('motivo', 'SIN_SERVICIO');
-
-    tenancy()->initialize($this->tenant);
-    expect(Pedido::withoutGlobalScopes()->count())->toBe(0);
-});
-
 it('rejects a seal that does not match the order data (RN-24)', function () {
     $cuerpo = selladaApp($this, solicitudApp());
 
@@ -343,6 +330,6 @@ it('tells the Panel the order was cancelled so its card disappears', function ()
     Event::assertDispatched(PedidoCanceladoSinConductor::class, function (PedidoCanceladoSinConductor $evento) use ($id) {
         $carga = $evento->broadcastWith();
 
-        return $carga['id_pedido'] === $id && $carga['estado'] === 'CANCELADO' && $carga['ambiente'] === 'live';
+        return $carga['id_pedido'] === $id && $carga['estado'] === 'CANCELADO';
     });
 });

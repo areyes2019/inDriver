@@ -8,7 +8,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Cliente\PedidoAppResource;
 use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\Cliente;
-use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
 use App\Services\Cliente\CotizacionApp;
 use App\Services\Cliente\SelloCotizacion;
@@ -90,8 +89,8 @@ class PedidoController extends Controller
     /**
      * `POST /cliente/pedidos` con el encabezado `Idempotency-Key` (RN-24, RN-30, RN-31, RN-34).
      *
-     * Errores con `motivo`: `OTROS_DATOS` (422), `PROCESANDO` (409), `SIN_SERVICIO` (la flotilla
-     * está en TEST, D19), `FUERA_DE_HORARIO`, `SELLO_INVALIDO`, `DATOS_DISTINTOS`, `FUERA_DE_ZONA`,
+     * Errores con `motivo`: `OTROS_DATOS` (422), `PROCESANDO` (409), `FUERA_DE_HORARIO`,
+     * `SELLO_INVALIDO`, `DATOS_DISTINTOS`, `FUERA_DE_ZONA`,
      * `LIMITE` (429) y `SELLO_VENCIDO` (409, con la cotización nueva).
      */
     public function store(Request $request): JsonResponse
@@ -209,10 +208,6 @@ class PedidoController extends Controller
      */
     private function motivoParaNoCrear(Cliente $cliente, array $datos): ?JsonResponse
     {
-        if (ConfiguracionTenant::obtener(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_LIVE) === Pedido::AMBIENTE_TEST) {
-            return response()->json(['motivo' => 'SIN_SERVICIO'], 422);
-        }
-
         if ($motivo = $this->cotizacionApp->motivoDeHorario($datos)) {
             return response()->json(['motivo' => $motivo], 422);
         }

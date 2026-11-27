@@ -12,13 +12,13 @@ use App\Events\Tenant\PedidoEntregado;
 use App\Events\Tenant\PedidoEstadoCambiado;
 use App\Events\Tenant\PedidoYaTomado;
 use App\Events\Tenant\SaldoTenantCambiado;
+use App\Models\Scopes\OcultarEnviosDePrueba;
 use App\Models\Tenant\ComisionConductor;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConductorPosicion;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\ConsumoViajeTenant;
 use App\Models\Tenant\Pedido;
-use App\Models\Tenant\SimulacionEnvio;
 use App\Models\Tenant\VentaViajeConductor;
 use App\Services\Gps\BuzonGps;
 use Illuminate\Support\Facades\DB;
@@ -170,8 +170,6 @@ class PedidoEstadoService
             $this->consumirViajeDelTenant($pedido);
         }
 
-        $this->abrirTramoSimulado($pedido, $nuevoEstado);
-
         $this->avisarServicioGps($pedido, $nuevoEstado);
 
         $this->notificarConductores($pedido, $nuevoEstado, $estadoAnterior);
@@ -210,17 +208,13 @@ class PedidoEstadoService
 
             $this->ofertas->prepararReoferta($bloqueado, $conductor);
 
-            // El tramo simulado iba a nombre de este conductor, y `abrirTramo()` no abre uno nuevo
-            // si ya existe: sin borrarlo, quien lo tome después en TEST nunca avanzaría.
-            SimulacionEnvio::where('id_pedido', $idPedido)->delete();
-
             // Su recorrido no es parte del envío que entregará otro: contarlo inflaría la distancia
             // y la línea del resumen. Las posiciones se conservan a nombre del conductor.
             ConductorPosicion::where('id_pedido', $idPedido)
                 ->where('id_conductor', $idConductor)
                 ->update(['id_pedido' => null]);
 
-            if (! $bloqueado->esTest() && $slug !== null) {
+            if ($slug !== null) {
                 $this->diferir($bloqueado, fn () => $this->gps->envioTerminado($slug, $idConductor, $idPedido));
             }
 
@@ -282,21 +276,9 @@ class PedidoEstadoService
      * Va por `diferir()` como el resto de avisos (spec tenant/027): `transicionar()` no guarda, y
      * mandar el aviso antes de que la fila exista abriría el rastreo de un envío que todavía puede
      * no llegar a persistirse.
-     *
-     * En TEST no se avisa nunca (spec tenant/025, RN-11; spec tenant/028, RN-13): el simulador ya
-     * escribe la posición por `TrackingService::registrarPosicion()`, y si el servicio GPS también
-     * queda habilitado para este conductor, el GPS real del teléfono —sin señal confiable al probar
-     * fuera de sitio— compite con el simulador por `conductor_estado` y puede dejarlo clavado en una
-     * lectura de red/IP muy lejos de la ruta simulada, sin que nada lo corrija después (RN-03 la
-     * toma como línea base y descarta cualquier lectura real posterior por "salto imposible").
-     * `abrirTramoSimulado()` ya hace esta misma comprobación; aquí faltaba.
      */
     private function avisarServicioGps(Pedido $pedido, string $nuevoEstado): void
     {
-        if ($pedido->esTest()) {
-            return;
-        }
-
         $slug = tenant()?->slug;
         $idConductor = $pedido->id_conductor;
 
@@ -317,41 +299,6 @@ class PedidoEstadoService
 
         if (in_array($nuevoEstado, self::ESTADOS_FINALES, true)) {
             $this->diferir($pedido, fn () => $this->gps->envioTerminado($slug, $idConductor, $idPedido));
-        }
-    }
-
-    /**
-     * Único punto de contacto entre la máquina de estados y el modo TEST (spec tenant/025, RN-07).
-     * En LIVE no hace absolutamente nada.
-     *
-     * Los dos momentos son los que en LIVE arrancan un desplazamiento real: aceptar el envío
-     * (empieza a manejar hacia la recogida) y recoger el paquete (empieza a manejar hacia la
-     * entrega). `EN_CAMINO` y `ENTREGADO` los sigue apretando el conductor en su app; lo que el
-     * servidor suple son los dos hitos de *llegada*, que en TEST la geocerca nunca dispararía
-     * porque el teléfono está quieto en otra parte.
-     *
-     * Envuelto en `try/catch` por el mismo criterio que el resto de efectos de `transicionar()`:
-     * que Google no conteste no puede impedirle a un conductor aceptar un viaje.
-     */
-    private function abrirTramoSimulado(Pedido $pedido, string $nuevoEstado): void
-    {
-        if (! $pedido->esTest() || ! in_array($nuevoEstado, ['TOMADO', 'EN_CAMINO'], true)) {
-            return;
-        }
-
-        try {
-            $simulaciones = app(SimulacionEnvioService::class);
-
-            match ($nuevoEstado) {
-                'TOMADO' => $simulaciones->iniciarAcercamiento($pedido),
-                'EN_CAMINO' => $simulaciones->iniciarEntrega($pedido),
-            };
-        } catch (\Throwable $e) {
-            Log::warning('No se pudo abrir el tramo simulado del envío', [
-                'id_pedido' => $pedido->id_pedido,
-                'estado' => $nuevoEstado,
-                'error' => $e->getMessage(),
-            ]);
         }
     }
 
@@ -422,16 +369,9 @@ class PedidoEstadoService
      * el `UNIQUE(id_pedido)` es la garantía de "una sola vez" aunque `saved()` corra dos veces, y el
      * aviso solo sale si la fila es nueva. Se difiere ANTES que `pedido.entregado`
      * (`notificarConductores`) para que quien lea el saldo tras ese aviso ya lo vea descontado.
-     *
-     * En TEST no se consume nada (spec tenant/025, enmienda a RN-06): es la única excepción a "el
-     * dinero no se simula", porque este saldo lo pagó el tenant contra un paquete con precio.
      */
     private function consumirViajeDelTenant(Pedido $pedido): void
     {
-        if ($pedido->esTest()) {
-            return;
-        }
-
         $slug = tenant()?->slug;
 
         $this->diferir($pedido, function () use ($pedido, $slug): void {
@@ -551,7 +491,9 @@ class PedidoEstadoService
         }
 
         $vendidos = VentaViajeConductor::where('id_conductor', $pedido->id_conductor)->sum('cantidad_viajes');
-        $consumidos = Pedido::where('id_conductor', $pedido->id_conductor)
+        // Con los envíos de prueba antiguos: también descontaron saldo (ver `pedidosParaSaldo()`).
+        $consumidos = Pedido::withoutGlobalScope(OcultarEnviosDePrueba::class)
+            ->where('id_conductor', $pedido->id_conductor)
             ->where('prepago_descontado', true)
             ->count();
 
@@ -567,8 +509,7 @@ class PedidoEstadoService
      *
      * La base es **solo** `importe_envio` (RN-02): ni `importe_cobro`, ni `pago_extra`, ni la
      * mercancía. Con porcentaje cero la fila nace `PAGADA`: queda constancia del viaje sin dejar
-     * un pendiente de $0 para siempre (RN-05). A diferencia del consumo del tenant, aquí TEST y
-     * LIVE generan por igual (supuesto 4): el sistema completo se prueba en TEST.
+     * un pendiente de $0 para siempre (RN-05).
      *
      * No toca `pedidos.comision_calculada`: esa columna queda sin uso (adición 7).
      */

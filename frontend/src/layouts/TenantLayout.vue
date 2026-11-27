@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import UiAmbienteSwitch from '@/components/ui/UiAmbienteSwitch.vue'
 import ModoAutomaticoControl from '@/components/tenant/ModoAutomaticoControl.vue'
 import UiSidebar, { type AccionSidebar, type ItemSidebar } from '@/components/ui/UiSidebar.vue'
 import { type EstadoConexion } from '@/services/realtime'
-import { useAmbienteStore } from '@/stores/ambiente'
 import { useBandejaWhatsappStore } from '@/stores/bandejaWhatsapp'
 import { useModoAutomaticoStore } from '@/stores/modoAutomatico'
 import { useTenantAuthStore } from '@/stores/tenantAuth'
@@ -48,7 +46,6 @@ const ACCION_VIAJES_EN_TURNO = 'viajes-en-turno'
 const route = useRoute()
 const router = useRouter()
 const auth = useTenantAuthStore()
-const ambientes = useAmbienteStore()
 const modoAutomatico = useModoAutomaticoStore()
 
 const slug = computed(() => route.params.slug as string)
@@ -75,15 +72,11 @@ onUnmounted(() => {
 })
 const usaDespachadores = computed(() => auth.usuario?.usar_despachadores === 'Sí')
 
-// spec tenant/025: el indicador de ambiente acompaña a toda pantalla del tenant, así que se carga
-// en cuanto hay sesión y slug, sin que cada vista tenga que pedirlo.
+// spec tenant/034: el botón del modo automático vive en el pie del menú y se carga en cuanto hay
+// sesión y slug, sin que cada vista tenga que pedirlo.
 watch(
   [slug, () => auth.usuario],
   ([slugActual, usuario]) => {
-    if (slugActual && usuario && !ambientes.cargado) {
-      ambientes.cargar(slugActual)
-    }
-    // spec tenant/034: el botón del modo automático vive junto al de ambiente.
     if (slugActual && usuario && !modoAutomatico.cargado) {
       modoAutomatico.cargar(slugActual)
     }
@@ -239,13 +232,12 @@ const usuarioMenu = computed(() => {
 })
 
 // Medidas del riel (spec tenant/032, §5). Los paneles del Panel las leen para colocarse junto al
-// riel y debajo de la banda de "Modo prueba".
+// riel.
 const variablesRiel = computed(() => ({
   '--riel-ancho': '4rem',
   '--riel-ancho-abierto': '15rem',
   '--riel-margen': '0.75rem',
   '--riel-ocupado': 'calc(var(--riel-ancho) + 2 * var(--riel-margen))',
-  '--alto-banda': ambientes.esTest ? '1.25rem' : '0px',
 }))
 
 function onCambiarPassword() {
@@ -281,18 +273,6 @@ function onClickConfiguracion() {
 
 <template>
   <div class="min-h-screen bg-black/[0.03]" :style="variablesRiel">
-    <!--
-      spec tenant/025: en TEST, una banda a lo ancho de la ventana, por encima de todo. El
-      interruptor del menú es discreto por diseño, y confundir la pantalla de pruebas con la de
-      operación real es justamente lo que no puede pasar: los envíos de prueba descuentan saldo de
-      verdad. Mide `--alto-banda`, y el menú y los paneles empiezan debajo de ella (spec 032).
-    -->
-    <div
-      v-if="ambientes.esTest"
-      class="fixed inset-x-0 top-0 z-50 flex h-(--alto-banda) items-center justify-center bg-amber-400 text-xs font-semibold uppercase tracking-wider text-amber-950"
-    >
-      Modo prueba — los envíos que crees aquí son simulados
-    </div>
     <!--
       Modo espectador de ADMIN_CENTRAL: aviso fijo abajo al centro, sin mover el layout del Panel.
     -->
@@ -330,7 +310,6 @@ function onClickConfiguracion() {
       @cerrar-sesion="onLogout"
     >
       <template #pie="{ abierto }">
-        <UiAmbienteSwitch :slug="slug" :editable="puedeEditar" :compacto="!abierto" />
         <ModoAutomaticoControl
           v-if="puedeVerBandeja"
           :slug="slug"
@@ -340,14 +319,14 @@ function onClickConfiguracion() {
       </template>
     </UiSidebar>
     <!--
-      Sin barra superior no hay franja que reservar arriba: solo la banda de TEST (`--alto-banda`)
-      y, a la izquierda, el riel cerrado (`--riel-ocupado`). El Panel no lleva relleno: el mapa va
+      Sin barra superior no hay franja que reservar arriba: solo, a la izquierda, el riel
+      cerrado (`--riel-ocupado`). El Panel no lleva relleno: el mapa va
       de borde a borde, también por detrás del riel.
     -->
     <main v-if="anchoCompleto">
       <slot />
     </main>
-    <main v-else class="pl-(--riel-ocupado) pt-(--alto-banda)">
+    <main v-else class="pl-(--riel-ocupado)">
       <div class="mx-auto max-w-screen-xl p-4 md:p-8">
         <slot />
       </div>

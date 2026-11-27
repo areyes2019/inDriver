@@ -263,45 +263,6 @@ it('avisa al servicio cuando el envío termina', function () {
     tenancy()->end();
 });
 
-it('no avisa al servicio GPS cuando arranca un envío TEST', function () {
-    // spec tenant/025 RN-11 / spec tenant/028 RN-13: en TEST el simulador es la única fuente de
-    // posición. Si el servicio GPS también quedara habilitado para este conductor, el GPS real del
-    // teléfono —sin señal confiable al probar fuera de sitio— competiría con el simulador por
-    // `conductor_estado` (era exactamente el defecto: `avisarServicioGps()` no comprobaba `esTest()`
-    // aunque `abrirTramoSimulado()`, un método hermano en el mismo `transicionar()`, sí lo hacía).
-    $buzon = $this->mock(BuzonGps::class);
-    $buzon->shouldReceive('habilitado')->andReturnTrue();
-    $buzon->shouldNotReceive('envioIniciado');
-
-    $tenant = gpsTenant();
-    ['conductor' => $conductor] = gpsConductor($tenant);
-    $pedido = gpsPedido($tenant, $conductor);
-
-    tenancy()->initialize($tenant);
-    $pedido = Pedido::find($pedido->id_pedido);
-    $pedido->ambiente = Pedido::AMBIENTE_TEST;
-    app(PedidoEstadoService::class)->transicionar($pedido, 'TOMADO');
-    $pedido->save();
-    tenancy()->end();
-});
-
-it('no avisa al servicio GPS cuando termina un envío TEST', function () {
-    $buzon = $this->mock(BuzonGps::class);
-    $buzon->shouldReceive('habilitado')->andReturnTrue();
-    $buzon->shouldNotReceive('envioTerminado');
-
-    $tenant = gpsTenant();
-    ['conductor' => $conductor] = gpsConductor($tenant);
-    $pedido = gpsPedido($tenant, $conductor, 'ARRIBADO_A_ENTREGA');
-
-    tenancy()->initialize($tenant);
-    $pedido = Pedido::find($pedido->id_pedido);
-    $pedido->ambiente = Pedido::AMBIENTE_TEST;
-    app(PedidoEstadoService::class)->transicionar($pedido, 'ENTREGADO');
-    $pedido->save();
-    tenancy()->end();
-});
-
 it('no avisa de un pedido que todavía no tiene conductor', function () {
     $buzon = $this->mock(BuzonGps::class);
     $buzon->shouldReceive('habilitado')->andReturnTrue();
@@ -597,46 +558,6 @@ function gpsBase(Tenant $tenant, Conductor $conductor, array $cambios = []): voi
     ]);
     tenancy()->end();
 }
-
-it('descarta el GPS real de un envío TEST que el servicio cree sin envío', function () {
-    // spec tenant/028, §16: en TEST no se avisa al servicio (RN-13), así que para él este conductor
-    // no tiene envío. Si la posición se guardara, el teléfono competiría con el simulador.
-    Event::fake([UbicacionActualizada::class]);
-
-    $tenant = gpsTenant();
-    ['conductor' => $conductor] = gpsConductor($tenant);
-    $pedido = gpsPedido($tenant, $conductor, 'EN_CAMINO');
-
-    tenancy()->initialize($tenant);
-    Pedido::where('id_pedido', $pedido->id_pedido)->update(['ambiente' => Pedido::AMBIENTE_TEST]);
-    tenancy()->end();
-
-    gpsBase($tenant, $conductor, ['ultima_actualizacion' => now()->subMinutes(5)]);
-
-    $buzon = gpsBuzonConAvisos([[
-        'id' => '1-0',
-        'tipo' => BuzonGps::POSICION_SIN_ENVIO,
-        'datos' => [
-            'tenant' => 'cafe-luna',
-            'id_conductor' => $conductor->id_conductor,
-            'latitud' => 20.5248,
-            'longitud' => -100.8132,
-            'fecha_ms' => now()->getTimestampMs(),
-        ],
-    ]]);
-    $buzon->shouldNotReceive('envioIniciado');
-
-    gpsCorrerWorker();
-
-    tenancy()->initialize($tenant);
-    $estado = ConductorEstado::where('id_conductor', $conductor->id_conductor)->first();
-    expect((float) $estado->ultima_latitud)->toEqualWithDelta(19.4326, 0.0001)
-        // Se descarta la posición, no al conductor: sin el latido, se apagaría a media simulación.
-        ->and($estado->ultima_actualizacion->greaterThan(now()->subMinute()))->toBeTrue();
-    tenancy()->end();
-
-    Event::assertNotDispatched(UbicacionActualizada::class);
-});
 
 it('recupera un envío LIVE cuando el servicio perdió la marca', function () {
     // Redis reiniciado o envío abierto antes de conectar el servicio: el Panel no debe dejar de ver

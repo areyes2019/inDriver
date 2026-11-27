@@ -118,7 +118,7 @@ it('lets the spectator read the panel but blocks every write', function () {
         ->assertForbidden()
         ->assertJsonPath('code', SoloLecturaEspectador::CODIGO);
 
-    $this->putJson('/api/v1/t/cafe-luna/configuracion/ambiente', ['ambiente' => 'TEST'])
+    $this->putJson('/api/v1/t/cafe-luna/configuracion/modo-automatico', ['modo_automatico' => 'Si'])
         ->assertForbidden();
 });
 

@@ -6,7 +6,6 @@ namespace App\Services;
 
 use App\Events\Tenant\PedidoCreado;
 use App\Models\Tenant\Auditoria;
-use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -76,16 +75,12 @@ class CreacionPedidoService
      */
     private function insertar(array $data): Pedido
     {
-        // spec tenant/025, RN-03: el envío sella aquí el ambiente del interruptor y no vuelve a
-        // cambiarlo nunca. Va fuera del `create()` a propósito: `ambiente` no está en el
-        // `#[Fillable]` del modelo, para que ningún `update()` ni `fill()` pueda moverlo después.
-        $ambiente = ConfiguracionTenant::obtener(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_LIVE);
-
         for ($intento = 1; ; $intento++) {
             try {
-                return DB::transaction(function () use ($data, $ambiente) {
-                    // `withoutGlobalScopes()`: el número de envío es correlativo del tenant entero, no
-                    // del ambiente. Sin esto, el primer envío TEST reciclaría el PED-000001 de un envío LIVE.
+                return DB::transaction(function () use ($data) {
+                    // `withoutGlobalScopes()`: el número de envío es correlativo del tenant entero,
+                    // contando los envíos de prueba antiguos que el scope oculta. Sin esto se
+                    // reciclaría el número de uno de ellos.
                     $siguienteId = (int) (Pedido::withoutGlobalScopes()->max('id_pedido') ?? 0) + 1;
                     $numeroPedido = 'PED-'.str_pad((string) $siguienteId, 6, '0', STR_PAD_LEFT);
 
@@ -94,9 +89,6 @@ class CreacionPedidoService
                         'numero_pedido' => $numeroPedido,
                         'estado' => 'PENDIENTE',
                     ]);
-
-                    $pedido->ambiente = $ambiente;
-                    $pedido->save();
 
                     return $pedido;
                 });

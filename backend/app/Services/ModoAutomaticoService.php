@@ -55,14 +55,10 @@ class ModoAutomaticoService
         return ConfiguracionTenant::obtener(ConfiguracionTenant::MODO_AUTOMATICO, self::NO);
     }
 
-    /**
-     * RN-02: prendido **y** la flotilla en LIVE. Con la flotilla en TEST el interruptor se guarda,
-     * pero no hace nada.
-     */
+    /** RN-02: el modo automático actúa mientras esté prendido. */
     public function activo(): bool
     {
-        return $this->estado() === self::SI
-            && ConfiguracionTenant::obtener(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_LIVE) === Pedido::AMBIENTE_LIVE;
+        return $this->estado() === self::SI;
     }
 
     /**

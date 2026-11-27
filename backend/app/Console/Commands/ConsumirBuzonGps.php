@@ -238,19 +238,13 @@ class ConsumirBuzonGps extends Command
      * `Conductor\UbicacionController::actualizar()` antes de que el servicio GPS existiera — se
      * recuerda dónde quedó, sin difundir al Panel ni generar historia (RN-01). Sin este aviso,
      * `conductor_estados.ultima_latitud/longitud` se quedaba vacío para cualquier conductor que
-     * aceptara su primer envío hablándole al servicio GPS, y la simulación TEST arrancaba el tramo
-     * de acercamiento en la recogida misma (spec tenant/025, RN-08), cayendo en `ARRIBADO` al
-     * instante.
+     * aceptara su primer envío hablándole al servicio GPS.
      *
      * El servicio dice "sin envío" porque no tiene la marca, y eso no siempre es cierto. Laravel es
-     * el dueño de esa verdad, así que aquí se comprueba:
-     *
-     * - **Envío TEST:** es el caso normal, porque en TEST no se avisa al servicio (RN-13). Manda el
-     *   simulador: se descarta la posición y queda el latido, igual que en
-     *   `Conductor\UbicacionController::actualizar()`. Sin esto reaparece el incidente de §16.
-     * - **Envío LIVE:** la marca se perdió (Redis reiniciado, o el envío abrió antes de conectar el
-     *   servicio). Se trata como la posición en vivo que es y se vuelve a avisar al servicio. Al
-     *   recibirlo, sus siguientes puntos ya vienen como `POSICION`.
+     * el dueño de esa verdad, así que aquí se comprueba: si hay un envío activo, la marca se perdió
+     * (Redis reiniciado, o el envío abrió antes de conectar el servicio). Se trata como la posición
+     * en vivo que es y se vuelve a avisar al servicio. Al recibirlo, sus siguientes puntos ya vienen
+     * como `POSICION`.
      *
      * @param  array<string, mixed>  $datos
      */
@@ -264,12 +258,6 @@ class ConsumirBuzonGps extends Command
         }
 
         $activo = $tracking->pedidoActivo($conductor);
-
-        if ($activo?->esTest()) {
-            $tracking->registrarLatido($conductor);
-
-            return true;
-        }
 
         if ($activo !== null) {
             $buzon->envioIniciado($slug, $idConductor, $activo->id_pedido);

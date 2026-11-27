@@ -113,7 +113,7 @@ function onTransitionEnd(event: TransitionEvent) {
 
 <template>
   <aside
-    class="panel-deslizante fixed right-0 top-(--alto-banda) z-30 flex h-[calc(100vh-var(--alto-banda))] w-[20%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
+    class="panel-deslizante fixed right-0 top-0 z-30 flex h-screen w-[20%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
     :class="abierto ? 'translate-x-0' : 'translate-x-full'"
     :inert="!abierto"
     aria-label="Flotilla"

@@ -7,7 +7,6 @@ use App\Models\Tenant\Usuario;
 use App\Services\Cliente\CanalCodigo;
 use App\Services\Cliente\CanalCodigoCorreo;
 use App\Services\Cliente\CanalCodigoLog;
-use App\Support\ContextoAmbiente;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Auth\CanResetPassword;
@@ -23,11 +22,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Ambiente TEST/LIVE de la petición en curso (spec tenant/025). Singleton para que el
-        // middleware del Panel y el global scope de `Pedido` hablen de la misma instancia; nace
-        // vacío, y vacío significa "no filtres nada".
-        $this->app->singleton(ContextoAmbiente::class);
-
         // spec tenant/031, etapa 5. Un timeout corto y un solo reintento caben en el job de
         // WhatsApp; si la IA no contesta, el cliente recibe una pregunta en lugar de silencio (RN-24).
         $this->app->singleton(AnthropicClient::class, fn () => new AnthropicClient(

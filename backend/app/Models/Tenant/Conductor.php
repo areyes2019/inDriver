@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models\Tenant;
 
+use App\Models\Scopes\OcultarEnviosDePrueba;
 use App\Services\PedidoEstadoService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,6 +41,16 @@ class Conductor extends Model
     public function pedidos(): HasMany
     {
         return $this->hasMany(Pedido::class, 'id_conductor', 'id_conductor');
+    }
+
+    /**
+     * Sus pedidos, incluidos los envíos de prueba antiguos que `OcultarEnviosDePrueba` esconde. Solo
+     * para contar viajes prepagados consumidos: esos envíos sí le descontaron saldo de verdad, y
+     * dejarlos fuera le devolvería viajes que ya gastó.
+     */
+    public function pedidosParaSaldo(): HasMany
+    {
+        return $this->pedidos()->withoutGlobalScope(OcultarEnviosDePrueba::class);
     }
 
     public function ventasViajes(): HasMany
@@ -115,6 +126,6 @@ class Conductor extends Model
             ])
             ->select('conductores.*')
             ->withSum('ventasViajes as viajes_vendidos', 'cantidad_viajes')
-            ->withCount(['pedidos as viajes_consumidos' => fn ($q) => $q->where('prepago_descontado', true)]);
+            ->withCount(['pedidosParaSaldo as viajes_consumidos' => fn ($q) => $q->where('prepago_descontado', true)]);
     }
 }

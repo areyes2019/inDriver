@@ -180,20 +180,23 @@ it('cuenta los 30 minutos desde que se prendió el modo, no desde antes (RN-04)'
     expect($pedido->fresh()->estado)->toBe('PENDIENTE');
 });
 
-it('con la flotilla en TEST, o con un pedido TEST, no hace nada', function () {
+it('no toca un envío de prueba antiguo', function () {
     tenancy()->initialize($this->tenant);
     automaticoPrendido();
     $pedidoTest = automaticoSinConductor(40, ['ambiente' => 'test']);
 
     automaticoCorre();
-    expect($pedidoTest->fresh()->estado)->toBe('PENDIENTE');
-
-    ConfiguracionTenant::establecer(ConfiguracionTenant::AMBIENTE, 'test');
-    $pedidoLive = automaticoSinConductor(40);
-
-    automaticoCorre();
-    expect($pedidoLive->fresh()->estado)->toBe('PENDIENTE')
+    expect(Pedido::withoutGlobalScopes()->find($pedidoTest->id_pedido)->estado)->toBe('PENDIENTE')
         ->and(AutomaticoBitacora::count())->toBe(0);
+});
+
+it('actúa aunque la flotilla se haya quedado en TEST antes de quitar el modo', function () {
+    tenancy()->initialize($this->tenant);
+    automaticoPrendido();
+    // El interruptor TEST/LIVE ya no existe, pero la fila vieja puede seguir en la base.
+    ConfiguracionTenant::establecer('ambiente', 'test');
+
+    expect(app(ModoAutomaticoService::class)->activo())->toBeTrue();
 });
 
 it('no toca un pedido que una persona ya canceló o que nunca se publicó', function () {

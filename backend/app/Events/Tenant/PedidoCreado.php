@@ -25,7 +25,7 @@ use Illuminate\Support\Str;
  * página para ver lo que él mismo acababa de crear.
  *
  * Lleva el `PedidoResource` del Panel, no el de la app: el de la app no trae agenda
- * (`fecha_servicio`, `hora_desde`, `lo_antes_posible`) ni `ambiente`, y sin agenda la fila se pinta
+ * (`fecha_servicio`, `hora_desde`, `lo_antes_posible`), y sin agenda la fila se pinta
  * sin fecha y cae en el lugar equivocado del orden (RN-03).
  *
  * Va al mismo canal del tenant que el resto; panda_express ignora los eventos que no conoce (spec
@@ -57,9 +57,8 @@ class PedidoCreado implements ShouldBroadcastNow
     }
 
     /**
-     * Se relee el pedido por id, sin el scope de ambiente, en vez de arrastrar el modelo: es el
-     * mismo criterio del resto de eventos del Panel (ver `DatosDeEventoPanel`), y así la carga no
-     * depende de en qué ambiente estaba el que lo disparó.
+     * Se relee el pedido por id en vez de arrastrar el modelo: es el mismo criterio del resto de
+     * eventos del Panel (ver `DatosDeEventoPanel`).
      *
      * @return array<string, mixed>
      */

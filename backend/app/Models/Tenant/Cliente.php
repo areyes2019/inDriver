@@ -51,8 +51,7 @@ class Cliente extends Model implements AuthenticatableContract
     }
 
     /**
-     * Ojo con el filtro por ambiente de `Pedido` (spec tenant/025): fuera del Panel se agrega
-     * `withoutGlobalScopes()` donde haga falta ver TEST y LIVE juntos.
+     * Ojo: `Pedido` oculta los envíos de prueba antiguos (`OcultarEnviosDePrueba`).
      */
     public function pedidos(): HasMany
     {

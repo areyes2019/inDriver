@@ -245,7 +245,6 @@ it('consumes one tenant viaje per delivered pedido, once, in either modality, an
         ->and($cargas[0]['saldo_viajes_tenant'])->toBe(-1)
         ->and($cargas[0]['motivo'])->toBe('consumo')
         ->and($cargas[0]['id_pedido'])->toBe($pedido->id_pedido)
-        ->and($cargas[0])->not->toHaveKey('ambiente')
         // spec tenant/030: en Comisión el mismo envío genera además su comisión, también una sola vez.
         ->and(ComisionConductor::where('id_pedido', $pedido->id_pedido)->count())->toBe(1);
     tenancy()->end();
@@ -302,8 +301,7 @@ it('sends the panel what it needs to drop a cancelled pedido without a conductor
         ->and($evento->broadcastWith())->toMatchArray([
             'id_pedido' => $pedido->id_pedido,
             'estado' => 'CANCELADO',
-        ])
-        ->and($evento->broadcastWith())->toHaveKey('ambiente');
+        ]);
     tenancy()->end();
 });
 
@@ -392,7 +390,6 @@ it('carries the taken pedido resolved, so the panel does not have to ask again',
         'id_pedido' => $pedido->id_pedido,
         'estado' => 'TOMADO',
         'id_conductor' => $conductor->id_conductor,
-        'ambiente' => 'live',
     ])
         ->and($carga['conductor_nombre'])->toBe('Beto Lara')
         // Cinco vendidos menos el que acaba de consumir.
@@ -534,7 +531,7 @@ it('announces a scheduled pedido, which on creation is not published at all', fu
     Event::assertDispatched(PedidoCreado::class);
 });
 
-it('carries the new row resolved: agenda, ambiente and state', function () {
+it('carries the new row resolved: agenda and state', function () {
     $tenant = panelTenant();
     panelAdmin($tenant);
 
@@ -549,40 +546,35 @@ it('carries the new row resolved: agenda, ambiente and state', function () {
     $carga = (new PedidoCreado($pedido->id_pedido, 'panel-express'))->broadcastWith();
     tenancy()->end();
 
-    // Sin la agenda la tarjeta se pinta sin fecha y cae en el lugar equivocado del orden (RN-03);
-    // sin `ambiente` el Panel no puede descartar lo que es del otro mundo (RN-28).
+    // Sin la agenda la tarjeta se pinta sin fecha y cae en el lugar equivocado del orden (RN-03).
     expect($carga)->toMatchArray([
         'id_pedido' => $pedido->id_pedido,
         'numero_pedido' => 'PED-NUEVO',
         'estado' => 'PUBLICADO',
         'lo_antes_posible' => false,
         'hora_desde' => '09:00',
-        'ambiente' => 'live',
     ])
         ->and($carga['fecha_servicio'])->toBe(now()->toDateString())
         ->and($carga['direccion_recogida'])->toBe('Av. Reforma 100')
         ->and($carga['event_id'])->not->toBeNull();
 });
 
-it('adds the agenda and the ambiente to pedido.disponible without dropping what the app reads', function () {
+it('adds the agenda to pedido.disponible without dropping what the app reads', function () {
     $tenant = panelTenant();
     panelAdmin($tenant);
 
     tenancy()->initialize($tenant);
     $pedido = panelPedido(['estado' => 'PUBLICADO', 'lo_antes_posible' => false, 'hora_desde' => '18:00']);
-    // `ambiente` lo pone la omisión de la columna, no el `create()`: sin releer, el modelo en
-    // memoria lo tiene en nulo. Quien dispara el evento de verdad ya lo trae sellado.
     $pedido->refresh();
 
     $carga = (new PedidoDisponible($pedido, 'panel-express'))->broadcastWith();
     tenancy()->end();
 
-    // Este evento también inserta filas en el Panel, y con la forma de la app —sin agenda ni
-    // ambiente— insertaba una fila rota y dejaba pasar envíos TEST a un Panel LIVE.
+    // Este evento también inserta filas en el Panel, y con la forma de la app —sin agenda—
+    // insertaba una fila rota.
     expect($carga)->toMatchArray([
         'lo_antes_posible' => false,
         'hora_desde' => '18:00',
-        'ambiente' => 'live',
     ])
         ->and($carga['fecha_servicio'])->toBe(now()->toDateString())
         // Lo que panda_express ya leía sigue igual (spec tenant/018, RN-09).

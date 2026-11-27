@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Middleware\AplicarAmbientePanel;
 use App\Http\Middleware\AsegurarClienteApp;
 use App\Http\Middleware\AsegurarRolTenant;
 use App\Http\Middleware\IdentificarTenantPorSlug;
@@ -36,7 +35,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'tenant.slug' => IdentificarTenantPorSlug::class,
             'rol.tenant' => AsegurarRolTenant::class,
-            'ambiente.panel' => AplicarAmbientePanel::class,
             'cliente.app' => AsegurarClienteApp::class,
             'espectador' => SoloLecturaEspectador::class,
         ]);

@@ -6,7 +6,6 @@
 #     deploy/sembrar.sh                       <- 3 envíos, Celaya
 #     deploy/sembrar.sh 5                     <- 5 envíos
 #     deploy/sembrar.sh 3 --tenant=panda      <- si hay más de un tenant activo
-#     deploy/sembrar.sh 3 --ambiente=test     <- forzar TEST/LIVE (por omisión, el interruptor del tenant)
 #     deploy/sembrar.sh 3 --centro=21.12,-101.68 --radio=6   <- otra ciudad
 #
 # Es `pedidos:sembrar --google --force` vía deploy/artisan.sh: los envíos se

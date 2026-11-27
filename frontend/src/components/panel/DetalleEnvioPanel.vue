@@ -118,7 +118,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 <template>
   <aside
-    class="fixed left-(--riel-ocupado) top-(--alto-banda) z-[35] flex h-[calc(100vh-var(--alto-banda))] w-[20%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
+    class="fixed left-(--riel-ocupado) top-0 z-[35] flex h-screen w-[20%] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
     :class="viaje ? 'translate-x-0' : '-translate-x-[calc(100%+var(--riel-ocupado))]'"
     :inert="!viaje"
     aria-label="Detalle del envío"

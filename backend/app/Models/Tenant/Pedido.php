@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models\Tenant;
 
-use App\Models\Scopes\AmbienteScope;
+use App\Models\Scopes\OcultarEnviosDePrueba;
 use App\Observers\PedidoObserver;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -63,15 +63,13 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'referencias_recogida',
     'referencias_entrega',
 ])]
-#[ScopedBy([AmbienteScope::class])]
+#[ScopedBy([OcultarEnviosDePrueba::class])]
 #[ObservedBy([PedidoObserver::class])]
 class Pedido extends Model
 {
     /**
-     * `ambiente` queda deliberadamente fuera del `#[Fillable]` de arriba (spec tenant/025, RN-03):
-     * lo sella `Tenant\PedidoController@store` de forma explícita al crear el envío y nadie más
-     * puede tocarlo, ni por `update()` ni por un `fill()` accidental. Un envío es de prueba o no lo
-     * es desde que nace hasta que muere.
+     * El modo TEST se eliminó: todo envío nace `live` (el default de la columna). `test` solo
+     * marca envíos de prueba antiguos, que `OcultarEnviosDePrueba` deja fuera de toda consulta.
      */
     public const AMBIENTE_LIVE = 'live';
 
@@ -179,16 +177,5 @@ class Pedido extends Model
     public function cotizaciones(): HasMany
     {
         return $this->hasMany(PedidoCotizacion::class, 'id_pedido', 'id_pedido');
-    }
-
-    /** Tramos simulados, solo en envíos TEST (spec tenant/025). */
-    public function simulaciones(): HasMany
-    {
-        return $this->hasMany(SimulacionEnvio::class, 'id_pedido', 'id_pedido');
-    }
-
-    public function esTest(): bool
-    {
-        return $this->ambiente === self::AMBIENTE_TEST;
     }
 }

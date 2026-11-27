@@ -26,7 +26,7 @@ watch(
 
 <template>
   <aside
-    class="fixed right-0 top-(--alto-banda) z-30 flex h-[calc(100vh-var(--alto-banda))] w-[26rem] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
+    class="fixed right-0 top-0 z-30 flex h-screen w-[26rem] flex-col bg-white shadow-xl transition-transform duration-[400ms] ease-in-out"
     :class="abierto ? 'translate-x-0' : 'translate-x-full'"
     :inert="!abierto"
     aria-label="Chat de WhatsApp"

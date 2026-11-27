@@ -36,8 +36,8 @@ class ComisionController extends Controller
 
     public function conductor(Conductor $conductor): JsonResponse
     {
-        // Sin `AmbienteScope` sobre el pedido: las comisiones no distinguen ambiente (supuesto 4)
-        // y desde el Panel en LIVE los viajes TEST saldrían sin número de pedido.
+        // Sin el scope sobre el pedido: las comisiones de los envíos de prueba antiguos siguen
+        // siendo dinero del conductor, y sin esto saldrían sin número de pedido.
         $viajes = ComisionConductor::where('id_conductor', $conductor->id_conductor)
             ->with(['pedido' => fn ($q) => $q->withoutGlobalScopes()])
             ->orderByDesc('created_at')

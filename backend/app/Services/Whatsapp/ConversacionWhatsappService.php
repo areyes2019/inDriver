@@ -6,7 +6,6 @@ namespace App\Services\Whatsapp;
 
 use App\Models\Tenant\AutomaticoBitacora;
 use App\Models\Tenant\Cliente;
-use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\DireccionCliente;
 use App\Models\Tenant\Pedido;
 use App\Models\Tenant\WhatsappConversacion;
@@ -589,13 +588,6 @@ class ConversacionWhatsappService
      */
     private function confirmar(WhatsappSolicitud $solicitud, WhatsappConversacion $conversacion, ?Cliente $cliente): RespuestaBot
     {
-        // D3: en TEST no se crean pedidos por WhatsApp.
-        if (ConfiguracionTenant::obtener(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_LIVE) === Pedido::AMBIENTE_TEST) {
-            $solicitud->update(['estado' => WhatsappSolicitud::DESCARTADA]);
-
-            return $this->texto('servicio_no_disponible', ['contacto' => $this->frases->contacto($this->telefonoFlotilla)]);
-        }
-
         $tomada = WhatsappSolicitud::whereKey($solicitud->id_solicitud)
             ->where('estado', WhatsappSolicitud::CONFIRMANDO)
             ->whereNull('id_pedido')

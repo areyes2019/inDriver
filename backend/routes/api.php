@@ -94,11 +94,7 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
     Route::post('/conductor/login', [ConductorAuthController::class, 'login'])
         ->middleware('throttle:tenant-login');
 
-    // `ambiente.panel` (spec tenant/025, RN-05) va solo aquí: enciende el filtro por ambiente para
-    // el Panel. La app del conductor (grupo `auth:conductor-token`, más abajo), el comando
-    // `simulacion:avanzar` y los jobs diferidos no pasan por este middleware y por eso siguen
-    // viendo todos los envíos, sin excepciones escritas en ningún lado.
-    Route::middleware(['auth:usuario', 'espectador', 'ambiente.panel'])->group(function () {
+    Route::middleware(['auth:usuario', 'espectador'])->group(function () {
         Route::post('/logout', [TenantAuthController::class, 'logout']);
         Route::get('/me', [TenantAuthController::class, 'me']);
         Route::middleware('throttle:tenant-usuarios')->post('/cambiar-password', [TenantAuthController::class, 'changePassword']);
@@ -171,9 +167,6 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::delete('/clientes/{cliente}/direcciones/{direccion}', [DireccionClienteController::class, 'destroy']);
 
             Route::put('/configuracion', [ConfiguracionController::class, 'update']);
-            // spec tenant/025, RN-02: el interruptor TEST/LIVE de la cabecera. Solo AdminCliente;
-            // el Despachador lo ve por GET /configuracion y no puede moverlo.
-            Route::put('/configuracion/ambiente', [ConfiguracionController::class, 'ambiente']);
             // spec tenant/034, D2: el modo automático, solo AdminCliente.
             Route::put('/configuracion/modo-automatico', [ConfiguracionController::class, 'modoAutomatico']);
             // spec tenant/035, D17: la app de clientes, solo AdminCliente.

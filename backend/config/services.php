@@ -38,9 +38,9 @@ return [
     // Respaldo de push nativo cuando el socket de Reverb está caído (spec tenant/018). Solo se usa
     // como servicio de envío de mensajes — no implica ninguna base de datos de Firebase, MySQL
     // sigue siendo la única fuente de datos del sistema.
-    // Rutas por calles para los envíos TEST (spec tenant/025). Solo la usa `RutaService`, del lado
-    // del servidor: el Panel tiene su propia llave de navegador. Sin ella, la simulación cae a
-    // línea recta en vez de romperse.
+    // Rutas por calles para cotizar envíos. Solo la usa `RutaService`, del lado del servidor: el
+    // Panel tiene su propia llave de navegador. Sin ella, la ruta cae a línea recta en vez de
+    // romperse.
     'google_maps' => [
         'key' => env('GOOGLE_MAPS_API_KEY'),
     ],

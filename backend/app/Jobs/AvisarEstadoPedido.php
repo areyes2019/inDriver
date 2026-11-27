@@ -87,14 +87,10 @@ class AvisarEstadoPedido implements ShouldQueue
     private function avisar(WhatsappClient $cliente, FrasesBot $frases): void
     {
         $momento = self::MOMENTOS[$this->estado] ?? null;
-        $pedido = Pedido::withoutGlobalScopes()->with(['cliente', 'conductor.usuario'])->find($this->idPedido);
+        // Con el scope puesto: un envío de prueba antiguo no le escribe a nadie.
+        $pedido = Pedido::with(['cliente', 'conductor.usuario'])->find($this->idPedido);
 
         if ($momento === null || $pedido === null || WhatsappAviso::where('id_pedido', $pedido->id_pedido)->where('momento', $momento)->exists()) {
-            return;
-        }
-
-        // Un envío de prueba no le escribe a nadie.
-        if ($pedido->esTest()) {
             return;
         }
 

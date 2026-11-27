@@ -309,13 +309,12 @@ it('rejects the three endpoints for a Despachador', function () {
         ->assertForbidden();
 });
 
-it('lists TEST and LIVE viajes with their numero_pedido even when the Panel is in LIVE', function () {
+it('lists the comisiones of old TEST viajes with their numero_pedido', function () {
     $tenant = liquidacionTenant();
     $admin = liquidacionAdmin($tenant);
     $juan = liquidacionConductor();
     liquidacionSembrarViajes($juan, 1, 100, Pedido::AMBIENTE_LIVE);
     liquidacionSembrarViajes($juan, 1, 60, Pedido::AMBIENTE_TEST);
-    ConfiguracionTenant::establecer(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_LIVE);
     tenancy()->end();
 
     $detalle = $this->actingAs($admin, 'usuario')

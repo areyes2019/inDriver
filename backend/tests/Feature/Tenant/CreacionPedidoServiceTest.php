@@ -91,13 +91,14 @@ it('deja pendiente el pedido agendado', function () {
     Event::assertDispatched(PedidoCreado::class, 1);
 });
 
-it('sella el ambiente del interruptor', function () {
+it('crea el pedido LIVE aunque la flotilla se haya quedado en TEST antes de quitar el modo', function () {
     Event::fake([PedidoCreado::class]);
-    ConfiguracionTenant::establecer(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_TEST);
+    // El interruptor TEST/LIVE ya no existe, pero la fila vieja puede seguir en la base.
+    ConfiguracionTenant::establecer('ambiente', Pedido::AMBIENTE_TEST);
 
     $pedido = app(CreacionPedidoService::class)->crear(datosDePedido(), null);
 
-    expect(Pedido::withoutGlobalScopes()->find($pedido->id_pedido)->ambiente)->toBe(Pedido::AMBIENTE_TEST);
+    expect(Pedido::find($pedido->id_pedido)?->ambiente)->toBe(Pedido::AMBIENTE_LIVE);
 });
 
 it('recalcula el número si otro pedido simultáneo ganó el mismo', function () {

@@ -28,9 +28,6 @@ class ConfiguracionTenant extends Model
 
     public const USAR_DESPACHADORES = 'usar_despachadores';
 
-    /** Interruptor TEST/LIVE del tenant (spec tenant/025, RN-01). Sin fijar, se comporta como `live`. */
-    public const AMBIENTE = 'ambiente';
-
     /** Modo automático (spec tenant/034): `No`, `Si` o `Pausado`. Sin fijar, `No`. */
     public const MODO_AUTOMATICO = 'modo_automatico';
 

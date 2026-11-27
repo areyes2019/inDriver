@@ -6,7 +6,6 @@ namespace App\Console\Commands;
 
 use App\Events\Tenant\PedidoCreado;
 use App\Models\Tenant as TenantCentral;
-use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
 use App\Services\PedidoEstadoService;
 use App\Services\RutaService;
@@ -43,7 +42,6 @@ use Illuminate\Support\Facades\Http;
 #[Signature('pedidos:sembrar
     {cantidad=5 : Cuántos envíos crear}
     {--tenant= : Slug del tenant; obligatorio si hay más de uno activo}
-    {--ambiente= : live|test; por omisión, el interruptor del tenant}
     {--centro= : "lat,lng"; con esto los puntos se sortean al azar alrededor y se deja de usar el callejero de Celaya. Con --google, es el centro de la búsqueda}
     {--radio=4 : Radio en km del sorteo o de la búsqueda en Google}
     {--google : Lugares reales de Google Places y distancia por calle de Directions}
@@ -146,7 +144,6 @@ class SembrarPedidos extends Command
                 return self::FAILURE;
             }
 
-            $ambiente = $this->resolverAmbiente();
             $centro = $this->centroDelSorteo();
             $google = (bool) $this->option('google');
 
@@ -169,12 +166,12 @@ class SembrarPedidos extends Command
                     : "sorteo alrededor de {$centro['lat']},{$centro['lng']} (radio {$radioKm} km)";
             }
 
-            $this->line("Tenant <info>{$tenant->slug}</info> · ambiente <info>{$ambiente}</info> · {$origen}");
+            $this->line("Tenant <info>{$tenant->slug}</info> · {$origen}");
 
             $filas = [];
 
             for ($i = 1; $i <= $cantidad; $i++) {
-                $pedido = $this->crear($ambiente, $centro, $radioKm, $tarifas, $i, $google);
+                $pedido = $this->crear($centro, $radioKm, $tarifas, $i, $google);
 
                 if (! $this->option('sin-publicar')) {
                     $this->publicar($pedido);
@@ -228,14 +225,6 @@ class SembrarPedidos extends Command
         return null;
     }
 
-    private function resolverAmbiente(): string
-    {
-        $ambiente = $this->option('ambiente')
-            ?? ConfiguracionTenant::obtener(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_LIVE);
-
-        return $ambiente === Pedido::AMBIENTE_TEST ? Pedido::AMBIENTE_TEST : Pedido::AMBIENTE_LIVE;
-    }
-
     /**
      * `null` —el caso normal— significa "usa el callejero de Celaya". Solo con `--centro` explícito
      * se vuelve al sorteo al azar de la versión anterior, que es la salida para un tenant de otra
@@ -266,7 +255,7 @@ class SembrarPedidos extends Command
      * @param  array{lat: float, lng: float}|null  $centro
      * @param  array{banderazo: float, km_incluidos: float, km_adicional: float}  $tarifas
      */
-    private function crear(string $ambiente, ?array $centro, float $radioKm, array $tarifas, int $indice, bool $google): Pedido
+    private function crear(?array $centro, float $radioKm, array $tarifas, int $indice, bool $google): Pedido
     {
         [$recogida, $entrega] = $centro === null
             ? $this->parDeDirecciones()
@@ -286,10 +275,9 @@ class SembrarPedidos extends Command
 
         $solicitante = self::SOLICITANTES[array_rand(self::SOLICITANTES)];
 
-        return DB::transaction(function () use ($ambiente, $recogida, $entrega, $importe, $modalidad, $cobro, $solicitante) {
-            // Mismo criterio que `Tenant\PedidoController@store`: el correlativo es del tenant
-            // entero y no del ambiente, y `ambiente` se sella fuera del `create()` porque no está
-            // en el `#[Fillable]` del modelo.
+        return DB::transaction(function () use ($recogida, $entrega, $importe, $modalidad, $cobro, $solicitante) {
+            // Mismo criterio que `CreacionPedidoService`: el correlativo es del tenant entero,
+            // contando los envíos de prueba antiguos que el scope oculta.
             $siguienteId = (int) (Pedido::withoutGlobalScopes()->max('id_pedido') ?? 0) + 1;
 
             $pedido = Pedido::create([
@@ -309,9 +297,6 @@ class SembrarPedidos extends Command
                 'importe_cobro' => $cobro,
                 'estado' => 'PENDIENTE',
             ]);
-
-            $pedido->ambiente = $ambiente;
-            $pedido->save();
 
             return $pedido;
         });

@@ -9,9 +9,7 @@ use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\AutomaticoBitacora;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
-use App\Models\Tenant\Pedido;
 use App\Services\ModoAutomaticoService;
-use App\Support\ContextoAmbiente;
 use App\Support\SaldoViajesTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -61,35 +59,6 @@ class ConfiguracionController extends Controller
         ]);
 
         return response()->json($this->estadoActual());
-    }
-
-    /**
-     * Interruptor TEST/LIVE (spec tenant/025, RN-01/RN-02). Va aparte del `update()` de arriba
-     * porque se mueve desde la cabecera del Panel, no desde el formulario de tarifas: obligar a
-     * pasar por el formulario completo para cambiar de ambiente lo volvería inusable.
-     *
-     * La ruta ya lo restringe a AdminCliente; el Despachador lo ve por `show()` y no puede moverlo.
-     */
-    public function ambiente(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'ambiente' => ['required', Rule::in([Pedido::AMBIENTE_LIVE, Pedido::AMBIENTE_TEST])],
-        ]);
-
-        ConfiguracionTenant::establecer(ConfiguracionTenant::AMBIENTE, $data['ambiente']);
-
-        Auditoria::create([
-            'id_usuario' => $request->user('usuario')->id_usuario,
-            'tabla_afectada' => 'configuraciones_tenant',
-            'accion' => 'EDICION',
-            'descripcion' => "Cambio de ambiente a {$data['ambiente']}",
-        ]);
-
-        // El contexto de esta misma petición ya quedó viejo: `AplicarAmbientePanel` corrió antes de
-        // guardar. Se actualiza para que la respuesta refleje el ambiente nuevo y no el anterior.
-        app(ContextoAmbiente::class)->fijar($data['ambiente']);
-
-        return response()->json(['ambiente' => $data['ambiente']]);
     }
 
     /**
@@ -159,7 +128,6 @@ class ConfiguracionController extends Controller
             'costo_viaje_prepago' => ConfiguracionTenant::obtener(ConfiguracionTenant::COSTO_VIAJE_PREPAGO),
             'comision_porcentaje' => ConfiguracionTenant::obtener(ConfiguracionTenant::COMISION_PORCENTAJE),
             'usar_despachadores' => ConfiguracionTenant::obtener(ConfiguracionTenant::USAR_DESPACHADORES, 'No'),
-            'ambiente' => ConfiguracionTenant::obtener(ConfiguracionTenant::AMBIENTE, Pedido::AMBIENTE_LIVE),
             'saldo_viajes_tenant' => SaldoViajesTenant::actualONull(),
             'modo_automatico' => ConfiguracionTenant::obtener(ConfiguracionTenant::MODO_AUTOMATICO, ModoAutomaticoService::NO),
             'app_clientes' => ConfiguracionTenant::obtener(ConfiguracionTenant::APP_CLIENTES, 'No'),

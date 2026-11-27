@@ -8,7 +8,7 @@ import { Icon } from '@iconify/vue'
  * derecha y arranca cerrado. Flota sobre el contenido: abrirlo no mueve nada de lo que hay debajo.
  *
  * Sus medidas salen de las variables CSS que define `TenantLayout` (`--riel-ancho`,
- * `--riel-ancho-abierto`, `--riel-margen`, `--alto-banda`).
+ * `--riel-ancho-abierto`, `--riel-margen`).
  */
 export interface ItemSidebar {
   label: string
@@ -148,7 +148,7 @@ defineExpose({
   <nav
     ref="raizRef"
     aria-label="Menú principal"
-    class="fixed bottom-(--riel-margen) left-(--riel-margen) top-[calc(var(--alto-banda)+var(--riel-margen))] z-40 rounded-lg bg-sidebar text-sidebar-texto shadow-xl transition-[width] duration-300 ease-in-out"
+    class="fixed bottom-(--riel-margen) left-(--riel-margen) top-(--riel-margen) z-40 rounded-lg bg-sidebar text-sidebar-texto shadow-xl transition-[width] duration-300 ease-in-out"
     :class="abierto ? 'w-(--riel-ancho-abierto)' : 'w-(--riel-ancho)'"
   >
     <!--

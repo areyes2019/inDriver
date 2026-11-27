@@ -63,10 +63,8 @@ class PedidoEstadoCambiado implements ShouldBroadcastNow
             'id_conductor' => $this->idConductor,
             'estado' => $this->estado,
             // spec tenant/027: `seguimiento` viaja con el evento para que el mapa del Panel cambie
-            // de hito sin volver a pedir `/conductores/activos`, y `ambiente` para que un envío de
-            // un ambiente no se cuele en el Panel del otro (RN-28).
+            // de hito sin volver a pedir `/conductores/activos`.
             'seguimiento' => $datos['seguimiento'] ?? null,
-            'ambiente' => $datos['ambiente'] ?? null,
             'event_id' => $this->eventId,
         ];
     }
