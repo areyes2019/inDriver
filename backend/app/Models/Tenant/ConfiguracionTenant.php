@@ -40,6 +40,16 @@ class ConfiguracionTenant extends Model
     /** App de clientes (spec tenant/035, D17): `No` o `Si`. Sin fijar, `No`. */
     public const APP_CLIENTES = 'app_clientes';
 
+    /**
+     * Horario de atención de la app de clientes (spec tenant/035, RN-28 y RN-29): JSON por día ISO
+     * (`1` lunes … `7` domingo) con `["HH:mm", "HH:mm"]` o `null` si ese día no se atiende. Sin
+     * fijar, se atiende las 24 horas. Ver `App\Support\HorarioAtencion`.
+     */
+    public const HORARIO_ATENCION = 'horario_atencion';
+
+    /** Minutos de la ventana de un pedido programado desde la app (RN-28): 15 a 240, 60 por defecto. */
+    public const VENTANA_PROGRAMADO_MIN = 'ventana_programado_min';
+
     public static function appClientesPrendida(): bool
     {
         return static::obtener(self::APP_CLIENTES, 'No') === 'Si';

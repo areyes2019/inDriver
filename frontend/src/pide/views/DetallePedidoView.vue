@@ -91,7 +91,7 @@ function repetir(): void {
       </ol>
 
       <dl class="space-y-2 rounded-3xl bg-white p-4 text-sm ring-1 ring-linea">
-        <div class="flex justify-between">
+        <div v-if="pedido.km !== null" class="flex justify-between">
           <dt class="text-suave">Distancia</dt>
           <dd>{{ km(pedido.km) }}</dd>
         </div>

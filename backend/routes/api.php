@@ -10,6 +10,7 @@ use App\Http\Controllers\Cliente\CotizacionController as ClienteCotizacionContro
 use App\Http\Controllers\Cliente\DireccionController as ClienteDireccionController;
 use App\Http\Controllers\Cliente\ManifiestoController as ClienteManifiestoController;
 use App\Http\Controllers\Cliente\MarcaController as ClienteMarcaController;
+use App\Http\Controllers\Cliente\PedidoController as ClientePedidoController;
 use App\Http\Controllers\Cliente\PerfilController as ClientePerfilController;
 use App\Http\Controllers\Tenant\AuthController as TenantAuthController;
 use App\Http\Controllers\Tenant\ClienteController;
@@ -220,6 +221,12 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::post('/direcciones', [ClienteDireccionController::class, 'store']);
             Route::put('/direcciones/{direccion}', [ClienteDireccionController::class, 'update'])->whereNumber('direccion');
             Route::delete('/direcciones/{direccion}', [ClienteDireccionController::class, 'destroy'])->whereNumber('direccion');
+
+            // Fase 5: pedidos (creación con llave anti-duplicados, lista, detalle y cancelación).
+            Route::get('/pedidos', [ClientePedidoController::class, 'index']);
+            Route::post('/pedidos', [ClientePedidoController::class, 'store'])->middleware('throttle:cliente-google');
+            Route::get('/pedidos/{pedido}', [ClientePedidoController::class, 'show'])->whereNumber('pedido');
+            Route::post('/pedidos/{pedido}/cancelar', [ClientePedidoController::class, 'cancelar'])->whereNumber('pedido');
         });
     });
 

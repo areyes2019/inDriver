@@ -1,12 +1,17 @@
 import type { ApiCliente } from './cliente'
 import { apiSimulada } from './mock'
 import type {
+  ActualizacionPedido,
   Cliente,
+  Cotizacion,
   Direccion,
   Marca,
+  Pedido,
   ResultadoCodigo,
   ResultadoCotizar,
+  ResultadoCrear,
   ResultadoVerificar,
+  SolicitudPedido,
 } from './tipos'
 import { useMarcaStore } from '../stores/marca'
 
@@ -14,7 +19,9 @@ import { useMarcaStore } from '../stores/marca'
  * API real de la app de clientes (spec tenant/035, sección 8). Va entrando por fases:
  * - Fase 3: marca, código, verificación, salir y perfil.
  * - Fase 4: zona de servicio, dirección de un punto, cotización y direcciones favoritas.
- * Lo demás sigue en la simulada hasta su fase.
+ * - Fase 5: crear (con llave anti-duplicados), listar, ver y cancelar pedidos. Mientras llega el
+ *   canal en tiempo real (Fase 6), el seguimiento consulta el pedido cada 15 segundos.
+ * Lo demás sigue en la simulada hasta su fase; los avisos (Fase 8) quedan vacíos.
  *
  * Usa `fetch` y no el `http` (axios) del Panel: la app autentica con token Bearer, no con la cookie
  * de sesión, y así no descarga el código del Panel.
@@ -33,9 +40,17 @@ interface Respuesta<T> {
 async function llamar<T>(
   slug: string,
   ruta: string,
-  opciones: { metodo?: string; cuerpo?: unknown; conToken?: boolean } = {},
+  opciones: {
+    metodo?: string
+    cuerpo?: unknown
+    conToken?: boolean
+    encabezados?: Record<string, string>
+  } = {},
 ): Promise<Respuesta<T>> {
-  const encabezados: Record<string, string> = { Accept: 'application/json' }
+  const encabezados: Record<string, string> = {
+    Accept: 'application/json',
+    ...opciones.encabezados,
+  }
   if (opciones.cuerpo !== undefined) encabezados['Content-Type'] = 'application/json'
   if (opciones.conToken) {
     const token = useMarcaStore().almacen.leer('token')
@@ -205,21 +220,7 @@ export const apiReal: ApiCliente = {
         },
       },
     )
-    if (estado === 200) {
-      return {
-        ok: true,
-        cotizacion: {
-          km: datos.km,
-          // Sin minutos de Google, un estimado de ciudad: 22 km/h y 4 minutos para salir.
-          minutos: datos.minutos ?? Math.max(6, Math.round((datos.km / 22) * 60) + 4),
-          importeEnvio: datos.importe_envio,
-          importeProducto: datos.importe_producto,
-          total: datos.total,
-          sello: datos.sello,
-          venceEn: datos.vence_en,
-        },
-      }
-    }
+    if (estado === 200) return { ok: true, cotizacion: aCotizacion(datos) }
     if (datos?.motivo === 'FUERA_DE_ZONA') {
       return {
         ok: false,
@@ -256,6 +257,110 @@ export const apiReal: ApiCliente = {
     return aDireccion(datos)
   },
 
+  async crearPedido(s, cotizacion, llave): Promise<ResultadoCrear> {
+    let sello = cotizacion.sello
+    // Reintentos: "se está procesando" (RN-31) y un sello vencido con el mismo precio (RN-24).
+    for (let intento = 0; intento < 6; intento++) {
+      const { estado, datos } = await llamar<RespuestaCrear>(slugActual(), '/pedidos', {
+        metodo: 'POST',
+        conToken: true,
+        encabezados: { 'Idempotency-Key': llave },
+        cuerpo: { ...cuerpoSolicitud(s), sello },
+      })
+      if (estado === 200 || estado === 201) return { ok: true, pedido: aPedido(datos as PedidoApi) }
+
+      const error = datos as ErrorCrear | null
+      if (estado === 409 && error?.motivo === 'PROCESANDO') {
+        await new Promise((listo) => setTimeout(listo, 2000))
+        continue
+      }
+      if (estado === 409 && error?.motivo === 'SELLO_VENCIDO' && error.cotizacion) {
+        const nueva = aCotizacion(error.cotizacion)
+        if (nueva.total !== cotizacion.total) {
+          return { ok: false, motivo: 'PRECIO_CAMBIO', cotizacion: nueva }
+        }
+        sello = nueva.sello
+        continue
+      }
+      if (estado === 429) return { ok: false, motivo: 'LIMITE' }
+      if (estado === 403) return { ok: false, motivo: 'NO_DISPONIBLE' }
+      if (error?.motivo === 'SIN_SERVICIO' || error?.motivo === 'FUERA_DE_HORARIO') {
+        return { ok: false, motivo: error.motivo }
+      }
+      throw new Error(`No se pudo crear el pedido (${error?.motivo ?? estado})`)
+    }
+    throw new Error('El pedido sigue en proceso')
+  },
+
+  async pedidos(grupo) {
+    const { estado, datos } = await llamar<{ data: PedidoApi[] }>(
+      slugActual(),
+      `/pedidos?grupo=${grupo}`,
+      { conToken: true },
+    )
+    if (estado !== 200) throw new Error('No se pudieron cargar tus pedidos')
+    return datos.data.map(aPedido)
+  },
+
+  async pedido(id) {
+    const { estado, datos } = await llamar<PedidoApi>(slugActual(), `/pedidos/${id}`, {
+      conToken: true,
+    })
+    if (estado === 404) return null
+    if (estado !== 200) throw new Error('No se pudo cargar el pedido')
+    return aPedido(datos)
+  },
+
+  async cancelar(id) {
+    const { estado, datos } = await llamar<PedidoApi & { pedido?: PedidoApi }>(
+      slugActual(),
+      `/pedidos/${id}/cancelar`,
+      { metodo: 'POST', conToken: true },
+    )
+    if (estado === 200) return aPedido(datos)
+    // RN-37: un repartidor lo tomó justo antes; la pantalla se actualiza con ese estado.
+    if (estado === 409 && datos.pedido) throw new YaAsignado(aPedido(datos.pedido))
+    throw new Error('No se pudo cancelar el pedido')
+  },
+
+  /**
+   * Hasta la Fase 6 no hay canal en tiempo real: se consulta el pedido cada 15 segundos (lo mismo
+   * que hará el respaldo de D15) y se avisa solo lo que cambió.
+   */
+  escucharPedido(id, alRecibir) {
+    let anterior: Pedido | null = null
+    let activo = true
+    const consultar = async (): Promise<void> => {
+      if (!activo || document.hidden) return
+      try {
+        const actual = await apiReal.pedido(id)
+        if (!actual || !activo) return
+        const cambio = diferencia(anterior, actual)
+        anterior = actual
+        if (cambio) alRecibir(cambio)
+      } catch {
+        // Sin red: se intenta en la siguiente vuelta.
+      }
+    }
+    void consultar()
+    const reloj = setInterval(consultar, 15_000)
+    return () => {
+      activo = false
+      clearInterval(reloj)
+    }
+  },
+
+  estadoConexion() {
+    return 'conectado'
+  },
+
+  // Los avisos llegan en la Fase 8: mientras tanto, la campanita queda vacía.
+  async notificaciones() {
+    return []
+  },
+
+  async marcarLeida() {},
+
   async borrarDireccion(id) {
     const { estado } = await llamar(slugActual(), `/direcciones/${id}`, {
       metodo: 'DELETE',
@@ -263,6 +368,116 @@ export const apiReal: ApiCliente = {
     })
     if (estado !== 204) throw new Error('No se pudo borrar la dirección')
   },
+}
+
+/** Un repartidor tomó el pedido justo antes de cancelar (RN-37). */
+export class YaAsignado extends Error {
+  constructor(public readonly pedido: Pedido) {
+    super('El pedido ya tiene repartidor')
+  }
+}
+
+function cuerpoSolicitud(s: SolicitudPedido) {
+  return {
+    tipo: s.tipo,
+    recogida: { lat: s.recogida.lat, lng: s.recogida.lng, direccion: s.recogida.direccion },
+    entrega: { lat: s.entrega.lat, lng: s.entrega.lng, direccion: s.entrega.direccion },
+    referencias_recogida: s.referenciasRecogida || null,
+    referencias_entrega: s.referenciasEntrega || null,
+    contacto_recogida: { nombre: s.contactoRecogida.nombre, telefono: s.contactoRecogida.telefono },
+    recibe: { nombre: s.recibe.nombre, telefono: s.recibe.telefono },
+    modalidad: s.modalidad,
+    importe_producto: s.importeProducto || null,
+    lo_antes_posible: s.loAntesPosible,
+    ...(s.loAntesPosible ? {} : { fecha: s.fecha, hora: s.hora }),
+  }
+}
+
+function aCotizacion(c: CotizacionApi): Cotizacion {
+  return {
+    km: c.km,
+    // Sin minutos de Google, un estimado de ciudad: 22 km/h y 4 minutos para salir.
+    minutos: c.minutos ?? Math.max(6, Math.round((c.km / 22) * 60) + 4),
+    importeEnvio: c.importe_envio,
+    importeProducto: c.importe_producto,
+    total: c.total,
+    sello: c.sello,
+    venceEn: c.vence_en,
+  }
+}
+
+interface ErrorCrear {
+  motivo?: string
+  cotizacion?: CotizacionApi
+}
+
+type RespuestaCrear = PedidoApi | ErrorCrear
+
+interface PuntoApi {
+  direccion: string
+  lat: number
+  lng: number
+}
+
+interface PedidoApi {
+  id: number
+  numero: string
+  tipo: Pedido['tipo']
+  estado: Pedido['estado']
+  recogida: PuntoApi
+  referencias_recogida: string
+  contacto_recogida: { nombre: string; telefono: string }
+  entrega: PuntoApi
+  referencias_entrega: string
+  recibe: { nombre: string; telefono: string }
+  modalidad: Pedido['modalidad']
+  importe_envio: number
+  importe_producto: number
+  km: number | null
+  creado_en: string
+  programado_para: string | null
+  repartidor: { nombre: string; telefono: string; color: string } | null
+  posicion: { lat: number; lng: number } | null
+  sin_repartidor: boolean
+}
+
+function aPedido(p: PedidoApi): Pedido {
+  return {
+    id: p.id,
+    numero: p.numero,
+    tipo: p.tipo,
+    estado: p.estado,
+    recogida: p.recogida,
+    referenciasRecogida: p.referencias_recogida,
+    contactoRecogida: p.contacto_recogida,
+    entrega: p.entrega,
+    referenciasEntrega: p.referencias_entrega,
+    recibe: p.recibe,
+    modalidad: p.modalidad,
+    importeEnvio: p.importe_envio,
+    importeProducto: p.importe_producto,
+    km: p.km,
+    creadoEn: p.creado_en,
+    programadoPara: p.programado_para,
+    repartidor: p.repartidor,
+    posicion: p.posicion,
+    sinRepartidor: p.sin_repartidor,
+  }
+}
+
+/** Lo que cambió entre dos consultas del mismo pedido, o `null` si nada. */
+function diferencia(antes: Pedido | null, ahora: Pedido): ActualizacionPedido | null {
+  const cambio: ActualizacionPedido = { idPedido: ahora.id }
+  if (!antes || antes.estado !== ahora.estado) cambio.estado = ahora.estado
+  if (JSON.stringify(antes?.repartidor ?? null) !== JSON.stringify(ahora.repartidor)) {
+    cambio.repartidor = ahora.repartidor
+  }
+  if (!antes || antes.sinRepartidor !== ahora.sinRepartidor) {
+    cambio.sinRepartidor = ahora.sinRepartidor
+  }
+  const p = ahora.posicion
+  if (p && (antes?.posicion?.lat !== p.lat || antes?.posicion?.lng !== p.lng)) cambio.posicion = p
+  return Object.keys(cambio).length > 1 ? cambio : null
 }
 
 interface CotizacionApi {

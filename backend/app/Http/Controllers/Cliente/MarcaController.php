@@ -7,14 +7,15 @@ namespace App\Http\Controllers\Cliente;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\ZonaServicio;
+use App\Support\HorarioAtencion;
 use Illuminate\Http\JsonResponse;
 
 /**
  * Lo que la app necesita antes de entrar (spec tenant/035, sección 8): nombre, contacto y si la app
  * está prendida. Es pública.
  *
- * Logo, banner, servicios por flotilla y horario llegan en la Fase 8; mientras tanto van los valores
- * por defecto de la spec (sin logo ni banner, los dos servicios, 24 horas).
+ * Logo, banner y servicios por flotilla llegan en la Fase 8; mientras tanto van los valores por
+ * defecto de la spec (sin logo ni banner, los dos servicios). El horario sale de `HorarioAtencion`.
  */
 class MarcaController extends Controller
 {
@@ -24,6 +25,7 @@ class MarcaController extends Controller
     public function show(): JsonResponse
     {
         $tenant = tenant();
+        $horario = HorarioAtencion::deLaFlotilla();
 
         return response()->json([
             'slug' => $tenant->slug,
@@ -34,8 +36,8 @@ class MarcaController extends Controller
             'servicios' => ['enviar' => true, 'recibir' => true],
             'disponible' => ConfiguracionTenant::appClientesPrendida(),
             'centro' => $this->centro(),
-            'horario' => 'Todos los días, a cualquier hora',
-            'abierto_ahora' => true,
+            'horario' => $horario->texto(),
+            'abierto_ahora' => $horario->abiertoAhora(),
         ]);
     }
 

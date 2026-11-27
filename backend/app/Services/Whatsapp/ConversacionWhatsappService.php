@@ -639,6 +639,7 @@ class ConversacionWhatsappService
 
         return [
             'id_cliente' => $cliente?->id_cliente,
+            'origen' => 'WHATSAPP',
             'nombre_solicitante' => $solicitud->destinatario_nombre,
             'telefono_solicitante' => $solicitud->destinatario_telefono,
             'direccion_recogida' => mb_substr((string) $solicitud->recogida_direccion, 0, 255),

@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { iniciales } from '@/lib/iniciales'
 import MapService from '@/services/maps/MapService'
 import { api } from '../api'
+import { YaAsignado } from '../api/real'
 import type { ActualizacionPedido, Coordenada, Pedido } from '../api/tipos'
 import BotonPrincipal from '../components/BotonPrincipal.vue'
 import HojaInferior from '../components/HojaInferior.vue'
@@ -203,7 +204,14 @@ async function cancelar(): Promise<void> {
     const p = await api.cancelar(pedido.value.id)
     aplicar({ idPedido: p.id, estado: 'CANCELADO' })
     confirmarCancelacion.value = false
-  } catch {
+  } catch (e) {
+    if (e instanceof YaAsignado) {
+      // RN-37: un repartidor lo tomó justo antes; ahora se ve "Llama a la flotilla".
+      confirmarCancelacion.value = false
+      aplicar({ idPedido: e.pedido.id, estado: e.pedido.estado, repartidor: e.pedido.repartidor })
+      ui.avisar('Un repartidor ya tomó tu pedido. Para cancelarlo, llama a la flotilla.', 'error')
+      return
+    }
     ui.avisar('No pudimos cancelar. Intenta de nuevo.', 'error')
   } finally {
     cancelando.value = false

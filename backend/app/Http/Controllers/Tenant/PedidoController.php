@@ -101,7 +101,7 @@ class PedidoController extends Controller
         $this->validarTarifasConfiguradas();
         $data = $this->validarDatos($request);
 
-        $pedido = $this->creacion->crear($data, $request->user('usuario')->id_usuario);
+        $pedido = $this->creacion->crear([...$data, 'origen' => 'PANEL'], $request->user('usuario')->id_usuario);
 
         return response()->json(new PedidoResource($pedido), 201);
     }

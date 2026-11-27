@@ -126,7 +126,8 @@ export interface Pedido {
   modalidad: ModalidadPago
   importeEnvio: number
   importeProducto: number
-  km: number
+  /** Kilómetros recorridos; `null` mientras el envío no termina. */
+  km: number | null
   /** ISO 8601. */
   creadoEn: string
   /** ISO 8601 de `hora_desde`, o `null` si es "lo antes posible". */
@@ -167,7 +168,7 @@ export type ResultadoCotizar =
 export type ResultadoCrear =
   | { ok: true; pedido: Pedido }
   | { ok: false; motivo: 'PRECIO_CAMBIO'; cotizacion: Cotizacion }
-  | { ok: false; motivo: 'NO_DISPONIBLE' | 'LIMITE' }
+  | { ok: false; motivo: 'NO_DISPONIBLE' | 'LIMITE' | 'SIN_SERVICIO' | 'FUERA_DE_HORARIO' }
 
 /** Lo que llega por el canal del cliente (RN-41, RN-42). */
 export interface ActualizacionPedido {

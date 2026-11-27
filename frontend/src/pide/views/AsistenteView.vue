@@ -118,6 +118,17 @@ async function confirmar(): Promise<void> {
       ui.avisar(`El precio cambió a ${pesos(r.cotizacion.total)}. Revísalo y confirma.`, 'error')
     } else if (r.motivo === 'LIMITE') {
       ui.avisar('Tienes varios pedidos en curso. Espera a que termine alguno.', 'error')
+    } else if (r.motivo === 'FUERA_DE_HORARIO') {
+      ui.avisar(
+        `Ahora no estamos atendiendo (${marca.marca?.horario}). Programa tu pedido.`,
+        'error',
+      )
+    } else if (r.motivo === 'SIN_SERVICIO') {
+      const tel = marca.marca?.telefonoContacto
+      ui.avisar(
+        `Por ahora no podemos recibir pedidos desde la app.${tel ? ` Llámanos al ${tel}.` : ''}`,
+        'error',
+      )
     } else {
       router.replace({ name: 'no-disponible', params: { slug: marca.slug } })
     }

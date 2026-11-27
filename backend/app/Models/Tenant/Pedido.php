@@ -56,6 +56,12 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'ultima_reoferta_automatica',
     'estado_cambiado_en',
     'aviso_atorado_en',
+    'origen',
+    'tipo_servicio',
+    'contacto_recogida_nombre',
+    'contacto_recogida_telefono',
+    'referencias_recogida',
+    'referencias_entrega',
 ])]
 #[ScopedBy([AmbienteScope::class])]
 #[ObservedBy([PedidoObserver::class])]
