@@ -49,12 +49,19 @@ class WhatsappWebhookController extends Controller
 
     /**
      * Sobre el cuerpo crudo: decodificarlo y volver a codificarlo cambiaría los bytes firmados. Sin
-     * secreto configurado no se acepta nada.
+     * secreto configurado no se acepta nada. Cada app de Meta firma con su propio secreto y puede
+     * haber varias (una por flotilla), así que vale la firma de cualquiera de ellas.
      */
     private function firmaValida(string $cuerpo, string $firma): bool
     {
-        $secreto = (string) config('services.whatsapp.app_secret');
+        $secretos = array_filter(array_map('trim', explode(',', (string) config('services.whatsapp.app_secret'))));
 
-        return $secreto !== '' && hash_equals('sha256='.hash_hmac('sha256', $cuerpo, $secreto), $firma);
+        foreach ($secretos as $secreto) {
+            if (hash_equals('sha256='.hash_hmac('sha256', $cuerpo, $secreto), $firma)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -131,6 +131,18 @@ it('no guarda nada si la firma es inválida', function (?string $firma) {
     Queue::assertNothingPushed();
 })->with(['firma falsa' => 'sha256=abc', 'sin firma' => [null]]);
 
+it('acepta la firma de cualquiera de las apps de Meta configuradas', function () {
+    config(['services.whatsapp.app_secret' => 'secreto-de-la-app, secreto-de-otra-app']);
+    flotillaConNumero('moto-a', 'NUM-A');
+    Queue::fake();
+    $cuerpo = json_encode(mensajeDeMeta('NUM-A'));
+
+    $this->call('POST', WEBHOOK_URL, [], [], [], [
+        'CONTENT_TYPE' => 'application/json',
+        'HTTP_X_HUB_SIGNATURE_256' => 'sha256='.hash_hmac('sha256', $cuerpo, 'secreto-de-otra-app'),
+    ], $cuerpo)->assertOk();
+});
+
 it('no acepta nada si falta el secreto', function () {
     config(['services.whatsapp.app_secret' => '']);
     $cuerpo = json_encode(mensajeDeMeta('NUM-A'));
