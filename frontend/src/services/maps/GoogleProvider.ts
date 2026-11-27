@@ -400,6 +400,11 @@ export default class GoogleProvider extends BaseProvider {
     instance.dibujosVigentes.clear()
   }
 
+  /** Centro actual del mapa (spec tenant/035, "Elegir en el mapa"), o `null` si aún no hay mapa. */
+  getCenter(containerId: string): LatLngLike | null {
+    return this.instances.get(containerId)?.map.getCenter()?.toJSON() ?? null
+  }
+
   centerOn(containerId: string, position: LatLngLike, zoom?: number): void {
     const instance = this.instances.get(containerId)
     if (!instance) return

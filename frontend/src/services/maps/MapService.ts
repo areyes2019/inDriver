@@ -69,6 +69,10 @@ class MapService {
     this.provider.clearRoutes(containerId)
   }
 
+  getCenter(containerId: string): LatLngLike | null {
+    return this.provider.getCenter(containerId)
+  }
+
   centerOn(containerId: string, position: LatLngLike, zoom?: number): void {
     this.provider.centerOn(containerId, position, zoom)
   }

@@ -1,0 +1,134 @@
+@import 'tailwindcss';
+
+/*
+ * App de clientes (spec tenant/035, D16): los colores son fijos para todas las flotillas —
+ * morado, amarillo y blanco—. Lo único que cambia por flotilla es el logo y el banner.
+ */
+@theme {
+  --color-morado-950: #1e0b4b;
+  --color-morado-900: #2e1065;
+  --color-morado-800: #4c1d95;
+  --color-morado-700: #5b21b6;
+  --color-morado-600: #6d28d9;
+  --color-morado-500: #7c3aed;
+  --color-morado-200: #ddd6fe;
+  --color-morado-100: #ede9fe;
+  --color-morado-50: #f5f3ff;
+
+  --color-amarillo-500: #facc15;
+  --color-amarillo-400: #fde047;
+  --color-amarillo-100: #fef9c3;
+
+  --color-tinta: #1b1530;
+  --color-suave: #6b6780;
+  --color-linea: #e9e6f2;
+  --color-fondo: #f7f6fb;
+
+  --color-exito: #16a34a;
+  --color-peligro: #dc2626;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-titulo: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-tarjeta: 0 10px 30px -12px rgb(46 16 101 / 0.18);
+  --shadow-flotante: 0 18px 40px -16px rgb(46 16 101 / 0.35);
+}
+
+html,
+body {
+  background: var(--color-fondo);
+  color: var(--color-tinta);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+#pide {
+  min-height: 100dvh;
+}
+
+/* Espacio para la barra del sistema en teléfonos con muesca (PWA instalada). */
+.pb-seguro {
+  padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+}
+
+.pt-seguro {
+  padding-top: max(env(safe-area-inset-top), 0.75rem);
+}
+
+@keyframes pulso-busqueda {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+.onda-busqueda {
+  animation: pulso-busqueda 2.2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+
+@keyframes moto-avanza {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(2deg);
+  }
+}
+
+.moto-avanza {
+  animation: moto-avanza 1.2s ease-in-out infinite;
+}
+
+/* Transición entre pantallas. */
+.pantalla-enter-active,
+.pantalla-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+.pantalla-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.pantalla-leave-to {
+  opacity: 0;
+}
+
+/* Hoja inferior. */
+.hoja-enter-active,
+.hoja-leave-active {
+  transition: opacity 0.2s ease;
+}
+.hoja-enter-active .hoja-panel,
+.hoja-leave-active .hoja-panel {
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.hoja-enter-from,
+.hoja-leave-to {
+  opacity: 0;
+}
+.hoja-enter-from .hoja-panel,
+.hoja-leave-to .hoja-panel {
+  transform: translateY(100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onda-busqueda,
+  .moto-avanza {
+    animation: none;
+  }
+  .pantalla-enter-active,
+  .pantalla-leave-active,
+  .hoja-enter-active,
+  .hoja-leave-active,
+  .hoja-enter-active .hoja-panel,
+  .hoja-leave-active .hoja-panel {
+    transition: none;
+  }
+}
