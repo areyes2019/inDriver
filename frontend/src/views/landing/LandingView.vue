@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Icon } from '@iconify/vue'
 import { vAparecer } from './aparecer'
+import MaquetaPanel from './components/MaquetaPanel.vue'
 import MaquetaWhatsapp from './components/MaquetaWhatsapp.vue'
 import FormularioContacto from './components/FormularioContacto.vue'
 
@@ -10,7 +11,8 @@ import FormularioContacto from './components/FormularioContacto.vue'
  * cómo contactarnos. Todo lo que promete existe hoy en el sistema.
  *
  * Las imágenes viven en `public/landing/` en WebP, en dos anchos: el navegador elige con `srcset`
- * la que le toca a su pantalla. WhatsApp no tiene imagen y usa una maqueta animada.
+ * la que le toca a su pantalla. La portada (motos moviéndose en el mapa) y WhatsApp usan maquetas
+ * animadas.
  */
 const PRECIO_POR_VIAJE = 3
 
@@ -26,14 +28,6 @@ interface ImagenLanding {
 }
 
 const imagenes: Record<string, ImagenLanding> = {
-  portada: {
-    src: '/landing/portada-960.webp',
-    srcset: '/landing/portada-960.webp 960w, /landing/portada-1600.webp 1600w',
-    sizes: '(min-width: 1024px) 45vw, 100vw',
-    ancho: 1600,
-    alto: 901,
-    alt: 'Panel de Motopanda con los repartidores de una flotilla en el mapa de Celaya',
-  },
   panel: {
     src: '/landing/panel-640.webp',
     srcset: '/landing/panel-640.webp 640w, /landing/panel-1100.webp 1100w',
@@ -379,16 +373,23 @@ const preguntas = [
 
         <div v-aparecer="150" class="relative">
           <div class="flotar">
-            <img
-              :src="imagenes.portada!.src"
-              :srcset="imagenes.portada!.srcset"
-              :sizes="imagenes.portada!.sizes"
-              :width="imagenes.portada!.ancho"
-              :height="imagenes.portada!.alto"
-              :alt="imagenes.portada!.alt"
-              fetchpriority="high"
-              class="h-auto w-full rounded-3xl shadow-2xl shadow-panda-950/40 ring-1 ring-white/15"
-            />
+            <MaquetaPanel />
+          </div>
+          <div
+            class="flotar-lento absolute -bottom-6 -left-3 hidden items-center gap-3 rounded-2xl bg-white p-3 pr-5 text-tinta shadow-xl sm:flex"
+          >
+            <span class="flex size-10 items-center justify-center rounded-xl bg-emerald-100">
+              <Icon icon="tabler:circle-check" class="size-6 text-emerald-600" />
+            </span>
+            <div>
+              <p class="text-xs text-tinta/50">PED-000183</p>
+              <p class="text-sm font-bold">Entregado en 18 min</p>
+            </div>
+          </div>
+          <div
+            class="flotar absolute -top-5 -right-2 hidden items-center gap-2 rounded-2xl bg-whatsapp px-4 py-2.5 text-sm font-bold text-white shadow-xl sm:flex"
+          >
+            <Icon icon="tabler:brand-whatsapp" class="size-5" /> Nuevo pedido
           </div>
         </div>
       </div>
@@ -842,6 +843,10 @@ const preguntas = [
   animation: flotar 6s ease-in-out infinite;
 }
 
+.flotar-lento {
+  animation: flotar 8s ease-in-out infinite reverse;
+}
+
 @keyframes flotar {
   0%,
   100% {
@@ -898,7 +903,8 @@ const preguntas = [
 @media (prefers-reduced-motion: reduce) {
   .mancha-1,
   .mancha-2,
-  .flotar {
+  .flotar,
+  .flotar-lento {
     animation: none;
   }
 
