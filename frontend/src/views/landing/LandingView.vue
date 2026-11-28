@@ -258,8 +258,15 @@ const preguntas = [
       :class="conScroll ? 'bg-white/85 shadow-sm backdrop-blur-lg' : 'bg-transparent'"
     >
       <nav class="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4 sm:px-6 lg:px-8">
-        <a href="#inicio" class="flex items-center gap-2">
-          <img src="/pide/iconos/icono-192.png" alt="" class="size-9 rounded-xl" />
+        <a href="#inicio" class="flex items-center gap-2.5">
+          <img
+            src="/landing/logo-motopanda-96.webp"
+            srcset="/landing/logo-motopanda-96.webp 1x, /landing/logo-motopanda-256.webp 2x"
+            width="48"
+            height="48"
+            alt=""
+            class="size-12 rounded-full shadow-md ring-2 ring-white/70"
+          />
           <span
             class="font-heading text-xl font-extrabold tracking-tight"
             :class="conScroll ? 'text-tinta' : 'text-white'"
