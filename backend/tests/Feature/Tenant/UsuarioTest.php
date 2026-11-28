@@ -9,6 +9,7 @@ use App\Notifications\CredencialesUsuarioTenant;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Markdown;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
@@ -176,10 +177,11 @@ it('emails a conductor the fleet code and the Google Play link instead of the pa
     Notification::assertSentOnDemand(
         CredencialesConductor::class,
         function (CredencialesConductor $notification, $channels, $notifiable) {
-            $html = $notification->toMail($notifiable)->render()->toHtml();
+            $html = (string) $notification->toMail($notifiable)->render();
 
             return $notifiable->routes['mail'] === 'pedro@cafeluna.com'
-                && str_contains($html, '<code>cafe-luna</code>')
+                && preg_match('/data-campo="slug"[^>]*>cafe-luna</', $html) === 1
+                && str_contains($html, '¡Bienvenido, Pedro!')
                 && str_contains($html, 'https://play.google.com/store/apps/details?id=com.pandaconnect.delivery')
                 && ! str_contains($html, 'Ir al panel');
         },
@@ -204,12 +206,59 @@ it('emails a conductor without the Google Play button while the listing is not c
     Notification::assertSentOnDemand(
         CredencialesConductor::class,
         function (CredencialesConductor $notification, $channels, $notifiable) {
-            $correo = $notification->toMail($notifiable);
+            $html = (string) $notification->toMail($notifiable)->render();
 
-            return $correo->actionUrl === null
-                && str_contains($correo->render()->toHtml(), 'Busca la app Panda Express en Google Play');
+            return ! str_contains($html, 'Descargar en Google Play')
+                && str_contains($html, 'Busca la app <strong>Panda Express</strong> en Google Play');
         },
     );
+});
+
+/**
+ * @return array{html: string, texto: string, correo: MailMessage}
+ */
+function correoConductor(string $password = 'Abc123!', ?string $logoUrl = null): array
+{
+    $correo = (new CredencialesConductor('Moto Celaya', 'moto-celaya', 'pedro@motocelaya.mx', $password, 'Pedro', $logoUrl))
+        ->toMail(Notification::route('mail', 'pedro@motocelaya.mx'));
+
+    return [
+        'html' => (string) $correo->render(),
+        'texto' => view('mail.credenciales-conductor-texto', $correo->viewData)->render(),
+        'correo' => $correo,
+    ];
+}
+
+it('brands the conductor welcome email as Moto Panda and signs it with the flotilla', function () {
+    ['html' => $html, 'texto' => $texto, 'correo' => $correo] = correoConductor();
+
+    foreach ([$html, $texto] as $contenido) {
+        expect($contenido)
+            ->not->toContain('inDriver')
+            ->not->toContain('Regards')
+            ->toContain('Saludos,')
+            ->toContain('El equipo de')
+            ->toContain('Moto Panda');
+    }
+
+    expect($correo->from)->toBe([config('mail.from.address'), 'Moto Celaya'])
+        ->and($correo->subject)->toBe('Tu acceso como repartidor de Moto Celaya');
+});
+
+it('shows the flotilla logo in the conductor email, or its initial when there is none', function () {
+    $conLogo = correoConductor(logoUrl: 'https://motopanda.mx/logo-abc.png')['html'];
+    $sinLogo = correoConductor()['html'];
+
+    expect($conLogo)->toContain('<img src="https://motopanda.mx/logo-abc.png" alt="Moto Celaya"')
+        ->and($sinLogo)->not->toContain('<img')
+        ->and(preg_match('/line-height:96px;">M</', $sinLogo))->toBe(1);
+});
+
+it('escapes the password in the HTML email and keeps it whole in the plain text', function () {
+    ['html' => $html, 'texto' => $texto] = correoConductor('a<b&c)9');
+
+    expect($html)->toContain('a&lt;b&amp;c)9')->not->toContain('a<b&c)9')
+        ->and($texto)->toContain('Contraseña: a<b&c)9');
 });
 
 it('rejects creating a usuario with a duplicate email', function () {

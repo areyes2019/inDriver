@@ -649,8 +649,8 @@ it('resends the welcome email to a conductor with a new password', function () {
     Notification::assertSentOnDemand(
         CredencialesConductor::class,
         function (CredencialesConductor $notification, $channels, $notifiable) use (&$passwordEnviada) {
-            $html = $notification->toMail($notifiable)->render()->toHtml();
-            preg_match('/Contraseña: <code>([^<]+)<\/code>/', $html, $coincidencias);
+            $html = (string) $notification->toMail($notifiable)->render();
+            preg_match('/data-campo="password"[^>]*>([^<]+)</', $html, $coincidencias);
             $passwordEnviada = $coincidencias[1] ?? null;
 
             return $notifiable->routes['mail'] === 'pedro@cafeluna.com';

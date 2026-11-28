@@ -109,6 +109,28 @@ it('creates a conductor with its user and vehicle, emails the credentials and lo
     expect(LogCentral::where('tipo', 'CONDUCTOR')->where('accion', 'ALTA')->where('id_tenant', $tenant->id_tenant)->exists())->toBeTrue();
 });
 
+it('puts the flotilla logo in the conductor welcome email (spec tenant/036, RN-13)', function () {
+    Notification::fake();
+    $admin = conductorCentralAdmin();
+    $tenant = conductorCentralTenant();
+
+    tenancy()->initialize($tenant);
+    ConfiguracionTenant::establecer(ConfiguracionTenant::APP_LOGO, 'abcdefghijkl');
+    tenancy()->end();
+
+    $this->actingAs($admin, 'admin')
+        ->postJson("/api/v1/admin/tenants/{$tenant->id_tenant}/conductores", datosConductorCentral())
+        ->assertCreated();
+
+    Notification::assertSentOnDemand(
+        CredencialesConductor::class,
+        fn (CredencialesConductor $notification, $channels, $notifiable) => str_contains(
+            (string) $notification->toMail($notifiable)->render(),
+            "/t/{$tenant->slug}/cliente/marca/archivos/logo-abcdefghijkl.png",
+        ),
+    );
+});
+
 it('rejects a duplicated email or plate inside the tenant', function () {
     Notification::fake();
     $admin = conductorCentralAdmin();

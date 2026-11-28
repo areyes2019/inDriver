@@ -17,6 +17,7 @@ use App\Notifications\CredencialesConductor;
 use App\Services\VentaViajesConductorService;
 use App\Support\AdminClienteDelTenant;
 use App\Support\DespachadorDeConductor;
+use App\Support\MarcaFlotilla;
 use App\Support\PasswordGenerada;
 use App\Support\SaldoViajes;
 use App\Support\SaldoViajesTenant;
@@ -121,6 +122,8 @@ class ConductorTenantController extends Controller
                 $tenant->slug,
                 $data['email'],
                 $password,
+                $data['nombre'],
+                MarcaFlotilla::logoUrl(),
             ));
 
             $conductor->load(['usuario', 'vehiculo']);

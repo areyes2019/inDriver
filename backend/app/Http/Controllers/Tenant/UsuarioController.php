@@ -12,6 +12,7 @@ use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Usuario;
 use App\Notifications\CredencialesConductor;
 use App\Notifications\CredencialesUsuarioTenant;
+use App\Support\MarcaFlotilla;
 use App\Support\PasswordGenerada;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -69,14 +70,23 @@ class UsuarioController extends Controller
 
         // spec tenant/036, RN-11: el conductor recibe el correo de la app (con el código de
         // flotilla), no el del Panel.
-        $credenciales = $usuario->rol === 'Conductor' ? CredencialesConductor::class : CredencialesUsuarioTenant::class;
+        $credenciales = $usuario->rol === 'Conductor'
+            ? new CredencialesConductor(
+                tenant('nombre_comercial'),
+                tenant('slug'),
+                $usuario->email,
+                $password,
+                $usuario->nombre,
+                MarcaFlotilla::logoUrl(),
+            )
+            : new CredencialesUsuarioTenant(
+                tenant('nombre_comercial'),
+                tenant('slug'),
+                $usuario->email,
+                $password,
+            );
 
-        Notification::route('mail', $usuario->email)->notify(new $credenciales(
-            tenant('nombre_comercial'),
-            tenant('slug'),
-            $usuario->email,
-            $password,
-        ));
+        Notification::route('mail', $usuario->email)->notify($credenciales);
 
         Auditoria::create([
             'id_usuario' => $request->user('usuario')->id_usuario,

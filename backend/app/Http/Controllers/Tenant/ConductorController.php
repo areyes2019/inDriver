@@ -13,6 +13,7 @@ use App\Models\Tenant\Usuario;
 use App\Models\Tenant\Vehiculo;
 use App\Notifications\CredencialesConductor;
 use App\Support\DespachadorDeConductor;
+use App\Support\MarcaFlotilla;
 use App\Support\PasswordGenerada;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -204,6 +205,8 @@ class ConductorController extends Controller
             tenant('slug'),
             $usuario->email,
             $password,
+            $usuario->nombre,
+            MarcaFlotilla::logoUrl(),
         ));
 
         Auditoria::create([

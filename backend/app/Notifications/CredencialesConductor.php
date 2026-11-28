@@ -8,9 +8,14 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
- * Correo de bienvenida de un conductor (spec tenant/036, RN-11). Es distinto del de los demás roles
- * (`CredencialesUsuarioTenant`) porque un conductor no entra al Panel: entra a la app Panda Express,
- * que es una sola para todas las flotillas y le pide el código de su flotilla (el slug).
+ * Correo de bienvenida de un conductor (spec tenant/036, RN-11 a RN-15). Es distinto del de los demás
+ * roles (`CredencialesUsuarioTenant`) porque un conductor no entra al Panel: entra a la app Panda
+ * Express, que es una sola para todas las flotillas y le pide el código de su flotilla (el slug).
+ *
+ * Usa una plantilla propia y no el tema de `MailMessage` (D7): el tema pone `APP_NAME` en el
+ * encabezado y "Regards" al final, y no admite el logo ni los colores de la marca.
+ *
+ * La URL del logo la resuelve quien manda el correo, con la tenencia ya inicializada (RN-13).
  */
 class CredencialesConductor extends Notification
 {
@@ -19,6 +24,8 @@ class CredencialesConductor extends Notification
         private readonly string $slug,
         private readonly string $email,
         private readonly string $password,
+        private readonly ?string $nombreConductor = null,
+        private readonly ?string $logoUrl = null,
     ) {}
 
     /**
@@ -31,23 +38,23 @@ class CredencialesConductor extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $urlPlayStore = config('services.panda_express.play_store_url');
+        $nombre = trim((string) $this->nombreConductor);
 
-        $correo = (new MailMessage)
+        return (new MailMessage)
+            ->from((string) config('mail.from.address'), $this->nombreComercial)
             ->subject("Tu acceso como repartidor de {$this->nombreComercial}")
-            ->greeting('¡Bienvenido!')
-            ->line("Ya se creó tu acceso como repartidor de {$this->nombreComercial}.");
-
-        $correo = $urlPlayStore
-            ? $correo->line('Descarga la app Panda Express desde Google Play:')->action('Descargar en Google Play', $urlPlayStore)
-            : $correo->line('Busca la app Panda Express en Google Play y descárgala.');
-
-        // Código y contraseña van dentro de un code span de Markdown, por la misma razón que en
-        // `CredencialesUsuarioTenant`: fuera de él, el parser puede alterar caracteres.
-        return $correo
-            ->line('Al abrirla, entra con estos datos:')
-            ->line("Código de flotilla: `{$this->slug}`")
-            ->line("Correo: {$this->email}")
-            ->line("Contraseña: `{$this->password}`");
+            ->view(
+                ['mail.credenciales-conductor', 'mail.credenciales-conductor-texto'],
+                [
+                    'flotilla' => $this->nombreComercial,
+                    'inicial' => mb_strtoupper(mb_substr(trim($this->nombreComercial), 0, 1)),
+                    'logoUrl' => $this->logoUrl,
+                    'nombre' => $nombre === '' ? null : $nombre,
+                    'slug' => $this->slug,
+                    'email' => $this->email,
+                    'password' => $this->password,
+                    'urlPlayStore' => config('services.panda_express.play_store_url') ?: null,
+                ],
+            );
     }
 }
