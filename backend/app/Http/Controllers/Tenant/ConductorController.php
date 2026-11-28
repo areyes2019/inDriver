@@ -11,11 +11,14 @@ use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\Vehiculo;
+use App\Notifications\CredencialesUsuarioTenant;
 use App\Support\DespachadorDeConductor;
+use App\Support\PasswordGenerada;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -182,6 +185,37 @@ class ConductorController extends Controller
         ]);
 
         return response()->json(new ConductorResource($conductor));
+    }
+
+    /**
+     * Vuelve a mandar el correo de bienvenida con una contraseña nueva. La original solo existe
+     * hasheada, así que no hay forma de reenviarla: se genera otra con `PasswordGenerada` (la misma
+     * del alta) y la anterior deja de servir.
+     */
+    public function reenviarCredenciales(Request $request, Conductor $conductor): JsonResponse
+    {
+        $usuario = $conductor->usuario;
+        $password = PasswordGenerada::generar();
+
+        $usuario->update(['password' => $password]);
+
+        Notification::route('mail', $usuario->email)->notify(new CredencialesUsuarioTenant(
+            tenant('nombre_comercial'),
+            tenant('slug'),
+            $usuario->email,
+            $password,
+        ));
+
+        Auditoria::create([
+            'id_usuario' => $request->user('usuario')->id_usuario,
+            'tabla_afectada' => 'usuarios',
+            'accion' => 'EDICION',
+            'descripcion' => "Reenvío de credenciales al conductor {$usuario->nombre} {$usuario->apellido_paterno}",
+        ]);
+
+        return response()->json([
+            'message' => "Se enviaron nuevas credenciales a {$usuario->email}.",
+        ]);
     }
 
     /**

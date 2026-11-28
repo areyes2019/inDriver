@@ -147,6 +147,7 @@ Route::prefix('t/{slug}')->middleware('tenant.slug')->group(function () {
             Route::get('/conductores/{conductor}', [ConductorController::class, 'show']);
             Route::put('/conductores/{conductor}', [ConductorController::class, 'update']);
             Route::get('/conductores/{conductor}/saldo-viajes', [ConductorController::class, 'saldoViajes']);
+            Route::post('/conductores/{conductor}/reenviar-credenciales', [ConductorController::class, 'reenviarCredenciales']);
             Route::post('/conductores/{conductor}/vender-viajes', [VentaViajeConductorController::class, 'store']);
             Route::get('/conductores/{conductor}/historial-pagos', [VentaViajeConductorController::class, 'historialConductor']);
             Route::get('/reportes/pagos-conductores', [VentaViajeConductorController::class, 'reportePagos']);

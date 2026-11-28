@@ -11,10 +11,13 @@ use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\Vehiculo;
 use App\Models\Tenant\VentaViajeConductor;
+use App\Notifications\CredencialesUsuarioTenant;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 
 uses(RefreshDatabase::class);
 
@@ -623,4 +626,61 @@ it('rejects a conductor without despachador when updated to ACTIVO with 2+ despa
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['id_despachador']);
+});
+
+it('resends the welcome email to a conductor with a new password', function () {
+    Notification::fake();
+    $tenant = conductorTenant();
+    $admin = conductorAdminUsuario($tenant);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    $conductor = Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    tenancy()->end();
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson("/api/v1/t/cafe-luna/conductores/{$conductor->id_conductor}/reenviar-credenciales")
+        ->assertOk();
+
+    $passwordEnviada = null;
+    Notification::assertSentOnDemand(
+        CredencialesUsuarioTenant::class,
+        function (CredencialesUsuarioTenant $notification, $channels, $notifiable) use (&$passwordEnviada) {
+            $html = $notification->toMail($notifiable)->render()->toHtml();
+            preg_match('/Contraseña: <code>([^<]+)<\/code>/', $html, $coincidencias);
+            $passwordEnviada = $coincidencias[1] ?? null;
+
+            return $notifiable->routes['mail'] === 'pedro@cafeluna.com';
+        },
+    );
+
+    tenancy()->initialize($tenant);
+    $hash = $usuarioPedro->fresh()->password;
+    expect(Hash::check('Password123!', $hash))->toBeFalse();
+    expect($passwordEnviada)->not->toBeNull();
+    expect(Hash::check(html_entity_decode($passwordEnviada), $hash))->toBeTrue();
+    tenancy()->end();
+});
+
+it('rejects resending credentials for a non-AdminCliente role', function () {
+    Notification::fake();
+    $tenant = conductorTenant();
+    $despachador = conductorAdminUsuario($tenant, ['email' => 'luis@cafeluna.com', 'rol' => 'Despachador']);
+
+    tenancy()->initialize($tenant);
+    $usuarioPedro = Usuario::create([
+        'nombre' => 'Pedro', 'apellido_paterno' => 'Ruiz', 'email' => 'pedro@cafeluna.com',
+        'password' => bcrypt('Password123!'), 'rol' => 'Conductor', 'estado' => 'Activo',
+    ]);
+    $conductor = Conductor::create(['id_usuario' => $usuarioPedro->id_usuario, 'numero_licencia' => 'ABC123', 'estado' => 'ACTIVO', 'disponibilidad' => 'FUERA_DE_SERVICIO']);
+    tenancy()->end();
+
+    $this->actingAs($despachador, 'usuario')
+        ->postJson("/api/v1/t/cafe-luna/conductores/{$conductor->id_conductor}/reenviar-credenciales")
+        ->assertForbidden();
+
+    Notification::assertNothingSent();
 });

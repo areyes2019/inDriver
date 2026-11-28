@@ -231,6 +231,41 @@ function cerrarHistorialPagos() {
   conductorHistorial.value = null
 }
 
+// --- Reenviar correo de bienvenida ---
+// La contraseña original solo existe hasheada: el backend genera una nueva y la manda con el mismo
+// correo del alta, así que la anterior deja de servir. Por eso se pide confirmación.
+
+const conductorReenvio = ref<Conductor | null>(null)
+const reenviando = ref(false)
+const errorReenvio = ref('')
+const exitoReenvio = ref('')
+
+function abrirReenviarCredenciales(conductor: Conductor) {
+  conductorReenvio.value = conductor
+  errorReenvio.value = ''
+  exitoReenvio.value = ''
+}
+
+async function confirmarReenviarCredenciales() {
+  const conductor = conductorReenvio.value
+  if (!conductor) return
+
+  reenviando.value = true
+  errorReenvio.value = ''
+
+  try {
+    const { data } = await http.post(
+      `/t/${slug.value}/conductores/${conductor.id_conductor}/reenviar-credenciales`,
+    )
+    exitoReenvio.value = data.message
+    conductorReenvio.value = null
+  } catch {
+    errorReenvio.value = 'No se pudo enviar el correo, intenta de nuevo.'
+  } finally {
+    reenviando.value = false
+  }
+}
+
 // --- Despachador asignado (solo si el tenant usa despachadores, spec tenant/011) ---
 
 const usaDespachadores = computed(() => auth.usuario?.usar_despachadores === 'Sí')
@@ -357,6 +392,7 @@ onUnmounted(() => {
         {{ errorReasignar }}
       </p>
       <p v-if="exitoLiquidacion" class="mb-4 text-sm text-green-600">{{ exitoLiquidacion }}</p>
+      <p v-if="exitoReenvio" class="mb-4 text-sm text-green-600">{{ exitoReenvio }}</p>
 
       <div class="overflow-x-auto">
         <table class="w-full min-w-[760px] text-left text-sm">
@@ -481,6 +517,13 @@ onUnmounted(() => {
                   >
                     Ver comisiones
                   </RouterLink>
+                  <button
+                    type="button"
+                    class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-semibold text-heading transition-colors hover:bg-black/5"
+                    @click="abrirReenviarCredenciales(conductor)"
+                  >
+                    Reenviar acceso
+                  </button>
                 </div>
               </td>
             </tr>
@@ -619,6 +662,48 @@ onUnmounted(() => {
               @click="cerrarHistorialPagos"
             >
               Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+    <Teleport to="body">
+      <div
+        v-if="conductorReenvio"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Reenviar acceso"
+      >
+        <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg shadow-black/10">
+          <h2 class="text-base font-semibold text-heading">
+            Reenviar acceso a {{ conductorReenvio.nombre }} {{ conductorReenvio.apellido_paterno }}
+          </h2>
+          <p class="mt-2 text-sm text-black/60">
+            Se generará una contraseña nueva y se enviará el correo de bienvenida a
+            <span class="font-medium text-heading">{{ conductorReenvio.email }}</span>. La
+            contraseña anterior dejará de funcionar.
+          </p>
+
+          <p v-if="errorReenvio" role="alert" class="mt-2 text-sm text-red-600">
+            {{ errorReenvio }}
+          </p>
+
+          <div class="mt-5 flex justify-end gap-3">
+            <button
+              type="button"
+              class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-heading hover:bg-black/5"
+              @click="conductorReenvio = null"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              :disabled="reenviando"
+              class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              @click="confirmarReenviarCredenciales"
+            >
+              {{ reenviando ? 'Enviando...' : 'Enviar' }}
             </button>
           </div>
         </div>
