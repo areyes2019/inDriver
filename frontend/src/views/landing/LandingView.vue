@@ -2,18 +2,65 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Icon } from '@iconify/vue'
 import { vAparecer } from './aparecer'
-import MaquetaPanel from './components/MaquetaPanel.vue'
 import MaquetaWhatsapp from './components/MaquetaWhatsapp.vue'
-import MaquetaAppClientes from './components/MaquetaAppClientes.vue'
-import MaquetaRepartidor from './components/MaquetaRepartidor.vue'
 import FormularioContacto from './components/FormularioContacto.vue'
 
 /**
  * Página pública de motopanda.mx: qué hace el sistema para una flotilla de motos, cuánto cuesta y
- * cómo contactarnos. Todo lo que promete existe hoy en el sistema; las imágenes son maquetas
- * dibujadas (sin datos reales) hasta tener capturas.
+ * cómo contactarnos. Todo lo que promete existe hoy en el sistema.
+ *
+ * Las imágenes viven en `public/landing/` en WebP, en dos anchos: el navegador elige con `srcset`
+ * la que le toca a su pantalla. WhatsApp no tiene imagen y usa una maqueta animada.
  */
 const PRECIO_POR_VIAJE = 3
+
+interface ImagenLanding {
+  src: string
+  srcset: string
+  sizes: string
+  ancho: number
+  alto: number
+  alt: string
+  /** Fotos de teléfono con fondo blanco: se funden con el fondo de la sección. */
+  fundir?: boolean
+}
+
+const imagenes: Record<string, ImagenLanding> = {
+  portada: {
+    src: '/landing/portada-960.webp',
+    srcset: '/landing/portada-960.webp 960w, /landing/portada-1600.webp 1600w',
+    sizes: '(min-width: 1024px) 45vw, 100vw',
+    ancho: 1600,
+    alto: 901,
+    alt: 'Panel de Motopanda con los repartidores de una flotilla en el mapa de Celaya',
+  },
+  panel: {
+    src: '/landing/panel-640.webp',
+    srcset: '/landing/panel-640.webp 640w, /landing/panel-1100.webp 1100w',
+    sizes: '(min-width: 1024px) 40vw, 100vw',
+    ancho: 1100,
+    alto: 1100,
+    alt: 'Panel de Motopanda: mapa con cinco repartidores en línea y el estado de cada entrega',
+  },
+  'app-clientes': {
+    src: '/landing/app-clientes-460.webp',
+    srcset: '/landing/app-clientes-460.webp 460w, /landing/app-clientes-831.webp 831w',
+    sizes: '(min-width: 1024px) 22rem, 70vw',
+    ancho: 831,
+    alto: 1893,
+    alt: 'App de clientes con el logo y el banner de la flotilla y los botones Enviar y Recibir',
+    fundir: true,
+  },
+  repartidores: {
+    src: '/landing/app-repartidor-460.webp',
+    srcset: '/landing/app-repartidor-460.webp 460w, /landing/app-repartidor-831.webp 831w',
+    sizes: '(min-width: 1024px) 22rem, 70vw',
+    ancho: 831,
+    alto: 1893,
+    alt: 'App del repartidor con su servicio activo, la recogida, la entrega y el pago del viaje',
+    fundir: true,
+  },
+}
 
 const enlaces = [
   { href: '#beneficios', texto: 'Beneficios' },
@@ -332,23 +379,16 @@ const preguntas = [
 
         <div v-aparecer="150" class="relative">
           <div class="flotar">
-            <MaquetaPanel />
-          </div>
-          <div
-            class="flotar-lento absolute -bottom-6 -left-3 hidden items-center gap-3 rounded-2xl bg-white p-3 pr-5 text-tinta shadow-xl sm:flex"
-          >
-            <span class="flex size-10 items-center justify-center rounded-xl bg-emerald-100">
-              <Icon icon="tabler:circle-check" class="size-6 text-emerald-600" />
-            </span>
-            <div>
-              <p class="text-xs text-tinta/50">PED-000183</p>
-              <p class="text-sm font-bold">Entregado en 18 min</p>
-            </div>
-          </div>
-          <div
-            class="flotar absolute -top-5 -right-2 hidden items-center gap-2 rounded-2xl bg-whatsapp px-4 py-2.5 text-sm font-bold text-white shadow-xl sm:flex"
-          >
-            <Icon icon="tabler:brand-whatsapp" class="size-5" /> Nuevo pedido
+            <img
+              :src="imagenes.portada!.src"
+              :srcset="imagenes.portada!.srcset"
+              :sizes="imagenes.portada!.sizes"
+              :width="imagenes.portada!.ancho"
+              :height="imagenes.portada!.alto"
+              :alt="imagenes.portada!.alt"
+              fetchpriority="high"
+              class="h-auto w-full rounded-3xl shadow-2xl shadow-panda-950/40 ring-1 ring-white/15"
+            />
           </div>
         </div>
       </div>
@@ -459,10 +499,24 @@ const preguntas = [
                 class="absolute inset-6 -z-10 rounded-[3rem] bg-gradient-to-br from-panda-100 to-sol-100 blur-2xl"
                 aria-hidden="true"
               />
-              <MaquetaPanel v-if="destacado.id === 'panel'" class="w-full" />
-              <MaquetaWhatsapp v-else-if="destacado.id === 'whatsapp'" />
-              <MaquetaAppClientes v-else-if="destacado.id === 'app-clientes'" />
-              <MaquetaRepartidor v-else />
+              <MaquetaWhatsapp v-if="destacado.id === 'whatsapp'" />
+              <img
+                v-else-if="imagenes[destacado.id]"
+                :src="imagenes[destacado.id]!.src"
+                :srcset="imagenes[destacado.id]!.srcset"
+                :sizes="imagenes[destacado.id]!.sizes"
+                :width="imagenes[destacado.id]!.ancho"
+                :height="imagenes[destacado.id]!.alto"
+                :alt="imagenes[destacado.id]!.alt"
+                loading="lazy"
+                decoding="async"
+                class="h-auto"
+                :class="
+                  imagenes[destacado.id]!.fundir
+                    ? 'w-auto max-h-[34rem] mix-blend-multiply'
+                    : 'w-full rounded-3xl shadow-2xl shadow-panda-900/20'
+                "
+              />
             </div>
           </article>
         </div>
@@ -676,6 +730,17 @@ const preguntas = [
               Te contestamos personalmente
             </p>
           </div>
+          <img
+            src="/landing/mandados-960.webp"
+            srcset="/landing/mandados-960.webp 960w, /landing/mandados-1600.webp 1600w"
+            sizes="(min-width: 1024px) 26rem, 100vw"
+            width="1600"
+            height="900"
+            alt="Repartidor de Moto Panda en la ciudad: tus mandados más rápidos y seguros"
+            loading="lazy"
+            decoding="async"
+            class="mt-10 h-auto w-full rounded-3xl shadow-xl shadow-panda-900/15"
+          />
         </div>
         <div
           v-aparecer="120"
@@ -777,10 +842,6 @@ const preguntas = [
   animation: flotar 6s ease-in-out infinite;
 }
 
-.flotar-lento {
-  animation: flotar 8s ease-in-out infinite reverse;
-}
-
 @keyframes flotar {
   0%,
   100% {
@@ -837,8 +898,7 @@ const preguntas = [
 @media (prefers-reduced-motion: reduce) {
   .mancha-1,
   .mancha-2,
-  .flotar,
-  .flotar-lento {
+  .flotar {
     animation: none;
   }
 
