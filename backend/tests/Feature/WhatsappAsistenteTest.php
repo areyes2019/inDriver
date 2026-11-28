@@ -3,6 +3,7 @@
 use Anthropic\Client;
 use App\Models\Tenant;
 use App\Models\Tenant\AutomaticoBitacora;
+use App\Models\Tenant\Ciudad;
 use App\Models\Tenant\Cliente;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
@@ -145,10 +146,13 @@ function fingirGoogle(): void
                 return Http::response(['status' => 'ZERO_RESULTS', 'results' => []]);
             }
 
-            return Http::response(['status' => 'OK', 'results' => [[
-                'formatted_address' => "{$peticion['address']}, Gto.",
-                'geometry' => ['location' => ['lat' => $lugar[0], 'lng' => $lugar[1]], 'location_type' => $lugar[2] ?? 'ROOFTOP'],
-            ]]]);
+            // Varios resultados: [[lat, lng, tipo, dirección], ...], como cuando la calle existe en varias ciudades.
+            $resultados = is_array($lugar[0]) ? $lugar : [$lugar];
+
+            return Http::response(['status' => 'OK', 'results' => array_map(fn (array $uno) => [
+                'formatted_address' => $uno[3] ?? "{$peticion['address']}, Gto.",
+                'geometry' => ['location' => ['lat' => $uno[0], 'lng' => $uno[1]], 'location_type' => $uno[2] ?? 'ROOFTOP'],
+            ], $resultados)]);
         }
 
         return $metros === null
@@ -341,6 +345,39 @@ it('avisa cuando la dirección cae fuera de la cobertura', function () {
 
     expect(clienteEscribe($this->conversacion, ['texto' => 'A Alan, al rancho'])->texto)
         ->toContain('queda fuera de la zona donde damos servicio');
+});
+
+it('entre varias ciudades con la misma calle elige la que cae en la cobertura', function () {
+    ZonaServicio::create(['nombre' => 'Centro', 'estado' => 'Activo', 'poligono' => [
+        ['lat' => 20.50, 'lng' => -100.83], ['lat' => 20.50, 'lng' => -100.80],
+        ['lat' => 20.54, 'lng' => -100.80], ['lat' => 20.54, 'lng' => -100.83],
+    ]]);
+    googleResponde(['López Mateos 125, Centro' => [
+        [21.12, -101.68, 'ROOFTOP', 'Blvd. López Mateos 125, León, Gto.'],
+        [20.52, -100.81, 'ROOFTOP', 'Blvd. López Mateos 125, Celaya, Gto.'],
+    ]]);
+    iaDevuelve(['destinatario_nombre' => 'Alan', 'entrega_direccion' => 'López Mateos 125, Centro']);
+
+    clienteEscribe($this->conversacion, ['texto' => 'A Alan, López Mateos 125']);
+
+    expect(solicitud()->entrega_direccion)->toBe('Blvd. López Mateos 125, Celaya, Gto.');
+});
+
+it('si Google ubica la calle en otra ciudad, la busca otra vez en la ciudad de la flotilla', function () {
+    ZonaServicio::create(['nombre' => 'Centro', 'estado' => 'Activo', 'poligono' => [
+        ['lat' => 20.50, 'lng' => -100.83], ['lat' => 20.50, 'lng' => -100.80],
+        ['lat' => 20.54, 'lng' => -100.80], ['lat' => 20.54, 'lng' => -100.83],
+    ]]);
+    Ciudad::create(['nombre' => 'Celaya, Gto., México', 'place_id' => 'celaya', 'lat' => 20.52, 'lng' => -100.81]);
+    googleResponde([
+        'López Mateos 256, Centro' => [27.93, -101.21, 'ROOFTOP', 'Av. López Mateos 256, Nueva Rosita, Coah.'],
+        'López Mateos 256, Centro, Celaya, Gto., México' => [20.52, -100.81, 'ROOFTOP', 'Blvd. López Mateos 256, Celaya, Gto.'],
+    ]);
+    iaDevuelve(['destinatario_nombre' => 'Alan', 'entrega_direccion' => 'López Mateos 256, Centro']);
+
+    clienteEscribe($this->conversacion, ['texto' => 'A Alan, López Mateos 256']);
+
+    expect(solicitud()->entrega_direccion)->toBe('Blvd. López Mateos 256, Celaya, Gto.');
 });
 
 it('una ubicación compartida responde la dirección que se estaba preguntando, sin la IA', function () {

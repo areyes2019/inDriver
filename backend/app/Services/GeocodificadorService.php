@@ -8,6 +8,7 @@ use App\Models\Tenant\Ciudad;
 use App\Models\Tenant\ZonaServicio;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Convierte una dirección escrita en coordenadas, en el servidor (spec tenant/031, RN-16).
@@ -21,6 +22,10 @@ class GeocodificadorService
     private const PRECISOS = ['ROOFTOP', 'RANGE_INTERPOLATED'];
 
     /**
+     * Entre los resultados precisos se prefiere el que cae en la cobertura: `bounds` solo sesga a
+     * Google, y "Adolfo López Mateos 125, Centro" existe en decenas de ciudades. Si ninguno cae
+     * dentro, se vuelve a buscar con el nombre de la ciudad de la flotilla.
+     *
      * @return array{lat: float, lng: float, direccion: string}|null `null` si no hay un resultado preciso.
      */
     public function geocodificar(string $direccion): ?array
@@ -33,6 +38,22 @@ class GeocodificadorService
             return null;
         }
 
+        $candidatos = $this->buscar($direccion, $llave);
+        $elegido = $this->primeroEnCobertura($candidatos);
+
+        if ($elegido === null && ($conCiudad = $this->conCiudad($direccion)) !== null) {
+            $elegido = $this->primeroEnCobertura($this->buscar($conCiudad, $llave));
+        }
+
+        // Ninguno en la cobertura: se devuelve el primero para que quien llama diga que no llegamos.
+        return $elegido ?? $candidatos[0] ?? null;
+    }
+
+    /**
+     * @return list<array{lat: float, lng: float, direccion: string}> Solo los resultados precisos, en el orden de Google.
+     */
+    private function buscar(string $direccion, string $llave): array
+    {
         $parametros = [
             'address' => $direccion,
             'components' => 'country:MX',
@@ -40,8 +61,6 @@ class GeocodificadorService
             'key' => $llave,
         ];
 
-        // Sin ciudad en el texto, "Hidalgo 10" existe en cientos de municipios: se favorece la
-        // zona donde opera la flotilla.
         $limites = $this->limitesDeOperacion();
 
         if ($limites !== null) {
@@ -53,7 +72,7 @@ class GeocodificadorService
         } catch (\Throwable $e) {
             Log::warning('No se pudo geocodificar', ['error' => $e->getMessage()]);
 
-            return null;
+            return [];
         }
 
         $estado = $respuesta->json('status');
@@ -62,20 +81,60 @@ class GeocodificadorService
             // REQUEST_DENIED suele ser la Geocoding API sin habilitar en la llave.
             Log::warning('Geocoding no respondió OK', ['status' => $estado, 'error' => $respuesta->json('error_message')]);
 
+            return [];
+        }
+
+        $precisos = [];
+
+        foreach ((array) $respuesta->json('results', []) as $resultado) {
+            if (! is_array($resultado) || ! in_array($resultado['geometry']['location_type'] ?? null, self::PRECISOS, true)) {
+                continue;
+            }
+
+            $precisos[] = [
+                'lat' => (float) $resultado['geometry']['location']['lat'],
+                'lng' => (float) $resultado['geometry']['location']['lng'],
+                'direccion' => (string) ($resultado['formatted_address'] ?? $direccion),
+            ];
+        }
+
+        return $precisos;
+    }
+
+    /**
+     * @param  list<array{lat: float, lng: float, direccion: string}>  $candidatos
+     * @return array{lat: float, lng: float, direccion: string}|null
+     */
+    private function primeroEnCobertura(array $candidatos): ?array
+    {
+        foreach ($candidatos as $candidato) {
+            if (ZonaServicio::cubrePunto($candidato['lat'], $candidato['lng'])) {
+                return $candidato;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * La dirección con la ciudad de la flotilla al final, o `null` si no hay ciudad o ya la trae.
+     */
+    private function conCiudad(string $direccion): ?string
+    {
+        $nombre = Ciudad::query()->orderBy('id_ciudad')->value('nombre');
+
+        if (! is_string($nombre) || trim($nombre) === '') {
             return null;
         }
 
-        $resultado = $respuesta->json('results.0');
+        $ciudad = trim(explode(',', $nombre)[0]);
+        $normalizar = fn (string $texto): string => Str::lower(Str::ascii($texto));
 
-        if (! is_array($resultado) || ! in_array($resultado['geometry']['location_type'] ?? null, self::PRECISOS, true)) {
+        if ($ciudad === '' || str_contains($normalizar($direccion), $normalizar($ciudad))) {
             return null;
         }
 
-        return [
-            'lat' => (float) $resultado['geometry']['location']['lat'],
-            'lng' => (float) $resultado['geometry']['location']['lng'],
-            'direccion' => (string) ($resultado['formatted_address'] ?? $direccion),
-        ];
+        return "{$direccion}, {$nombre}";
     }
 
     /**
