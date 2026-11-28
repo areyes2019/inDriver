@@ -97,6 +97,24 @@ const TABLER_ICON_NAMES = [
   'mail',
   'sparkles',
   'route',
+  // Página pública de motopanda.mx.
+  'robot',
+  'device-mobile',
+  'chart-bar',
+  'coin',
+  'arrow-right',
+  'send',
+  'receipt',
+  'adjustments-horizontal',
+  'menu-2',
+  'map-pins',
+  'rocket',
+  'message-chatbot',
+  'clock-bolt',
+  'chevron-down',
+  'building-store',
+  'user-check',
+  'speakerphone',
 ]
 
 const output = {}

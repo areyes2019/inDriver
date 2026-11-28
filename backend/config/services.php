@@ -41,6 +41,11 @@ return [
     // Rutas por calles para cotizar envíos. Solo la usa `RutaService`, del lado del servidor: el
     // Panel tiene su propia llave de navegador. Sin ella, la ruta cae a línea recta en vez de
     // romperse.
+    // Formulario de contacto de la página pública: a dónde llega el aviso.
+    'contacto' => [
+        'correo' => env('CONTACTO_CORREO', 'contacto@motopanda.mx'),
+    ],
+
     'google_maps' => [
         'key' => env('GOOGLE_MAPS_API_KEY'),
     ],

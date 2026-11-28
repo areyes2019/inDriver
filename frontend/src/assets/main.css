@@ -21,6 +21,21 @@
   /* Pestaña y panel de chat de WhatsApp (spec tenant/032, paso 3). */
   --color-whatsapp: #25d366;
 
+  /* Marca Motopanda (página pública y app de clientes): morado, amarillo y tinta. */
+  --color-panda-950: #1e0b4b;
+  --color-panda-900: #2e1065;
+  --color-panda-800: #4c1d95;
+  --color-panda-700: #5b21b6;
+  --color-panda-600: #6d28d9;
+  --color-panda-500: #7c3aed;
+  --color-panda-200: #ddd6fe;
+  --color-panda-100: #ede9fe;
+  --color-panda-50: #f5f3ff;
+  --color-sol-500: #facc15;
+  --color-sol-400: #fde047;
+  --color-sol-100: #fef9c3;
+  --color-tinta: #1b1530;
+
   --color-warning-bg: #fef3c7;
   --color-warning-text: #92400e;
   --color-info-bg: #dbeafe;
@@ -40,40 +55,6 @@
 
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-heading: 'Outfit', sans-serif;
-}
-
-.app-shell {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  font-weight: normal;
-}
-
-.app-shell a,
-.green {
-  text-decoration: none;
-  color: hsla(160, 100%, 37%, 1);
-  transition: 0.4s;
-  padding: 3px;
-}
-
-@media (hover: hover) {
-  .app-shell a:hover {
-    background-color: hsla(160, 100%, 37%, 0.2);
-  }
-}
-
-@media (min-width: 1024px) {
-  body:not(.is-admin) {
-    display: flex;
-    place-items: center;
-  }
-
-  .app-shell {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 0 2rem;
-  }
 }
 
 /*

@@ -15,6 +15,7 @@ use App\Http\Controllers\Cliente\MarcaArchivoController as ClienteMarcaArchivoCo
 use App\Http\Controllers\Cliente\MarcaController as ClienteMarcaController;
 use App\Http\Controllers\Cliente\PedidoController as ClientePedidoController;
 use App\Http\Controllers\Cliente\PerfilController as ClientePerfilController;
+use App\Http\Controllers\ContactoController;
 use App\Http\Controllers\Tenant\AuthController as TenantAuthController;
 use App\Http\Controllers\Tenant\ClienteController;
 use App\Http\Controllers\Tenant\ComisionController;
@@ -46,6 +47,9 @@ use Illuminate\Support\Facades\Route;
 // ni sesión: lo que la protege es la firma de Meta.
 Route::get('/webhooks/whatsapp', [WhatsappWebhookController::class, 'verificar']);
 Route::post('/webhooks/whatsapp', [WhatsappWebhookController::class, 'recibir']);
+
+// Formulario de contacto de la página pública (motopanda.mx).
+Route::post('/contacto', [ContactoController::class, 'store'])->middleware('throttle:contacto');
 
 Route::prefix('admin')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:admin-login');

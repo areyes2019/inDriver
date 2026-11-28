@@ -75,6 +75,12 @@ class AppServiceProvider extends ServiceProvider
         // App de clientes (spec tenant/035). Las rutas públicas (marca, código, verificar) van por IP;
         // los límites finos del código (por correo, flotilla y global) los aplica
         // `CodigoAccesoService`. Las rutas con sesión, por cliente.
+        // Formulario de contacto de la página pública: suficiente para quien escribe de verdad, poco
+        // para quien quiera llenar el buzón.
+        RateLimiter::for('contacto', function (Request $request) {
+            return [Limit::perMinute(3)->by($request->ip()), Limit::perDay(20)->by($request->ip())];
+        });
+
         RateLimiter::for('cliente-publico', function (Request $request) {
             return Limit::perMinute(30)->by($request->ip());
         });
