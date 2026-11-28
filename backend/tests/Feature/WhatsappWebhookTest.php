@@ -102,6 +102,12 @@ function postFirmado($prueba, array $payload, ?string $firma = null)
     ], $cuerpo);
 }
 
+/** Las respuestas al cliente; el aviso de "escribiendo…" también va a `/messages` pero no lleva `type`. */
+function respuestasEnviadas(): int
+{
+    return Http::recorded(fn (PeticionHttp $p) => isset($p['type']))->count();
+}
+
 function fingirMeta(): void
 {
     Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.RESPUESTA'.uniqid()]]])]);
@@ -159,10 +165,10 @@ it('guarda el mensaje, responde y registra la respuesta', function () {
 
     postFirmado($this, mensajeDeMeta('NUM-A'))->assertOk();
 
-    Http::assertSentCount(1);
+    expect(respuestasEnviadas())->toBe(1);
     Http::assertSent(fn (PeticionHttp $p) => str_contains($p->url(), '/v23.0/NUM-A/messages')
         && $p->hasHeader('Authorization', 'Bearer token-moto-a')
-        && $p['to'] === '5214611234567'
+        && ($p['to'] ?? null) === '5214611234567'
         && $p['text']['body'] === RESPUESTA_ASISTENTE);
 
     tenancy()->initialize($tenant);
@@ -196,7 +202,7 @@ it('un reintento de Meta no se atiende dos veces', function () {
     postFirmado($this, mensajeDeMeta('NUM-A'))->assertOk();
     postFirmado($this, mensajeDeMeta('NUM-A'))->assertOk();
 
-    Http::assertSentCount(1);
+    expect(respuestasEnviadas())->toBe(1);
 
     tenancy()->initialize($tenant);
     expect(WhatsappMensaje::where('wamid', 'wamid.UNO')->count())->toBe(1);
@@ -229,7 +235,7 @@ it('un lote con dos números reparte cada mensaje a su flotilla', function () {
     $lote['entry'][] = mensajeDeMeta('NUM-B', ['id' => 'wamid.B'])['entry'][0];
     postFirmado($this, $lote)->assertOk();
 
-    Http::assertSentCount(2);
+    expect(respuestasEnviadas())->toBe(2);
 
     tenancy()->initialize($a);
     expect(WhatsappMensaje::where('wamid', 'wamid.A')->exists())->toBeTrue()
@@ -269,7 +275,7 @@ it('atiende a quien no comparte su teléfono', function () {
     unset($payload['entry'][0]['changes'][0]['value']['contacts'][0]['wa_id']);
     postFirmado($this, $payload)->assertOk();
 
-    Http::assertSent(fn (PeticionHttp $p) => $p['recipient'] === 'MX.BSUID1' && ! isset($p['to']));
+    Http::assertSent(fn (PeticionHttp $p) => ($p['recipient'] ?? null) === 'MX.BSUID1' && ! isset($p['to']));
 
     tenancy()->initialize($tenant);
     expect(WhatsappConversacion::sole()->telefono)->toBeNull();
@@ -305,7 +311,7 @@ it('manda los botones en el formato de Meta y guarda la respuesta', function () 
 
     postFirmado($this, mensajeDeMeta('NUM-A'))->assertOk();
 
-    Http::assertSent(fn (PeticionHttp $p) => $p['type'] === 'interactive'
+    Http::assertSent(fn (PeticionHttp $p) => ($p['type'] ?? null) === 'interactive'
         && $p['interactive']['body']['text'] === 'Así quedaría tu envío'
         && $p['interactive']['action']['buttons'][0] === ['type' => 'reply', 'reply' => ['id' => 'confirmar', 'title' => 'Confirmar']]
         && count($p['interactive']['action']['buttons']) === 3);
@@ -347,8 +353,11 @@ it('si Meta falla no marca el mensaje como respondido y el reintento lo envía u
     $numero = WhatsappNumero::sole();
     $job = new ProcesarMensajeWhatsapp($tenant, $numero->id_numero, $mensaje->id_mensaje);
 
+    // Cada intento muestra "escribiendo…" antes de responder.
     Http::fakeSequence('graph.facebook.com/*')
+        ->push(['success' => true])
         ->push(['error' => ['message' => 'caído']], 500)
+        ->push(['success' => true])
         ->push(['messages' => [['id' => 'wamid.OK']]]);
 
     $asistente = app(ConversacionWhatsappService::class);
@@ -360,7 +369,7 @@ it('si Meta falla no marca el mensaje como respondido y el reintento lo envía u
     $job->handle(app(WhatsappClient::class), $asistente);
 
     expect($mensaje->fresh()->respondido_en)->not->toBeNull();
-    Http::assertSentCount(2);
+    expect(respuestasEnviadas())->toBe(2);
 });
 
 it('varios mensajes seguidos reciben una sola respuesta (RN-34)', function () {
@@ -384,8 +393,35 @@ it('varios mensajes seguidos reciben una sola respuesta (RN-34)', function () {
     expect($uno->fresh()->respondido_en)->not->toBeNull();
 
     (new ProcesarMensajeWhatsapp($tenant, $numero->id_numero, $dos->id_mensaje))->handle(app(WhatsappClient::class), app(ConversacionWhatsappService::class));
-    Http::assertSentCount(1);
+    expect(respuestasEnviadas())->toBe(1);
     expect(WhatsappMensaje::where('direccion', WhatsappMensaje::SALIENTE)->count())->toBe(1);
+});
+
+it('muestra "escribiendo…" sobre el mensaje del cliente antes de responder', function () {
+    flotillaConNumero('moto-a', 'NUM-A');
+    fingirMeta();
+
+    postFirmado($this, mensajeDeMeta('NUM-A'))->assertOk();
+
+    $peticiones = Http::recorded()->map(fn (array $par) => $par[0]);
+
+    expect($peticiones->first()->data())->toBe([
+        'messaging_product' => 'whatsapp',
+        'status' => 'read',
+        'message_id' => 'wamid.UNO',
+        'typing_indicator' => ['type' => 'text'],
+    ])->and($peticiones->last()['text']['body'])->toBe(RESPUESTA_ASISTENTE);
+});
+
+it('responde aunque Meta no acepte el aviso de "escribiendo…"', function () {
+    flotillaConNumero('moto-a', 'NUM-A');
+    Http::fakeSequence('graph.facebook.com/*')
+        ->push(['error' => ['message' => 'caído']], 500)
+        ->push(['messages' => [['id' => 'wamid.OK']]]);
+
+    postFirmado($this, mensajeDeMeta('NUM-A'))->assertOk();
+
+    expect(respuestasEnviadas())->toBe(1);
 });
 
 it('no responde un mensaje fuera de la ventana de 24 horas', function () {

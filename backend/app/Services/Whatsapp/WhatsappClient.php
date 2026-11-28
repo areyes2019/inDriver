@@ -8,6 +8,7 @@ use App\Models\Tenant\WhatsappConversacion;
 use App\Models\WhatsappNumero;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
@@ -62,6 +63,29 @@ class WhatsappClient
                 ],
             ],
         ]);
+    }
+
+    /**
+     * Marca el mensaje del cliente como leído y le muestra "escribiendo…" mientras se arma la
+     * respuesta. Meta quita el indicador al llegar la respuesta o a los 25 segundos.
+     *
+     * Es cortesía: si Meta falla solo se anota, para no retrasar ni impedir la respuesta.
+     */
+    public function mostrarEscribiendo(WhatsappNumero $numero, string $wamid): void
+    {
+        try {
+            Http::withToken($numero->access_token)
+                ->timeout(5)
+                ->post($this->urlGraph("{$numero->phone_number_id}/messages"), [
+                    'messaging_product' => 'whatsapp',
+                    'status' => 'read',
+                    'message_id' => $wamid,
+                    'typing_indicator' => ['type' => 'text'],
+                ])
+                ->throw();
+        } catch (\Throwable $e) {
+            Log::warning('WhatsApp: no se pudo mostrar "escribiendo".', ['wamid' => $wamid, 'error' => $e->getMessage()]);
+        }
     }
 
     /**

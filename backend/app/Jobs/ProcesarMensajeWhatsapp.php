@@ -101,6 +101,12 @@ class ProcesarMensajeWhatsapp implements ShouldQueue
             return;
         }
 
+        // Los tres puntitos mientras la IA piensa. Con una persona atendiendo (RN-58) no, porque
+        // el bot no va a contestar.
+        if (! $mensaje->conversacion->botPausado()) {
+            $cliente->mostrarEscribiendo($numero, $mensaje->wamid);
+        }
+
         $respuesta = $conversacion->atender($mensaje->conversacion, $this->pendientes($mensaje), $this->tenant->telefono);
 
         // RN-58: una persona atiende; el mensaje queda en la bandeja y el bot no contesta.
