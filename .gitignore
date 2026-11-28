@@ -9,3 +9,6 @@
 id_rsa*
 id_ed25519*
 Bugs.md
+
+# Imagenes originales (las versiones WebP viven en frontend/public/landing)
+backend/resources/img/
