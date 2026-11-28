@@ -9,7 +9,7 @@ use App\Models\Tenant\Conductor;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\VentaViajeConductor;
-use App\Notifications\CredencialesUsuarioTenant;
+use App\Notifications\CredencialesConductor;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -105,7 +105,7 @@ it('creates a conductor with its user and vehicle, emails the credentials and lo
         ->and(Auditoria::count())->toBe(0);
     tenancy()->end();
 
-    Notification::assertSentOnDemand(CredencialesUsuarioTenant::class);
+    Notification::assertSentOnDemand(CredencialesConductor::class);
     expect(LogCentral::where('tipo', 'CONDUCTOR')->where('accion', 'ALTA')->where('id_tenant', $tenant->id_tenant)->exists())->toBeTrue();
 });
 

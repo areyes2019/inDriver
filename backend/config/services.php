@@ -75,4 +75,10 @@ return [
         'url' => env('LATIDO_URL'),
     ],
 
+    // spec tenant/036, D6: la ficha de Google Play de panda_express, para el correo de bienvenida
+    // del conductor. Vacía mientras la ficha no esté publicada: el correo sale sin botón.
+    'panda_express' => [
+        'play_store_url' => env('PANDA_EXPRESS_PLAY_STORE_URL'),
+    ],
+
 ];

@@ -11,7 +11,7 @@ use App\Models\Tenant\Auditoria;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\Vehiculo;
-use App\Notifications\CredencialesUsuarioTenant;
+use App\Notifications\CredencialesConductor;
 use App\Support\DespachadorDeConductor;
 use App\Support\PasswordGenerada;
 use Illuminate\Http\JsonResponse;
@@ -199,7 +199,7 @@ class ConductorController extends Controller
 
         $usuario->update(['password' => $password]);
 
-        Notification::route('mail', $usuario->email)->notify(new CredencialesUsuarioTenant(
+        Notification::route('mail', $usuario->email)->notify(new CredencialesConductor(
             tenant('nombre_comercial'),
             tenant('slug'),
             $usuario->email,

@@ -13,7 +13,7 @@ use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\Vehiculo;
-use App\Notifications\CredencialesUsuarioTenant;
+use App\Notifications\CredencialesConductor;
 use App\Services\VentaViajesConductorService;
 use App\Support\AdminClienteDelTenant;
 use App\Support\DespachadorDeConductor;
@@ -116,7 +116,7 @@ class ConductorTenantController extends Controller
                 return $conductor;
             });
 
-            Notification::route('mail', $data['email'])->notify(new CredencialesUsuarioTenant(
+            Notification::route('mail', $data['email'])->notify(new CredencialesConductor(
                 $tenant->nombre_comercial,
                 $tenant->slug,
                 $data['email'],

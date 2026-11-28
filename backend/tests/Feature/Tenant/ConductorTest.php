@@ -11,7 +11,7 @@ use App\Models\Tenant\Pedido;
 use App\Models\Tenant\Usuario;
 use App\Models\Tenant\Vehiculo;
 use App\Models\Tenant\VentaViajeConductor;
-use App\Notifications\CredencialesUsuarioTenant;
+use App\Notifications\CredencialesConductor;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -647,8 +647,8 @@ it('resends the welcome email to a conductor with a new password', function () {
 
     $passwordEnviada = null;
     Notification::assertSentOnDemand(
-        CredencialesUsuarioTenant::class,
-        function (CredencialesUsuarioTenant $notification, $channels, $notifiable) use (&$passwordEnviada) {
+        CredencialesConductor::class,
+        function (CredencialesConductor $notification, $channels, $notifiable) use (&$passwordEnviada) {
             $html = $notification->toMail($notifiable)->render()->toHtml();
             preg_match('/Contraseña: <code>([^<]+)<\/code>/', $html, $coincidencias);
             $passwordEnviada = $coincidencias[1] ?? null;

@@ -183,6 +183,8 @@ Cerrar sesión → POST /t/{slug}/conductor/logout (desconecta y borra el push, 
 | `src/views/Login.vue` | Campo "Código de flotilla", normalización y mensaje de 404 (RN-01 a RN-04). |
 | `src/views/ForgotPassword.vue` | Campo "Código de flotilla" (RN-08). |
 | `.env.production`, `.env.local`, `README.md` | Quitar `VITE_TENANT_SLUG`. `VITE_API_BASE_URL` termina en `/api/v1`. |
+| `src/stores/auth.js` (`logout`) | **Hallado al implementar:** la app nunca llamaba a `POST /conductor/logout`; solo borraba la sesión local. Ahora lo llama antes de borrarla (sin bloquear si falla), para que RN-09 ocurra y para que el conductor quede desconectado como pide la spec 019, RN-05. |
+| `src/services/push.js` | **Hallado al implementar:** el token FCM solo se mandaba la primera vez que el sistema lo entregaba en esa ejecución de la app. Tras un logout (que ahora lo borra en el backend) y un nuevo login sin reiniciar la app, no se volvía a registrar. Ahora se guarda el último token y se reenvía en cada login. |
 
 **Backend**
 

@@ -4,6 +4,7 @@ use App\Models\Tenant;
 use App\Models\Tenant\Conductor;
 use App\Models\Tenant\Despachador;
 use App\Models\Tenant\Usuario;
+use App\Notifications\CredencialesConductor;
 use App\Notifications\CredencialesUsuarioTenant;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -132,7 +133,7 @@ it('emails a password that still matches the stored hash after the markdown rend
             'nombre' => 'Pedro',
             'apellido_paterno' => 'Ruiz',
             'email' => 'pedro@cafeluna.com',
-            'rol' => 'Conductor',
+            'rol' => 'Despachador',
         ])
         ->assertCreated();
 
@@ -150,6 +151,63 @@ it('emails a password that still matches the stored hash after the markdown rend
             preg_match('#<code>(.*)</code>#', Markdown::parse($linea)->toHtml(), $coincidencias);
 
             return Hash::check($coincidencias[1] ?? '', $creado->password);
+        },
+    );
+});
+
+// spec tenant/036, RN-11: el conductor no entra al Panel sino a la app, que es una sola para todas
+// las flotillas, así que su correo le dice el código de flotilla y dónde descargarla.
+it('emails a conductor the fleet code and the Google Play link instead of the panel link', function () {
+    Notification::fake();
+    config(['services.panda_express.play_store_url' => 'https://play.google.com/store/apps/details?id=com.pandaconnect.delivery']);
+    $tenant = usuarioTenant();
+    $admin = usuarioEnTenant($tenant);
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/usuarios', [
+            'nombre' => 'Pedro',
+            'apellido_paterno' => 'Ruiz',
+            'email' => 'pedro@cafeluna.com',
+            'rol' => 'Conductor',
+        ])
+        ->assertCreated();
+
+    Notification::assertSentOnDemandTimes(CredencialesUsuarioTenant::class, 0);
+    Notification::assertSentOnDemand(
+        CredencialesConductor::class,
+        function (CredencialesConductor $notification, $channels, $notifiable) {
+            $html = $notification->toMail($notifiable)->render()->toHtml();
+
+            return $notifiable->routes['mail'] === 'pedro@cafeluna.com'
+                && str_contains($html, '<code>cafe-luna</code>')
+                && str_contains($html, 'https://play.google.com/store/apps/details?id=com.pandaconnect.delivery')
+                && ! str_contains($html, 'Ir al panel');
+        },
+    );
+});
+
+it('emails a conductor without the Google Play button while the listing is not configured', function () {
+    Notification::fake();
+    config(['services.panda_express.play_store_url' => null]);
+    $tenant = usuarioTenant();
+    $admin = usuarioEnTenant($tenant);
+
+    $this->actingAs($admin, 'usuario')
+        ->postJson('/api/v1/t/cafe-luna/usuarios', [
+            'nombre' => 'Pedro',
+            'apellido_paterno' => 'Ruiz',
+            'email' => 'pedro@cafeluna.com',
+            'rol' => 'Conductor',
+        ])
+        ->assertCreated();
+
+    Notification::assertSentOnDemand(
+        CredencialesConductor::class,
+        function (CredencialesConductor $notification, $channels, $notifiable) {
+            $correo = $notification->toMail($notifiable);
+
+            return $correo->actionUrl === null
+                && str_contains($correo->render()->toHtml(), 'Busca la app Panda Express en Google Play');
         },
     );
 });

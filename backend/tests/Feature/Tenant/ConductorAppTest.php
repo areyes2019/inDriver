@@ -201,6 +201,18 @@ it('exposes the id_conductor on login and on /me so the App can filter its own e
         ->assertJsonPath('id_conductor', $datos['conductor']->id_conductor);
 });
 
+// spec tenant/036, RN-03: la app distingue "esa flotilla no existe" (404) de "credenciales
+// incorrectas" (422), porque el repartidor escribe el código a mano.
+it('answers 404 to a conductor login with a fleet code that does not exist', function () {
+    $tenant = conductorAppTenant();
+    $datos = conductorAppCrear($tenant);
+
+    $this->postJson('/api/v1/t/no-existe/conductor/login', [
+        'email' => $datos['usuario']->email,
+        'password' => $datos['password'],
+    ])->assertNotFound();
+});
+
 it('rejects conductor routes without a token', function () {
     conductorAppTenant();
 

@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Tenant\Conductor;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Tenant\UsuarioResource;
+use App\Models\Tenant\ConductorDispositivo;
 use App\Models\Tenant\Usuario;
 use App\Services\DisponibilidadService;
 use Illuminate\Http\JsonResponse;
@@ -53,6 +54,11 @@ class AuthController extends Controller
         // Al cerrar sesión se desconecta siempre (spec tenant/019, RN-05), aunque tenga un pedido
         // en curso: a diferencia de `PUT /estado`, aquí no hay a quién devolverle un error.
         $this->disponibilidad->desconectar($conductor, forzar: true);
+
+        // spec tenant/036, RN-09: con una sola app para todas las flotillas, el mismo teléfono
+        // puede entrar después a otra flotilla. Si su token de push se quedara aquí, esta flotilla
+        // le seguiría mandando avisos. Al volver a entrar, la app lo registra otra vez.
+        ConductorDispositivo::where('id_conductor', $conductor->id_conductor)->delete();
 
         $request->user('conductor-token')->currentAccessToken()->delete();
 

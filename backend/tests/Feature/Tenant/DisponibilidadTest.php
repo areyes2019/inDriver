@@ -4,6 +4,7 @@ use App\Console\Commands\ApagarConductoresInactivos;
 use App\Events\Tenant\ConductorDisponibilidadCambiada;
 use App\Models\Tenant;
 use App\Models\Tenant\Conductor;
+use App\Models\Tenant\ConductorDispositivo;
 use App\Models\Tenant\ConductorEstado;
 use App\Models\Tenant\ConfiguracionTenant;
 use App\Models\Tenant\Pedido;
@@ -218,5 +219,26 @@ it('leaves recently active conductores online', function () {
 
     tenancy()->initialize($tenant);
     expect(Conductor::find($datos['conductor']->id_conductor)->disponibilidad)->toBe('DISPONIBLE');
+    tenancy()->end();
+});
+
+// spec tenant/036, RN-09: con una sola app para todas las flotillas, el teléfono puede entrar
+// después a otra flotilla; ésta ya no debe tener su token de push.
+it('forgets the push token of the device when the conductor logs out', function () {
+    $tenant = disponibilidadTenant();
+    $datos = disponibilidadCrearConductor($tenant);
+
+    tenancy()->initialize($tenant);
+    ConductorDispositivo::create(['id_conductor' => $datos['conductor']->id_conductor, 'fcm_token' => 'token-del-telefono']);
+    tenancy()->end();
+
+    $token = disponibilidadToken($datos['usuario']->email, $datos['password']);
+
+    $this->withToken($token)
+        ->postJson('/api/v1/t/cafe-luna/conductor/logout')
+        ->assertNoContent();
+
+    tenancy()->initialize($tenant);
+    expect(ConductorDispositivo::where('id_conductor', $datos['conductor']->id_conductor)->exists())->toBeFalse();
     tenancy()->end();
 });
