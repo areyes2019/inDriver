@@ -1,6 +1,22 @@
-# Todavía no hay ninguna pantalla pública en inDriver: no hay nada que un
-# buscador deba indexar, y las URL del SPA filtrarían la estructura interna
-# sin ningún beneficio. Reemplaza al robots.txt por defecto de Laravel, que
-# permite el rastreo completo.
+# motopanda.mx: la página pública (/) se puede indexar; todo lo demás es privado o técnico.
+#
+# Este archivo se sube a mano al docroot (public_html): deploy-frontend.sh lo excluye a propósito
+# para no pisarlo. Hasta el 2026-11-28 decía "Disallow: /" porque no había ninguna página pública.
+#
+# Los paneles de cada flotilla viven en /{slug}/..., sin un prefijo común: se bloquean por patrón
+# (Google y Bing entienden el comodín *). El login de una flotilla (/{slug}) no tiene enlaces desde
+# ningún lado, así que un buscador no lo encuentra.
+
 User-agent: *
-Disallow: /
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /sanctum/
+Disallow: /app/
+Disallow: /gps/
+Disallow: /pide/
+Disallow: /t/
+Disallow: /*/panel
+Disallow: /*/login
+Disallow: /*/forgot-password
+Disallow: /*/reset-password
